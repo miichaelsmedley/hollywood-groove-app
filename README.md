@@ -1,6 +1,7 @@
 # Hollywood Groove Mobile App
 
-Cross-platform mobile app for Hollywood Groove (.NET MAUI)
+Cross-platform PWA mobile app for Hollywood Groove.
+
 
 ## Overview
 
