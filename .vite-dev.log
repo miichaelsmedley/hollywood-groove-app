@@ -1,0 +1,17 @@
+
+> hollywood-groove-app@0.0.0 dev
+> vite --port 5173 --strictPort
+
+
+  VITE v5.4.21  ready in 122 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+2:40:40 pm [vite] hmr update /src/pages/JoinShow.tsx, /src/index.css
+2:40:45 pm [vite] hmr update /src/components/Layout.tsx, /src/index.css
+2:40:51 pm [vite] hmr update /src/pages/Home.tsx, /src/index.css
+3:38:18 pm [vite] hmr update /src/pages/Home.tsx, /src/index.css
+3:39:13 pm [vite] hmr update /src/components/Layout.tsx, /src/index.css
+3:41:55 pm [vite] hmr update /src/App.tsx, /src/index.css
+3:42:30 pm [vite] hmr update /src/features/shows/ShowsPage.tsx, /src/index.css
+3:43:31 pm [vite] hmr update /src/pages/ShowDetail.tsx, /src/index.css

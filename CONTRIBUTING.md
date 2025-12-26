@@ -1,4 +1,9 @@
-# Contributing to Hollywood Groove Mobile App
+# Contributing to Hollywood Groove App (PWA)
+
+Before starting, skim:
+- `../MASTER_ARCHITECTURE.md`
+- `../TECH_STACK_DECISION.md`
+- `../FIREBASE_TRIVIA_CONTRACT.md` (crowd/trivia RTDB schema)
 
 ## 5 Core Rules
 
@@ -20,44 +25,19 @@
 - At least 1 approval required
 
 ### 4. C# Code Style
-- PascalCase for classes, methods, properties
-- camelCase for local variables, parameters
-- Async methods end with `Async`
-- Use nullable reference types
-- Follow Microsoft C# Coding Conventions
+The app is a **React + TypeScript PWA** (not .NET MAUI).
 
-Example:
-```csharp
-public class ShowService
-{
-    public async Task<List<Show>> GetUpcomingShowsAsync()
-    {
-        // Implementation
-    }
-}
-```
+- TypeScript strict mode (when scaffold exists)
+- ESLint + Prettier for formatting/linting
+- Prefer functional components and hooks
+- Keep API + Firebase access behind a small `services/` layer
+- Keep shared types in `src/types/` and align with `FIREBASE_TRIVIA_CONTRACT.md`
 
 ### 5. Testing
-- Write unit tests with xUnit
-- Test ViewModels and Services
-- Aim for 80%+ code coverage
-- Test on Android, iOS, and Windows before PR
-
-Example:
-```csharp
-[Fact]
-public async Task GetUpcomingShowsAsync_ReturnsShows()
-{
-    // Arrange
-    var service = new ShowService();
-    
-    // Act
-    var shows = await service.GetUpcomingShowsAsync();
-    
-    // Assert
-    Assert.NotEmpty(shows);
-}
-```
+- Unit tests: Vitest
+- Component tests: React Testing Library
+- Keep Firebase reads/writes mocked in unit tests
+- Smoke test in mobile Safari/Chrome before merging (PWA install + offline)
 
 ## Getting Started
 

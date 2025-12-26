@@ -1,0 +1,241 @@
+{
+  "rules": {
+    "test": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+
+      "users": {
+        "$uid": {
+          ".read": "auth != null && auth.uid == $uid",
+          ".write": "auth != null && auth.uid == $uid",
+          ".validate": "newData.hasChildren(['uid', 'displayName', 'createdAt', 'lastSeenAt', 'showsAttended', 'preferences'])",
+          "uid": {
+            ".validate": "newData.val() == $uid"
+          },
+          "displayName": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 50"
+          },
+          "email": {
+            ".validate": "newData.isString()"
+          },
+          "phone": {
+            ".validate": "newData.isString()"
+          }
+        },
+        ".indexOn": ["displayName"]
+      },
+
+      "members": {
+        "$odience": {
+          ".read": "auth != null && auth.uid == $odience",
+          ".write": "auth != null && (auth.uid == $odience || root.child('admins').child(auth.uid).exists())"
+        }
+      },
+
+      "shows": {
+        "$showId": {
+          "meta": {
+            ".read": true,
+            ".write": "root.child('admins').child(auth.uid).exists()"
+          },
+          "settings": {
+            ".read": "root.child('admins').child(auth.uid).exists()",
+            ".write": "root.child('admins').child(auth.uid).exists()"
+          },
+          "activities": {
+            ".read": true,
+            ".write": "root.child('admins').child(auth.uid).exists()"
+          },
+          "activities_private": {
+            ".read": "root.child('admins').child(auth.uid).exists()",
+            ".write": "root.child('admins').child(auth.uid).exists()"
+          },
+          "live": {
+            ".read": true,
+            ".write": "root.child('admins').child(auth.uid).exists()"
+          },
+          "attendees": {
+            "$odience": {
+              ".read": true,
+              ".write": "auth != null && (auth.uid == $odience || root.child('admins').child(auth.uid).exists())",
+              "flags": {
+                ".read": "root.child('admins').child(auth.uid).exists()",
+                ".write": "root.child('admins').child(auth.uid).exists()"
+              }
+            }
+          },
+          "responses": {
+            "$activityId": {
+              "$odience": {
+                ".read": true,
+                ".write": "auth != null && auth.uid == $odience",
+                ".validate": "newData.hasChildren() && (!newData.hasChild('displayName') || newData.child('displayName').isString())"
+              }
+            }
+          },
+          "results": {
+            ".read": true,
+            ".write": "false"
+          },
+          "scores": {
+            ".read": true,
+            ".write": "false"
+          },
+          "leaderboard": {
+            ".read": true,
+            ".write": "false"
+          },
+          "offers": {
+            ".read": true,
+            ".write": "root.child('admins').child(auth.uid).exists()"
+          },
+          "offer_claims": {
+            "$odience": {
+              "$offerId": {
+                ".read": "auth != null && auth.uid == $odience",
+                ".write": "auth != null && auth.uid == $odience"
+              }
+            }
+          }
+        }
+      },
+
+      "seasons": {
+        ".read": true,
+        ".write": "root.child('admins').child(auth.uid).exists()"
+      },
+
+      "between_show_trivia": {
+        "$triviaId": {
+          ".read": true,
+          ".write": "root.child('admins').child(auth.uid).exists()",
+          "responses": {
+            "$odience": {
+              ".read": "auth != null && auth.uid == $odience",
+              ".write": "auth != null && auth.uid == $odience"
+            }
+          }
+        }
+      }
+    },
+
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        ".validate": "newData.hasChildren(['uid', 'displayName', 'createdAt', 'lastSeenAt', 'showsAttended', 'preferences'])",
+        "uid": {
+          ".validate": "newData.val() == $uid"
+        },
+        "displayName": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 50"
+        },
+        "email": {
+          ".validate": "newData.isString()"
+        },
+        "phone": {
+          ".validate": "newData.isString()"
+        }
+      },
+      ".indexOn": ["displayName"]
+    },
+
+    "members": {
+      "$odience": {
+        ".read": "auth != null && auth.uid == $odience",
+        ".write": "auth != null && (auth.uid == $odience || root.child('admins').child(auth.uid).exists())"
+      }
+    },
+
+    "shows": {
+      "$showId": {
+        "meta": {
+          ".read": true,
+          ".write": "root.child('admins').child(auth.uid).exists()"
+        },
+        "settings": {
+          ".read": "root.child('admins').child(auth.uid).exists()",
+          ".write": "root.child('admins').child(auth.uid).exists()"
+        },
+        "activities": {
+          ".read": true,
+          ".write": "root.child('admins').child(auth.uid).exists()"
+        },
+        "activities_private": {
+          ".read": "root.child('admins').child(auth.uid).exists()",
+          ".write": "root.child('admins').child(auth.uid).exists()"
+        },
+        "live": {
+          ".read": true,
+          ".write": "root.child('admins').child(auth.uid).exists()"
+        },
+        "attendees": {
+          "$odience": {
+            ".read": true,
+            ".write": "auth != null && (auth.uid == $odience || root.child('admins').child(auth.uid).exists())",
+            "flags": {
+              ".read": "root.child('admins').child(auth.uid).exists()",
+              ".write": "root.child('admins').child(auth.uid).exists()"
+            }
+          }
+        },
+        "responses": {
+          "$activityId": {
+            "$odience": {
+              ".read": true,
+              ".write": "auth != null && auth.uid == $odience",
+              ".validate": "newData.hasChildren() && (!newData.hasChild('displayName') || newData.child('displayName').isString())"
+            }
+          }
+        },
+        "results": {
+          ".read": true,
+          ".write": "false"
+        },
+        "scores": {
+          ".read": true,
+          ".write": "false"
+        },
+        "leaderboard": {
+          ".read": true,
+          ".write": "false"
+        },
+        "offers": {
+          ".read": true,
+          ".write": "root.child('admins').child(auth.uid).exists()"
+        },
+        "offer_claims": {
+          "$odience": {
+            "$offerId": {
+              ".read": "auth != null && auth.uid == $odience",
+              ".write": "auth != null && auth.uid == $odience"
+            }
+          }
+        }
+      }
+    },
+
+    "seasons": {
+      ".read": true,
+      ".write": "root.child('admins').child(auth.uid).exists()"
+    },
+
+    "between_show_trivia": {
+      "$triviaId": {
+        ".read": true,
+        ".write": "root.child('admins').child(auth.uid).exists()",
+        "responses": {
+          "$odience": {
+            ".read": "auth != null && auth.uid == $odience",
+            ".write": "auth != null && auth.uid == $odience"
+          }
+        }
+      }
+    },
+
+    "admins": {
+      ".read": "root.child('admins').child(auth.uid).exists()",
+      ".write": "false"
+    }
+  }
+}

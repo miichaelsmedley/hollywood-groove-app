@@ -1,0 +1,127 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        // Hollywood Groove Primary (Amber/Gold)
+        primary: {
+          DEFAULT: '#F59E0B',
+          50: '#FFFBEB',
+          100: '#FEF3C7',
+          200: '#FDE68A',
+          300: '#FCD34D',
+          400: '#FBBF24',
+          500: '#F59E0B',
+          600: '#D97706',
+          700: '#B45309',
+          800: '#92400E',
+          900: '#78350F',
+        },
+        // Cinematic Dark Background
+        cinema: {
+          DEFAULT: '#0B0B0D', // Deep black
+          50: '#1C1C1E',      // Card surface
+          100: '#2C2C2E',     // Elevated surface
+          200: '#3A3A3C',     // Border/divider
+          300: '#48484A',     // Subtle accent
+          400: '#636366',     // Secondary text
+          500: '#8E8E93',     // Muted text
+          600: '#AEAEB2',     // Light muted
+          700: '#C7C7CC',     // Very light
+          800: '#E5E5EA',     // Near white
+          900: '#F2F2F7',     // Almost white
+        },
+        // Accent colors for engagement
+        accent: {
+          red: '#FF453A',      // Error/danger
+          orange: '#FF9F0A',   // Warning
+          yellow: '#FFD60A',   // Caution
+          green: '#30D158',    // Success
+          teal: '#64D2FF',     // Info
+          blue: '#0A84FF',     // Link
+          indigo: '#5E5CE6',   // Feature
+          purple: '#BF5AF2',   // Premium
+          pink: '#FF375F',     // Alert
+        },
+        // Star tier colors
+        tier: {
+          extra: '#6B7280',           // Gray
+          supporting: '#92400E',      // Bronze
+          featured: '#9CA3AF',        // Silver
+          lead: '#F59E0B',            // Gold
+          director: '#7C3AED',        // Purple
+          legend: '#DC2626',          // Red
+        },
+      },
+      fontFamily: {
+        sans: [
+          'system-ui',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          '"Segoe UI"',
+          'Roboto',
+          'sans-serif',
+        ],
+        display: [
+          'SF Pro Display',
+          'system-ui',
+          '-apple-system',
+          'sans-serif',
+        ],
+        mono: [
+          'SF Mono',
+          'Monaco',
+          'Consolas',
+          'monospace',
+        ],
+      },
+      fontSize: {
+        'hero': ['3.5rem', { lineHeight: '1', fontWeight: '700' }],
+        'display': ['2.5rem', { lineHeight: '1.1', fontWeight: '700' }],
+      },
+      spacing: {
+        '18': '4.5rem',
+        '88': '22rem',
+        '128': '32rem',
+      },
+      borderRadius: {
+        '2xl': '1rem',
+        '3xl': '1.5rem',
+        '4xl': '2rem',
+      },
+      boxShadow: {
+        'glow': '0 0 20px rgba(245, 158, 11, 0.3)',
+        'glow-lg': '0 0 40px rgba(245, 158, 11, 0.4)',
+        'cinema': '0 10px 40px rgba(0, 0, 0, 0.5)',
+        'cinema-lg': '0 20px 60px rgba(0, 0, 0, 0.6)',
+      },
+      backdropBlur: {
+        xs: '2px',
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.5s ease-in-out',
+        'slide-up': 'slideUp 0.4s ease-out',
+        'glow-pulse': 'glowPulse 2s ease-in-out infinite',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideUp: {
+          '0%': { transform: 'translateY(20px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        glowPulse: {
+          '0%, 100%': { boxShadow: '0 0 20px rgba(245, 158, 11, 0.3)' },
+          '50%': { boxShadow: '0 0 40px rgba(245, 158, 11, 0.5)' },
+        },
+      },
+    },
+  },
+  plugins: [],
+}

@@ -1,23 +1,22 @@
-# .NET
-bin/
-obj/
-*.user
-*.suo
-.vs/
+# Node / Vite
+node_modules/
+dist/
+.vite/
 
-# MAUI
-*.apk
-*.aab
-*.ipa
+# Env
+.env
+.env.*.local
 
-# Build results
-[Dd]ebug/
-[Rr]elease/
-x64/
-x86/
-[Aa]rm/
-[Aa]rm64/
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# User-specific files
-*.userprefs
+# Coverage
+coverage/
+
+# Editor/OS
 .DS_Store
+.vscode/
+.idea/

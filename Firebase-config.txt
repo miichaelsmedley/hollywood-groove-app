@@ -1,0 +1,19 @@
+// Reference only.
+// The real app wiring lives in: src/lib/firebase.ts
+
+import { initializeApp } from "firebase/app";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCg-2pHPaQjn2p9wdboksZGxhFyCJXG6SQ",
+  authDomain: "theta-inkwell-448908-g9.firebaseapp.com",
+  databaseURL:
+    "https://theta-inkwell-448908-g9-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "theta-inkwell-448908-g9",
+  storageBucket: "theta-inkwell-448908-g9.firebasestorage.app",
+  messagingSenderId: "491349312100",
+  appId: "1:491349312100:web:d688fd9d4ffff2e2115571",
+  measurementId: "G-8NMHF3ZPWQ",
+};
+
+const app = initializeApp(firebaseConfig);
+export default app;

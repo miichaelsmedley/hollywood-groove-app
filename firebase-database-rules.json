@@ -1,0 +1,83 @@
+{
+  "rules": {
+    // Test mode (development) - Allow all authenticated users
+    "test": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
+    // Production rules
+    "shows": {
+      "$showId": {
+        // Show metadata
+        "meta": {
+          ".read": true,
+          ".write": "root.child('admins').child(auth.uid).val() === true"
+        },
+
+        // Activities (public and private)
+        "activities": {
+          ".read": true,
+          ".write": "root.child('admins').child(auth.uid).val() === true"
+        },
+        "activities_private": {
+          ".read": "root.child('admins').child(auth.uid).val() === true",
+          ".write": "root.child('admins').child(auth.uid).val() === true"
+        },
+
+        // Live state
+        "live": {
+          ".read": true,
+          ".write": "root.child('admins').child(auth.uid).val() === true"
+        },
+
+        // Leaderboard and scores
+        "leaderboard": {
+          ".read": true,
+          ".write": "root.child('admins').child(auth.uid).val() === true"
+        },
+        "scores": {
+          ".read": true,
+          ".write": "root.child('admins').child(auth.uid).val() === true"
+        },
+
+        // Show settings (admin only)
+        "settings": {
+          ".read": "root.child('admins').child(auth.uid).val() === true",
+          ".write": "root.child('admins').child(auth.uid).val() === true"
+        },
+
+        // User responses (users can write their own)
+        "responses": {
+          "$activityId": {
+            "$uid": {
+              ".write": "auth != null && auth.uid == $uid"
+            }
+          }
+        }
+      }
+    },
+
+    // User profiles - users can read/write their own
+    "users": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid == $uid || root.child('admins').child(auth.uid).val() === true)",
+        ".write": "auth != null && (auth.uid == $uid || root.child('admins').child(auth.uid).val() === true)"
+      }
+    },
+
+    // Member profiles (for leaderboard) - everyone can read, users can write their own
+    "members": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.uid == $uid || root.child('admins').child(auth.uid).val() === true)"
+      }
+    },
+
+    // Admin list - only readable/writable by existing admins
+    "admins": {
+      ".read": "root.child('admins').child(auth.uid).val() === true",
+      ".write": "root.child('admins').child(auth.uid).val() === true"
+    }
+  }
+}

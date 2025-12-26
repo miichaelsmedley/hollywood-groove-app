@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Font Test</title>
+  <style>
+    @font-face {
+      font-family: 'BudmoJigglish';
+      src: url('./fonts/BudmoJigglish.woff2') format('woff2'),
+           url('./fonts/BudmoJigglish.woff') format('woff');
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    body {
+      background: #0B0B0D;
+      color: white;
+      padding: 50px;
+      font-family: system-ui;
+    }
+
+    .test-budmo {
+      font-family: 'BudmoJigglish', system-ui, sans-serif;
+      font-size: 48px;
+      color: #F59E0B;
+      margin: 20px 0;
+    }
+
+    .test-fallback {
+      font-family: system-ui, sans-serif;
+      font-size: 48px;
+      color: #999;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Font Loading Test</h1>
+
+  <div>
+    <p>With BudmoJigglish font:</p>
+    <div class="test-budmo">HOLLYWOOD GROOVE</div>
+  </div>
+
+  <div>
+    <p>With fallback font (for comparison):</p>
+    <div class="test-fallback">HOLLYWOOD GROOVE</div>
+  </div>
+
+  <div style="margin-top: 40px;">
+    <p>If the two texts look DIFFERENT, the font is loading correctly.</p>
+    <p>BudmoJigglish has wavy/jiggling letterforms.</p>
+  </div>
+
+  <script>
+    // Check if font loaded
+    document.fonts.ready.then(() => {
+      const fonts = Array.from(document.fonts.values());
+      const budmo = fonts.find(f => f.family === 'BudmoJigglish');
+
+      if (budmo) {
+        console.log('✅ BudmoJigglish font loaded:', budmo.status);
+      } else {
+        console.log('❌ BudmoJigglish font NOT found');
+      }
+
+      console.log('All loaded fonts:', fonts.map(f => f.family));
+    });
+  </script>
+</body>
+</html>

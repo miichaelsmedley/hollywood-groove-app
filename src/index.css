@@ -1,0 +1,96 @@
+/* Hollywood Groove Custom Font - BudmoJigglish */
+/* IMPORTANT: Must be before @tailwind directives */
+@font-face {
+  font-family: 'BudmoJigglish';
+  src: url('/fonts/BudmoJigglish.woff2') format('woff2'),
+       url('/fonts/BudmoJigglish.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  /* Hollywood Groove Brand Colors */
+  --color-primary: #F59E0B;
+  --color-cinema: #0B0B0D;
+  --color-cinema-50: #1C1C1E;
+  --color-cinema-100: #2C2C2E;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-cinema);
+  color: #f5f5f7;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-cinema-50);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-cinema-100);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3A3A3C;
+}
+
+/* Hollywood Groove Logo Text Effect */
+@layer components {
+  .logo-text {
+    @apply text-primary;
+    font-family: 'BudmoJigglish', system-ui, -apple-system, sans-serif;
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
+  }
+
+  .logo-outline {
+    color: transparent;
+    -webkit-text-stroke: 2px var(--color-primary);
+    text-stroke: 2px var(--color-primary);
+  }
+
+  /* Cinematic card style */
+  .card-cinema {
+    @apply bg-cinema-50 rounded-2xl border border-cinema-200 shadow-cinema;
+    backdrop-filter: blur(10px);
+  }
+
+  /* Primary button with glow */
+  .btn-primary {
+    @apply bg-primary text-cinema font-bold px-6 py-3 rounded-xl
+           transition-all duration-300 hover:shadow-glow active:scale-95;
+  }
+
+  /* Input field style */
+  .input-cinema {
+    @apply w-full bg-cinema border border-cinema-200 rounded-xl
+           text-cinema-900 placeholder-cinema-500
+           focus:border-primary focus:ring-2 focus:ring-primary/20
+           outline-none transition-all duration-200;
+  }
+}

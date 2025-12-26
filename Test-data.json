@@ -1,0 +1,55 @@
+{
+  "shows": {
+    "101": {
+      "meta": {
+        "title": "The Adele Show - New Year Bash",
+        "startDate": "2025-12-31T20:00:00+11:00",
+        "venueName": "The Grand Ballroom",
+        "schemaVersion": 1,
+        "publishedAt": 1734520800000
+      },
+      "live": {
+        "trivia": {
+          "activityId": null,
+          "phase": "idle",
+          "startedAt": 0,
+          "durationSeconds": 0
+        }
+      }
+    },
+    "102": {
+      "meta": {
+        "title": "Summer Vibes DJ Night",
+        "startDate": "2026-01-15T19:30:00+11:00",
+        "venueName": "Beach Club St Kilda",
+        "schemaVersion": 1,
+        "publishedAt": 1734520800000
+      },
+      "live": {
+        "trivia": {
+          "activityId": null,
+          "phase": "idle",
+          "startedAt": 0,
+          "durationSeconds": 0
+        }
+      }
+    },
+    "103": {
+      "meta": {
+        "title": "80s Retro Dance Party",
+        "startDate": "2026-02-20T21:00:00+11:00",
+        "venueName": "Groove Bar Melbourne",
+        "schemaVersion": 1,
+        "publishedAt": 1734520800000
+      },
+      "live": {
+        "trivia": {
+          "activityId": "trivia_001",
+          "phase": "question",
+          "startedAt": 1734522000000,
+          "durationSeconds": 30
+        }
+      }
+    }
+  }
+}
