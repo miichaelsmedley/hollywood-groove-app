@@ -61,6 +61,23 @@ export default function Activity() {
     }
   };
 
+  const claimDancePoints = async () => {
+    if (!id || !liveActivity?.activityId || !auth.currentUser) return;
+    const showId = Number(id);
+    const uid = auth.currentUser.uid;
+
+    try {
+      await set(ref(db, rtdbPath(`shows/${showId}/responses/${liveActivity.activityId}/${uid}`)), {
+        type: 'dance_claim',
+        claimedAt: Date.now(),
+        displayName: auth.currentUser.displayName || 'Anonymous',
+      });
+      setHasResponded(true);
+    } catch (error) {
+      console.error('Failed to claim dance points:', error);
+    }
+  };
+
   const voteOption = async (optionIndex: number, optionText: string) => {
     if (!id || !liveActivity?.activityId || !auth.currentUser) return;
     const showId = Number(id);
@@ -82,7 +99,15 @@ export default function Activity() {
 
   const isLive = liveActivity?.status === 'active';
   const options = Array.isArray(activity?.options) ? activity?.options : [];
-  const prompt = activity?.prompt || activity?.description || activity?.title || 'Join the activity';
+  const dancingPrompt = activity?.dancing?.prompt;
+  const prompt = dancingPrompt || activity?.prompt || activity?.description || activity?.title || 'Join the activity';
+  const isDancing = liveActivity?.type === 'dancing' || activity?.type === 'dancing';
+  const currentMedian = typeof liveActivity?.currentMedian === 'number'
+    ? liveActivity.currentMedian
+    : typeof activity?.dancing?.current_median === 'number'
+      ? activity.dancing.current_median
+      : null;
+  const hasMedian = typeof currentMedian === 'number';
 
   if (!isLive || !liveActivity) {
     return (
@@ -150,7 +175,30 @@ export default function Activity() {
           )}
         </div>
 
-        {activity.type === 'vote' && options.length > 0 ? (
+        {isDancing ? (
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={claimDancePoints}
+              className="w-full btn-primary"
+              disabled={hasResponded}
+            >
+              {hasResponded
+                ? 'Claimed!'
+                : hasMedian
+                  ? `Claim ${currentMedian} pts`
+                  : 'Claim dance points'}
+            </button>
+            {hasResponded && (
+              <div className="text-sm text-primary font-semibold">You are locked in.</div>
+            )}
+            {!hasResponded && (
+              <div className="text-xs text-gray-400">
+                Get on the floor to earn points.
+              </div>
+            )}
+          </div>
+        ) : activity.type === 'vote' && options.length > 0 ? (
           <div className="space-y-3">
             {options.map((option) => (
               <button

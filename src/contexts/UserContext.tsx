@@ -45,28 +45,62 @@ export function UserProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      console.log('Auth state changed:', {
+        uid: user.uid,
+        isAnonymous: user.isAnonymous,
+        providerData: user.providerData,
+        displayName: user.displayName,
+        email: user.email,
+      });
+
       // Update Google auth state
       setIsGoogleUser(isSignedInWithGoogle());
       setGooglePhotoURL(getGooglePhotoURL());
 
-      // Check if user profile exists in Firebase
-      const userRef = ref(db, rtdbPath(`users/${user.uid}`));
+      // Check if user profile exists in Firebase (/members/ path per contract)
+      const userRef = ref(db, rtdbPath(`members/${user.uid}`));
+      console.log('Fetching profile from:', rtdbPath(`members/${user.uid}`));
       const snapshot = await get(userRef);
 
       if (snapshot.exists()) {
+        console.log('Profile exists in Firebase:', snapshot.val());
         const profile = snapshot.val() as UserProfile;
-        setUserProfile(profile);
+
+        // Ensure required fields exist (for profiles created by controller)
+        const normalizedProfile: UserProfile = {
+          ...profile,
+          uid: user.uid,
+          showsAttended: profile.showsAttended || [],
+          preferences: profile.preferences || {
+            marketingEmails: false,
+            marketingSMS: false,
+            notifications: true,
+          },
+        };
+
+        console.log('Normalized profile:', normalizedProfile);
+        setUserProfile(normalizedProfile);
+        // Save to localStorage with current UID
+        localStorage.setItem('userProfile', JSON.stringify(normalizedProfile));
 
         // Update display name in auth if changed
-        if (user.displayName !== profile.displayName) {
-          await updateProfile(user, { displayName: profile.displayName });
+        if (user.displayName !== normalizedProfile.displayName) {
+          await updateProfile(user, { displayName: normalizedProfile.displayName });
         }
       } else {
-        // Check localStorage for cached profile
+        console.log('Profile does NOT exist in Firebase');
+        // Check localStorage for cached profile ONLY if UID matches
         const cached = localStorage.getItem('userProfile');
         if (cached) {
           const profile = JSON.parse(cached) as UserProfile;
-          setUserProfile(profile);
+          // Verify UID matches - if not, clear stale cache
+          if (profile.uid === user.uid) {
+            setUserProfile(profile);
+          } else {
+            console.warn('UID mismatch in cached profile, clearing cache');
+            localStorage.removeItem('userProfile');
+            setUserProfile(null);
+          }
         } else {
           setUserProfile(null);
         }
@@ -98,8 +132,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       },
     };
 
-    // Save to Firebase
-    await set(ref(db, rtdbPath(`users/${user.uid}`)), profile);
+    // Save to Firebase (/members/ path per contract)
+    await set(ref(db, rtdbPath(`members/${user.uid}`)), profile);
 
     // Save to localStorage
     localStorage.setItem('userProfile', JSON.stringify(profile));
@@ -118,7 +152,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       lastSeenAt: Date.now(),
     };
 
-    await update(ref(db, rtdbPath(`users/${user.uid}`)), updates);
+    await update(ref(db, rtdbPath(`members/${user.uid}`)), updates);
 
     setUserProfile({ ...userProfile, ...updates });
     localStorage.setItem('userProfile', JSON.stringify({ ...userProfile, ...updates }));
@@ -128,12 +162,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const user = auth.currentUser;
     if (!user || !userProfile) return;
 
+    // Ensure showsAttended exists (might be undefined from controller-created profiles)
+    const currentShows = userProfile.showsAttended || [];
+
     // Don't add duplicates
-    if (userProfile.showsAttended.includes(showId)) return;
+    if (currentShows.includes(showId)) return;
 
-    const updatedShows = [...userProfile.showsAttended, showId];
+    const updatedShows = [...currentShows, showId];
 
-    await update(ref(db, rtdbPath(`users/${user.uid}`)), {
+    await update(ref(db, rtdbPath(`members/${user.uid}`)), {
       showsAttended: updatedShows,
       lastSeenAt: Date.now(),
     });
@@ -144,8 +181,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   const handleSignInWithGoogle = async () => {
-    await signInWithGoogle();
-    // Auth state change will trigger useEffect to update profile
+    const success = await signInWithGoogle();
+
+    if (success) {
+      // Sign-in/link was successful (popup completed)
+      // Manually update state since onAuthStateChanged may not fire for linking
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        await currentUser.reload();
+        setIsGoogleUser(isSignedInWithGoogle());
+        setGooglePhotoURL(getGooglePhotoURL());
+        console.log('✅ Google auth state updated after successful link:', {
+          isGoogleUser: isSignedInWithGoogle(),
+          providerData: auth.currentUser?.providerData,
+        });
+      }
+    }
+    // If success is false, a redirect was initiated - state will update on return
   };
 
   const handleSignOut = async () => {

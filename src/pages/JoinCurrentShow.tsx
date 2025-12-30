@@ -36,11 +36,20 @@ export default function JoinCurrentShow() {
           const meta = showData?.meta as ShowMeta | undefined;
           const liveTrivia = showData?.live?.trivia;
           const phase = liveTrivia?.phase as string | undefined;
+          const triviaActive = Boolean(phase && phase !== 'idle');
+          const triviaStartedAt = typeof liveTrivia?.startedAt === 'number' ? liveTrivia.startedAt : 0;
+
+          const liveActivity = showData?.live?.activity;
+          const activityActive = liveActivity?.status === 'active';
+          const activityStartedAt = typeof liveActivity?.startedAt === 'number' ? liveActivity.startedAt : 0;
 
           if (!meta || !meta.title) return [];
-          if (!phase || phase === 'idle') return [];
+          if (!triviaActive && !activityActive) return [];
 
-          const startedAt = typeof liveTrivia?.startedAt === 'number' ? liveTrivia.startedAt : 0;
+          const startedAt = Math.max(
+            triviaActive ? triviaStartedAt : 0,
+            activityActive ? activityStartedAt : 0
+          );
           return [{ showId, meta, startedAt }];
         });
 
@@ -131,4 +140,3 @@ export default function JoinCurrentShow() {
 
   return null;
 }
-

@@ -2,9 +2,11 @@ import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { auth } from './lib/firebase';
+import { handleRedirectResult, isGoogleAuthInProgress } from './lib/auth';
 import { UserProvider } from './contexts/UserContext';
 
 import Layout from './components/Layout';
+import ShowLayout from './layouts/ShowLayout';
 import Home from './pages/Home';
 import ShowsPage from './features/shows/ShowsPage';
 import ShowDetail from './pages/ShowDetail';
@@ -19,19 +21,51 @@ import Profile from './pages/Profile';
 import { IS_TEST_MODE } from './lib/mode';
 
 export default function App() {
-  // Auto sign-in anonymously for Firebase RTDB access
+  // Handle auth initialization: redirect result first, then anonymous sign-in
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        try {
-          await signInAnonymously(auth);
-        } catch (error) {
-          console.error('Firebase auth error:', error);
-        }
-      }
-    });
+    let unsubscribe: (() => void) | undefined;
+    let isMounted = true;
 
-    return () => unsubscribe();
+    (async () => {
+      // First, check for redirect result (Google sign-in completion)
+      // This returns true if a redirect was processed (user is now signed in with Google)
+      let redirectProcessed = false;
+      try {
+        redirectProcessed = await handleRedirectResult();
+      } catch (error) {
+        console.error('Error handling redirect:', error);
+      }
+
+      // Only set up auth listener if component is still mounted
+      if (!isMounted) return;
+
+      // Set up auth state listener for anonymous sign-in fallback
+      // But skip anonymous sign-in if we just processed a redirect or Google auth is in progress
+      unsubscribe = onAuthStateChanged(auth, async (user) => {
+        if (!user && !redirectProcessed && !isGoogleAuthInProgress()) {
+          try {
+            console.log('No user, signing in anonymously...');
+            await signInAnonymously(auth);
+          } catch (error) {
+            console.error('Firebase auth error:', error);
+          }
+        } else if (!user && isGoogleAuthInProgress()) {
+          console.log('No user but Google auth in progress, skipping anonymous sign-in');
+        } else if (user) {
+          console.log('User signed in:', {
+            uid: user.uid,
+            isAnonymous: user.isAnonymous,
+            email: user.email,
+            providerData: user.providerData,
+          });
+        }
+      });
+    })();
+
+    return () => {
+      isMounted = false;
+      unsubscribe?.();
+    };
   }, []);
 
   return (
@@ -55,10 +89,14 @@ export default function App() {
             )}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
-          {/* Full-screen pages (no layout) */}
+          {/* Full-screen pages (no main layout) */}
           <Route path="shows/:id/join" element={<JoinShow />} />
-          <Route path="shows/:id/trivia" element={<Trivia />} />
-          <Route path="shows/:id/activity" element={<Activity />} />
+
+          {/* Show pages with FAB overlay */}
+          <Route path="shows/:id" element={<ShowLayout />}>
+            <Route path="trivia" element={<Trivia />} />
+            <Route path="activity" element={<Activity />} />
+          </Route>
         </Routes>
       </UserProvider>
     </BrowserRouter>

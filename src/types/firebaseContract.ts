@@ -69,7 +69,21 @@ export interface TriviaActivity extends BaseActivity {
 // Union type for all activities
 export type CrowdActivity = TriviaActivity | BaseActivity;
 
-// 3. Live State (Public read, minimal traffic)
+// 3. Show Settings (Controller writes, PWA reads)
+// Path: shows/{showId}/settings
+export type DancingMode = 'per_song' | 'interval' | 'activity' | 'disabled';
+
+export interface ShowSettings {
+  dancing_mode: DancingMode;
+  dancing_cooldown_minutes: number;
+  dancing_floor: number;
+  dancing_cap: number;
+  streak_mode?: 'per_round' | 'per_show' | 'disabled';
+  score_compression?: boolean;
+  leader_gap_alert?: number;
+}
+
+// 4. Live State (Public read, minimal traffic)
 // Path: shows/{showId}/live/trivia
 export type TriviaPhase = 'idle' | 'question' | 'answer';
 
@@ -85,9 +99,12 @@ export interface LiveTriviaState {
 export interface LiveActivityState {
   activityId: string | null;
   type: ActivityType;
-  status: string;
+  status: 'active' | 'ended';
   startedAt: number;
-  currentMedian?: number;
+  currentMedian?: number;      // Dancing only
+  prompt?: string;             // Participation activities
+  slotsAvailable?: number;     // Participation activities
+  fixedPoints?: number;        // Participation activities
 }
 
 // 4. User Response (Write only)
@@ -129,6 +146,47 @@ export interface LeaderboardEntry {
 export interface ShowLeaderboard {
   updatedAt?: number;
   top?: LeaderboardEntry[];
+}
+
+export interface AllTimeLeaderboardEntry {
+  member_id: string;
+  display_name: string;
+  stars: number;
+  tier?: string | null;
+}
+
+export interface AllTimeLeaderboard {
+  updatedAt?: number;
+  top?: AllTimeLeaderboardEntry[];
+}
+
+export interface MemberProfile {
+  display_name: string;
+  email_hash?: string | null;
+  created_at: number;
+  auth_provider: string;
+  stars: {
+    total: number;
+    tier: string;
+    starting_bonus: number;
+    breakdown: {
+      shows_attended: number;
+      trivia_participated: number;
+      dancing_engaged: number;
+      stage_participation: number;
+      between_show_trivia: number;
+      referrals: number;
+      early_tickets: number;
+      social_shares: number;
+      feedback_given: number;
+    };
+    last_show_date?: string | null;
+    decay_warning_sent?: boolean;
+    decay_warning_sent_at?: number | null;
+    total_stars_decayed?: number;
+  };
+  email_opt_in?: boolean;
+  sms_opt_in?: boolean;
 }
 
 // 6. User Profile (User writes, app reads)

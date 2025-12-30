@@ -1,16 +1,51 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { onValue, ref, get, query, orderByChild, equalTo } from 'firebase/database';
+import { onValue, ref, get, query, orderByChild, equalTo, set, update, runTransaction } from 'firebase/database';
 import { db, rtdbPath, auth } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
-import { ShowMeta } from '../types/firebaseContract';
+import { MemberProfile, ShowMeta } from '../types/firebaseContract';
 import { Music, Mail, Phone, User, Check, Sparkles, AlertCircle, CheckCircle } from 'lucide-react';
 import { signInWithGoogle } from '../lib/auth';
+
+const defaultStarBreakdown = {
+  shows_attended: 0,
+  trivia_participated: 0,
+  dancing_engaged: 0,
+  stage_participation: 0,
+  between_show_trivia: 0,
+  referrals: 0,
+  early_tickets: 0,
+  social_shares: 0,
+  feedback_given: 0,
+};
+
+function resolveTierAndBonus(stars: number) {
+  if (stars >= 51) return { tier: 'legend', bonus: 100 };
+  if (stars >= 31) return { tier: 'director', bonus: 75 };
+  if (stars >= 16) return { tier: 'lead', bonus: 50 };
+  if (stars >= 8) return { tier: 'featured', bonus: 25 };
+  if (stars >= 3) return { tier: 'supporting_role', bonus: 10 };
+  return { tier: 'extra', bonus: 0 };
+}
+
+function resolveShowDate(startDate?: string) {
+  if (!startDate) return new Date().toISOString().slice(0, 10);
+  const parts = startDate.split('T');
+  return parts[0] ?? new Date().toISOString().slice(0, 10);
+}
 
 export default function JoinShow() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isRegistered, registerUser, addShowAttended, updateLastSeen, isGoogleUser, googlePhotoURL } = useUser();
+  const {
+    isRegistered,
+    registerUser,
+    addShowAttended,
+    updateLastSeen,
+    isGoogleUser,
+    googlePhotoURL,
+    userProfile,
+  } = useUser();
 
   const [showMeta, setShowMeta] = useState<ShowMeta | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,13 +105,191 @@ export default function JoinShow() {
     return () => unsubscribe();
   }, [id]);
 
+  const ensureJoinRecords = useCallback(
+    async (options?: { displayName?: string; emailOptIn?: boolean; smsOptIn?: boolean }) => {
+      if (!id || !showMeta) return;
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const uid = user.uid;
+      const resolvedDisplayName =
+        options?.displayName?.trim() ||
+        userProfile?.displayName?.trim() ||
+        user.displayName?.trim() ||
+        'Guest';
+
+      const emailOptIn = options?.emailOptIn ?? userProfile?.preferences?.marketingEmails ?? false;
+      const smsOptIn = options?.smsOptIn ?? userProfile?.preferences?.marketingSMS ?? false;
+
+      const authProvider =
+        user.providerData?.[0]?.providerId || (user.isAnonymous ? 'anonymous' : 'unknown');
+
+      const memberRef = ref(db, rtdbPath(`members/${uid}`));
+      const memberSnap = await get(memberRef);
+      let member: MemberProfile;
+
+      if (memberSnap.exists()) {
+        const existing = memberSnap.val() as MemberProfile;
+        member = existing;
+
+        const updates: Partial<MemberProfile> = {};
+        if (resolvedDisplayName && existing.display_name !== resolvedDisplayName) {
+          updates.display_name = resolvedDisplayName;
+        }
+        if (!existing.stars) {
+          updates.stars = {
+            total: 0,
+            tier: 'extra',
+            starting_bonus: 0,
+            breakdown: defaultStarBreakdown,
+          };
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await update(memberRef, updates);
+          member = { ...existing, ...updates } as MemberProfile;
+        }
+      } else {
+        member = {
+          display_name: resolvedDisplayName,
+          created_at: Date.now(),
+          auth_provider: authProvider,
+          stars: {
+            total: 0,
+            tier: 'extra',
+            starting_bonus: 0,
+            breakdown: defaultStarBreakdown,
+          },
+          email_opt_in: emailOptIn,
+          sms_opt_in: smsOptIn,
+        };
+        await set(memberRef, member);
+      }
+
+      const starsTotal = member.stars?.total ?? 0;
+      const { tier, bonus } = resolveTierAndBonus(starsTotal);
+
+      const attendeeRef = ref(db, rtdbPath(`shows/${id}/attendees/${uid}`));
+      const attendeeSnap = await get(attendeeRef);
+      if (!attendeeSnap.exists()) {
+        await set(attendeeRef, {
+          member_id: uid,
+          display_name: resolvedDisplayName,
+          tier_at_checkin: tier,
+          starting_bonus_applied: bonus,
+          total_score: bonus,
+          breakdown: {
+            starting_bonus: bonus,
+            trivia: 0,
+            dancing: 0,
+            participation: 0,
+          },
+          stars_earned: {
+            attendance: 1,
+            trivia: 0,
+            dancing: 0,
+            stage: 0,
+            total: 1,
+          },
+          last_dance_claim: 0,
+          dance_claim_count: 0,
+          current_streak: 0,
+          times_selected: 0,
+        });
+      } else if (resolvedDisplayName) {
+        await update(attendeeRef, { display_name: resolvedDisplayName });
+      }
+
+      const scoreRef = ref(db, rtdbPath(`shows/${id}/scores/${uid}`));
+      await runTransaction(scoreRef, (current) => {
+        const existing = (current ?? {}) as Record<string, any>;
+        const existingBreakdown = (existing.breakdown ?? {}) as Record<string, any>;
+        const hasStartingBonus = typeof existingBreakdown.starting_bonus === 'number';
+
+        if (hasStartingBonus) {
+          return existing;
+        }
+
+        const existingTotal = typeof existing.totalScore === 'number' ? existing.totalScore : 0;
+        const startingBonus = bonus;
+        const nextBreakdown = {
+          trivia: existingBreakdown.trivia ?? 0,
+          dancing: existingBreakdown.dancing ?? 0,
+          participation: existingBreakdown.participation ?? 0,
+          starting_bonus: (existingBreakdown.starting_bonus ?? 0) + startingBonus,
+        };
+
+        return {
+          ...existing,
+          displayName: existing.displayName ?? resolvedDisplayName,
+          tier: existing.tier ?? tier,
+          totalScore: existingTotal + startingBonus,
+          breakdown: nextBreakdown,
+          correctCount: existing.correctCount ?? 0,
+          lastAnsweredAt: existing.lastAnsweredAt ?? 0,
+        };
+      });
+
+      const memberShowRef = ref(db, rtdbPath(`members/${uid}/shows/${id}`));
+      const memberShowSnap = await get(memberShowRef);
+      if (!memberShowSnap.exists()) {
+        const showDate = resolveShowDate(showMeta?.startDate);
+        await set(memberShowRef, {
+          date: showDate,
+          stars_earned: 1,
+        });
+
+        const starsRef = ref(db, rtdbPath(`members/${uid}/stars`));
+        await runTransaction(starsRef, (current) => {
+          const existing = (current ?? {}) as Record<string, any>;
+          const existingTotal = typeof existing.total === 'number' ? existing.total : 0;
+          const breakdown = (existing.breakdown ?? {}) as Record<string, any>;
+          const showsAttended = typeof breakdown.shows_attended === 'number'
+            ? breakdown.shows_attended
+            : 0;
+
+          const nextTotal = existingTotal + 1;
+          const nextTier = resolveTierAndBonus(nextTotal);
+
+          return {
+            ...existing,
+            total: nextTotal,
+            tier: nextTier.tier,
+            starting_bonus: nextTier.bonus,
+            breakdown: {
+              ...defaultStarBreakdown,
+              ...breakdown,
+              shows_attended: showsAttended + 1,
+            },
+            last_show_date: showDate,
+          };
+        });
+      }
+    },
+    [id, showMeta, userProfile]
+  );
+
   useEffect(() => {
-    if (isRegistered && showMeta && id) {
-      addShowAttended(id);
-      updateLastSeen();
-      navigate(`/shows/${id}`);
-    }
-  }, [isRegistered, showMeta, id, navigate, addShowAttended, updateLastSeen]);
+    if (!isRegistered || !showMeta || !id) return;
+    let cancelled = false;
+
+    ensureJoinRecords()
+      .then(async () => {
+        if (cancelled) return;
+        await addShowAttended(id);
+        await updateLastSeen();
+        if (!cancelled) {
+          navigate(`/shows/${id}`);
+        }
+      })
+      .catch((error) => {
+        console.error('Join flow error:', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isRegistered, showMeta, id, navigate, addShowAttended, updateLastSeen, ensureJoinRecords]);
 
   const checkNicknameAvailability = useCallback(async (nickname: string) => {
     if (!nickname.trim()) {
@@ -167,7 +380,13 @@ export default function JoinShow() {
       });
 
       if (id) {
+        await ensureJoinRecords({
+          displayName: displayName.trim(),
+          emailOptIn: email.trim() ? marketingConsent : false,
+          smsOptIn: phone.trim() ? marketingConsent : false,
+        });
         await addShowAttended(id);
+        await updateLastSeen();
       }
 
       navigate(`/shows/${id}`);

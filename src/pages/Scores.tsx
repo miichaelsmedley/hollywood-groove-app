@@ -5,21 +5,15 @@ import { auth, db, rtdbPath } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
 import { UserScore } from '../types/firebaseContract';
 import { Link } from 'react-router-dom';
-
-interface ScoresState {
-  loading: boolean;
-  error: string | null;
-  scores: Record<string, UserScore> | null;
-}
+import Leaderboard from '../components/leaderboard/Leaderboard';
 
 export default function Scores() {
   const { userProfile } = useUser();
   const [liveShowId, setLiveShowId] = useState<string | null>(null);
-  const [scoresState, setScoresState] = useState<ScoresState>({
-    loading: true,
-    error: null,
-    scores: null,
-  });
+  const [myScore, setMyScore] = useState<UserScore | null>(null);
+  const [myScoreError, setMyScoreError] = useState<string | null>(null);
+  const [isMyScoreLoading, setIsMyScoreLoading] = useState(false);
+  const uid = auth.currentUser?.uid ?? null;
 
   useEffect(() => {
     const showsRef = ref(db, rtdbPath('shows'));
@@ -35,9 +29,24 @@ export default function Scores() {
         const live = Object.entries(data).flatMap(([showId, showData]: [string, any]) => {
           const liveTrivia = showData?.live?.trivia;
           const phase = liveTrivia?.phase as string | undefined;
-          if (!phase || phase === 'idle') return [];
-          const startedAt = typeof liveTrivia?.startedAt === 'number' ? liveTrivia.startedAt : 0;
-          return [{ showId, startedAt }];
+          const triviaActive = Boolean(phase && phase !== 'idle');
+          const triviaStartedAt = typeof liveTrivia?.startedAt === 'number' ? liveTrivia.startedAt : 0;
+
+          const liveActivity = showData?.live?.activity;
+          const activityActive = liveActivity?.status === 'active';
+          const activityStartedAt = typeof liveActivity?.startedAt === 'number' ? liveActivity.startedAt : 0;
+
+          if (!triviaActive && !activityActive) return [];
+
+          return [
+            {
+              showId,
+              startedAt: Math.max(
+                triviaActive ? triviaStartedAt : 0,
+                activityActive ? activityStartedAt : 0
+              ),
+            },
+          ];
         });
 
         live.sort((a, b) => b.startedAt - a.startedAt);
@@ -58,48 +67,32 @@ export default function Scores() {
   }, [liveShowId, userProfile?.showsAttended]);
 
   useEffect(() => {
-    if (!selectedShowId) {
-      setScoresState({ loading: false, error: null, scores: null });
+    if (!selectedShowId || !uid) {
+      setMyScore(null);
+      setMyScoreError(null);
+      setIsMyScoreLoading(false);
       return;
     }
 
-    setScoresState((current) => ({ ...current, loading: true, error: null }));
+    setIsMyScoreLoading(true);
+    setMyScoreError(null);
 
-    const scoresRef = ref(db, rtdbPath(`shows/${selectedShowId}/scores`));
+    const scoreRef = ref(db, rtdbPath(`shows/${selectedShowId}/scores/${uid}`));
     const unsubscribe = onValue(
-      scoresRef,
+      scoreRef,
       (snapshot) => {
-        setScoresState({
-          loading: false,
-          error: null,
-          scores: (snapshot.val() as Record<string, UserScore> | null) ?? null,
-        });
+        setMyScore((snapshot.val() as UserScore | null) ?? null);
+        setIsMyScoreLoading(false);
       },
       (err) => {
-        setScoresState({
-          loading: false,
-          error: err.message,
-          scores: null,
-        });
+        setMyScore(null);
+        setMyScoreError(err.message);
+        setIsMyScoreLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [selectedShowId]);
-
-  const uid = auth.currentUser?.uid ?? null;
-  const scoresList = useMemo(() => {
-    const scores = scoresState.scores;
-    if (!scores) return [];
-    return Object.entries(scores)
-      .map(([scoreUid, score]) => ({ uid: scoreUid, ...score }))
-      .sort((a, b) => b.totalScore - a.totalScore);
-  }, [scoresState.scores]);
-
-  const myEntry = useMemo(() => {
-    if (!uid) return null;
-    return scoresList.find((entry) => entry.uid === uid) ?? null;
-  }, [scoresList, uid]);
+  }, [selectedShowId, uid]);
 
   if (!selectedShowId) {
     return (
@@ -131,64 +124,42 @@ export default function Scores() {
         <Trophy className="w-6 h-6 text-primary" />
       </div>
 
-      {scoresState.loading ? (
-        <div className="flex items-center justify-center min-h-[40vh]">
-          <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="text-cinema-500 font-medium">Loading scores…</p>
-          </div>
-        </div>
-      ) : scoresState.error ? (
+      {myScoreError && (
         <div className="bg-cinema-50 border border-cinema-200 rounded-2xl p-5">
-          <p className="text-accent-red font-semibold">Can’t load scores</p>
-          <p className="text-cinema-500 text-sm mt-1">{scoresState.error}</p>
-        </div>
-      ) : scoresList.length === 0 ? (
-        <div className="bg-cinema-50 border border-cinema-200 rounded-2xl p-6 text-center">
-          <p className="text-cinema-500 text-sm">No scores yet. Answer trivia to appear here.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {myEntry && (
-            <div className="bg-primary/15 border border-primary/40 rounded-2xl p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-semibold text-cinema-800">You</div>
-                  <div className="text-lg font-bold">{myEntry.totalScore.toLocaleString()} pts</div>
-                </div>
-                <div className="text-right text-xs text-cinema-500">
-                  <div>{myEntry.correctCount} correct</div>
-                  <div>Last: {new Date(myEntry.lastAnsweredAt).toLocaleTimeString()}</div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="bg-cinema-50 border border-cinema-200 rounded-2xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-cinema-200 text-sm font-semibold text-cinema-800">
-              Top scores
-            </div>
-            <ol className="divide-y divide-cinema-200">
-              {scoresList.slice(0, 20).map((entry, index) => (
-                <li
-                  key={entry.uid}
-                  className={[
-                    'flex items-center justify-between px-4 py-3',
-                    entry.uid === uid ? 'bg-primary/10' : '',
-                  ].join(' ')}
-                >
-                  <div className="flex items-baseline gap-3 min-w-0">
-                    <span className="w-6 text-sm text-cinema-500">{index + 1}</span>
-                    <span className="truncate font-semibold">{entry.displayName || 'Anonymous'}</span>
-                  </div>
-                  <span className="font-bold tabular-nums">{entry.totalScore.toLocaleString()}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
+          <p className="text-accent-red font-semibold">Can’t load your score</p>
+          <p className="text-cinema-500 text-sm mt-1">{myScoreError}</p>
         </div>
       )}
+
+      {isMyScoreLoading ? (
+        <div className="bg-cinema-50 border border-cinema-200 rounded-2xl p-4 text-center text-cinema-500 text-sm">
+          Loading your score...
+        </div>
+      ) : myScore ? (
+        <div className="bg-primary/15 border border-primary/40 rounded-2xl p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold text-cinema-800">You</div>
+              <div className="text-lg font-bold">{myScore.totalScore.toLocaleString()} pts</div>
+            </div>
+            <div className="text-right text-xs text-cinema-500">
+              <div>{myScore.correctCount} correct</div>
+              <div>
+                Last:{' '}
+                {myScore.lastAnsweredAt
+                  ? new Date(myScore.lastAnsweredAt).toLocaleTimeString()
+                  : '—'}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-cinema-50 border border-cinema-200 rounded-2xl p-4 text-center text-cinema-500 text-sm">
+          No score yet. Answer trivia to appear here.
+        </div>
+      )}
+
+      <Leaderboard showId={selectedShowId} currentUserId={uid} />
     </div>
   );
 }
-
