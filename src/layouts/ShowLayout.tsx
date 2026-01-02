@@ -1,10 +1,9 @@
 import { Outlet, useParams } from 'react-router-dom';
 import { ShowProvider } from '../contexts/ShowContext';
-import ShowFAB from '../components/show/ShowFAB';
 
 /**
  * Layout wrapper for show-related pages (Trivia, Activity).
- * Provides ShowContext and renders floating action buttons.
+ * Provides ShowContext. Individual pages render their own ActionBar.
  */
 export default function ShowLayout() {
   const { id } = useParams<{ id: string }>();
@@ -21,7 +20,6 @@ export default function ShowLayout() {
   return (
     <ShowProvider showId={showId}>
       <Outlet />
-      <ShowFAB />
     </ShowProvider>
   );
 }

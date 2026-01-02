@@ -1,0 +1,41 @@
+name: Deploy PWA to Azure
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build for production
+        run: npm run build
+        env:
+          VITE_RTDB_PREFIX: ""
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: dist
+
+# Required GitHub Secrets:
+# - AZURE_WEBAPP_NAME: Your Azure App Service name (e.g., "hollywoodgroove")
+# - AZURE_WEBAPP_PUBLISH_PROFILE: Download from Azure Portal → App Service → Get publish profile
+#
+# Note: This deploys to the root. For /app subdirectory deployment,
+# you may need to use FTP or a custom deployment script.

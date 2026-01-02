@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { ref, onValue, set } from 'firebase/database';
 import { auth, db, rtdbPath } from '../lib/firebase';
-import { ShowSettings, LiveActivityState } from '../types/firebaseContract';
+import { ShowSettings, LiveActivityState, LiveTriviaState } from '../types/firebaseContract';
 
 interface DanceClaimRecord {
   lastClaimAt: number;
@@ -13,6 +13,7 @@ interface ShowContextType {
   showId: number | null;
   settings: ShowSettings | null;
   liveActivity: LiveActivityState | null;
+  liveTrivia: LiveTriviaState | null;
 
   // Dancing state
   dancingEnabled: boolean;
@@ -47,6 +48,7 @@ interface ShowProviderProps {
 export function ShowProvider({ showId, children }: ShowProviderProps) {
   const [settings, setSettings] = useState<ShowSettings | null>(null);
   const [liveActivity, setLiveActivity] = useState<LiveActivityState | null>(null);
+  const [liveTrivia, setLiveTrivia] = useState<LiveTriviaState | null>(null);
   const [lastDanceClaim, setLastDanceClaim] = useState<DanceClaimRecord | null>(null);
   const [isOnBreak, setIsOnBreak] = useState(false);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
@@ -71,6 +73,16 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
     const unsubscribe = onValue(activityRef, (snapshot) => {
       const data = snapshot.val();
       setLiveActivity(data as LiveActivityState | null);
+    });
+    return () => unsubscribe();
+  }, [showId]);
+
+  // Listen to live trivia state
+  useEffect(() => {
+    const triviaRef = ref(db, rtdbPath(`shows/${showId}/live/trivia`));
+    const unsubscribe = onValue(triviaRef, (snapshot) => {
+      const data = snapshot.val();
+      setLiveTrivia(data as LiveTriviaState | null);
     });
     return () => unsubscribe();
   }, [showId]);
@@ -158,6 +170,7 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
         showId,
         settings: effectiveSettings,
         liveActivity,
+        liveTrivia,
         dancingEnabled,
         currentMedian,
         canClaimDance,

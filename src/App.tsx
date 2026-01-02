@@ -7,6 +7,7 @@ import { UserProvider } from './contexts/UserContext';
 
 import Layout from './components/Layout';
 import ShowLayout from './layouts/ShowLayout';
+import AdminRoute from './components/AdminRoute';
 import Home from './pages/Home';
 import ShowsPage from './features/shows/ShowsPage';
 import ShowDetail from './pages/ShowDetail';
@@ -83,8 +84,8 @@ export default function App() {
             <Route path="shows/:id" element={<ShowDetail />} />
             {IS_TEST_MODE && (
               <>
-                <Route path="firebase-test" element={<FirebaseTest />} />
-                <Route path="__testing/firebase" element={<FirebaseTest />} />
+                <Route path="firebase-test" element={<AdminRoute><FirebaseTest /></AdminRoute>} />
+                <Route path="__testing/firebase" element={<AdminRoute><FirebaseTest /></AdminRoute>} />
               </>
             )}
             <Route path="*" element={<Navigate to="/" replace />} />

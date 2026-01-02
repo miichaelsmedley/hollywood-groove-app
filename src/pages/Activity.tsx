@@ -4,6 +4,7 @@ import { onValue, ref, set } from 'firebase/database';
 import { CalendarCheck, ArrowLeft, Users } from 'lucide-react';
 import { auth, db, rtdbPath } from '../lib/firebase';
 import { CrowdActivity, LiveActivityState } from '../types/firebaseContract';
+import ActionBar from '../components/show/ActionBar';
 
 export default function Activity() {
   const { id } = useParams<{ id: string }>();
@@ -111,131 +112,140 @@ export default function Activity() {
 
   if (!isLive || !liveActivity) {
     return (
-      <div className="min-h-screen bg-gray-950 text-gray-100 p-8">
-        <Link
-          to={`/shows/${id}`}
-          className="inline-flex items-center space-x-2 text-gray-400 hover:text-gray-100 transition-colors mb-6"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Show</span>
-        </Link>
+      <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
+        <div className="flex-1 overflow-y-auto p-4">
+          <Link
+            to={`/shows/${id}`}
+            className="inline-flex items-center space-x-2 text-gray-400 hover:text-gray-100 transition-colors mb-4"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Show</span>
+          </Link>
 
-        <div className="max-w-2xl mx-auto text-center py-12">
-          <CalendarCheck className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-2">No Active Activity</h2>
-          <p className="text-gray-400">
-            Check back when the DJ starts a crowd activity.
-          </p>
+          <div className="max-w-2xl mx-auto text-center py-8">
+            <CalendarCheck className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+            <h2 className="text-xl font-bold mb-2">No Active Activity</h2>
+            <p className="text-gray-400 text-sm">
+              Check back when the DJ starts a crowd activity.
+            </p>
+          </div>
         </div>
+        <ActionBar />
       </div>
     );
   }
 
   if (!activity) {
     return (
-      <div className="min-h-screen bg-gray-950 text-gray-100 p-8">
-        <Link
-          to={`/shows/${id}`}
-          className="inline-flex items-center space-x-2 text-gray-400 hover:text-gray-100 transition-colors mb-6"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Show</span>
-        </Link>
-        <div className="max-w-2xl mx-auto text-center py-12">
-          <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-2">Loading Activity</h2>
-          <p className="text-gray-400">Fetching the activity details...</p>
+      <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
+        <div className="flex-1 overflow-y-auto p-4">
+          <Link
+            to={`/shows/${id}`}
+            className="inline-flex items-center space-x-2 text-gray-400 hover:text-gray-100 transition-colors mb-4"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Show</span>
+          </Link>
+          <div className="max-w-2xl mx-auto text-center py-8">
+            <Users className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+            <h2 className="text-xl font-bold mb-2">Loading Activity</h2>
+            <p className="text-gray-400 text-sm">Fetching the activity details...</p>
+          </div>
         </div>
+        <ActionBar />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-4 sm:p-8">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <Link
-          to={`/shows/${id}`}
-          className="inline-flex items-center space-x-2 text-gray-400 hover:text-gray-100 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Show</span>
-        </Link>
+    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="max-w-lg mx-auto space-y-4">
+          <Link
+            to={`/shows/${id}`}
+            className="inline-flex items-center space-x-2 text-gray-400 hover:text-gray-100 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="text-sm">Back to Show</span>
+          </Link>
 
-        <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 space-y-4">
-          <div className="text-xs uppercase tracking-[0.3em] text-gray-400">Live Activity</div>
-          <h1 className="text-3xl font-bold">{activity.title}</h1>
-          <p className="text-gray-300 text-lg">{prompt}</p>
+          <div className="bg-cinema-900/60 border border-cinema-700 rounded-xl p-4 space-y-3">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-cinema-400">Live Activity</div>
+            <h1 className="text-xl font-bold">{activity.title}</h1>
+            <p className="text-cinema-300 text-sm">{prompt}</p>
 
-          {activity.prize && (
-            <div className="text-sm text-amber-300 font-semibold">Prize: {activity.prize}</div>
-          )}
-
-          {activity.maxParticipants && (
-            <div className="text-sm text-gray-400">Spots: {activity.maxParticipants}</div>
-          )}
-        </div>
-
-        {isDancing ? (
-          <div className="space-y-3">
-            <button
-              type="button"
-              onClick={claimDancePoints}
-              className="w-full btn-primary"
-              disabled={hasResponded}
-            >
-              {hasResponded
-                ? 'Claimed!'
-                : hasMedian
-                  ? `Claim ${currentMedian} pts`
-                  : 'Claim dance points'}
-            </button>
-            {hasResponded && (
-              <div className="text-sm text-primary font-semibold">You are locked in.</div>
+            {activity.prize && (
+              <div className="text-xs text-amber-300 font-semibold">Prize: {activity.prize}</div>
             )}
-            {!hasResponded && (
-              <div className="text-xs text-gray-400">
-                Get on the floor to earn points.
-              </div>
+
+            {activity.maxParticipants && (
+              <div className="text-xs text-cinema-400">Spots: {activity.maxParticipants}</div>
             )}
           </div>
-        ) : activity.type === 'vote' && options.length > 0 ? (
-          <div className="space-y-3">
-            {options.map((option) => (
+
+          {isDancing ? (
+            <div className="space-y-2">
               <button
-                key={option.index}
                 type="button"
-                onClick={() => voteOption(option.index, option.text)}
-                className={[
-                  'w-full text-left px-5 py-4 rounded-xl border transition',
-                  selectedOption === option.index
-                    ? 'border-primary/70 bg-primary/20'
-                    : 'border-gray-800 bg-gray-900/60 hover:border-primary/40',
-                ].join(' ')}
+                onClick={claimDancePoints}
+                className="w-full py-3 px-4 rounded-lg bg-primary/20 border border-primary text-primary font-semibold text-sm hover:bg-primary/30 transition-all active:scale-[0.98] disabled:opacity-50"
                 disabled={hasResponded}
               >
-                <div className="font-semibold">{option.text}</div>
+                {hasResponded
+                  ? 'Claimed!'
+                  : hasMedian
+                    ? `Claim ${currentMedian} pts`
+                    : 'Claim dance points'}
               </button>
-            ))}
-            {hasResponded && (
-              <div className="text-sm text-primary font-semibold">Thanks for voting!</div>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <button
-              type="button"
-              onClick={joinActivity}
-              className="w-full btn-primary"
-              disabled={hasResponded}
-            >
-              {hasResponded ? 'You are in!' : 'Join Activity'}
-            </button>
-            {hasResponded && (
-              <div className="text-sm text-primary font-semibold">You are locked in.</div>
-            )}
-          </div>
-        )}
+              {hasResponded && (
+                <div className="text-xs text-primary font-semibold text-center">You are locked in.</div>
+              )}
+              {!hasResponded && (
+                <div className="text-xs text-cinema-400 text-center">
+                  Get on the floor to earn points.
+                </div>
+              )}
+            </div>
+          ) : activity.type === 'vote' && options.length > 0 ? (
+            <div className="space-y-2">
+              {options.map((option) => (
+                <button
+                  key={option.index}
+                  type="button"
+                  onClick={() => voteOption(option.index, option.text)}
+                  className={[
+                    'w-full text-left px-4 py-3 rounded-lg border transition text-sm',
+                    selectedOption === option.index
+                      ? 'border-primary/70 bg-primary/20'
+                      : 'border-cinema-700 bg-cinema-900/60 hover:border-primary/40',
+                  ].join(' ')}
+                  disabled={hasResponded}
+                >
+                  <div className="font-semibold">{option.text}</div>
+                </button>
+              ))}
+              {hasResponded && (
+                <div className="text-xs text-primary font-semibold text-center">Thanks for voting!</div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={joinActivity}
+                className="w-full py-3 px-4 rounded-lg bg-accent-green/20 border border-accent-green text-accent-green font-semibold text-sm hover:bg-accent-green/30 transition-all active:scale-[0.98] disabled:opacity-50"
+                disabled={hasResponded}
+              >
+                {hasResponded ? 'You are in!' : 'Join Activity'}
+              </button>
+              {hasResponded && (
+                <div className="text-xs text-accent-green font-semibold text-center">You are locked in.</div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
+      <ActionBar />
     </div>
   );
 }

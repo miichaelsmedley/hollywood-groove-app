@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom';
 import { Mail, Phone, User, CheckCircle, AlertCircle, Settings, LogOut } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
-import { IS_TEST_MODE } from '../lib/mode';
-import { RTDB_PREFIX } from '../lib/firebase';
+import { IS_TEST_MODE, isAdminEmail } from '../lib/mode';
+import { RTDB_PREFIX, auth } from '../lib/firebase';
 import { useState } from 'react';
 
 export default function Profile() {
@@ -265,7 +265,7 @@ export default function Profile() {
         )}
       </div>
 
-      {IS_TEST_MODE && (
+      {IS_TEST_MODE && isAdminEmail(auth.currentUser?.email) && (
         <div className="bg-primary/10 border border-primary/30 rounded-2xl p-5 space-y-3">
           <div className="text-sm font-semibold text-cinema-800">Testing</div>
           <div className="text-sm text-cinema-700">
