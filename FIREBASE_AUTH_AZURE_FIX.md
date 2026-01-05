@@ -2,7 +2,10 @@
 
 **Issue:** Google sign-in redirects to Google OAuth screen but doesn't return to the app.
 
-**Root Cause:** Firebase Authentication needs to know which domains are authorized to handle OAuth redirects.
+**Root Cause:**
+1. Firebase Authentication needs to know which domains are authorized to handle OAuth redirects
+2. The authorized redirect URI in Google Cloud Console was missing the `/__/auth/handler` path
+3. Mobile browsers require redirect flow instead of popup flow
 
 ## Solution
 
@@ -30,19 +33,24 @@ To find it:
 
 If you have a custom domain (like `hollywoodgroove.com`), add that as well.
 
-### Step 3: Configure Google Cloud Console (OAuth Consent Screen)
+### Step 3: Configure Google Cloud Console (OAuth Consent Screen) ⚠️ CRITICAL
 
 The authorized redirect URIs also need to be configured in Google Cloud Console:
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com)
 2. Select project: **theta-inkwell-448908-g9**
 3. Navigate to: **APIs & Services → Credentials**
-4. Find your OAuth 2.0 Client ID (Web client)
+4. Find your OAuth 2.0 Client ID (Web client - auto created by Google Service)
 5. Click to edit
-6. Under **Authorized redirect URIs**, add:
-   - `https://theta-inkwell-448908-g9.firebaseapp.com/__/auth/handler`
-   - `https://YOUR-AZURE-DOMAIN/__/auth/handler` (e.g., `https://proud-plant-02f697200.azurestaticapps.net/__/auth/handler`)
+6. Under **Authorized redirect URIs**, verify/fix these entries:
+   - ✅ `https://theta-inkwell-448908-g9.firebaseapp.com/__/auth/handler`
+   - ⚠️ **FIX THIS:** Change `https://proud-plant-02f697200.4.azurestaticapps.net` to:
+     - `https://proud-plant-02f697200.4.azurestaticapps.net/__/auth/handler`
+   - ✅ `https://app.hollywoodgroove.com.au/__/auth/handler`
 7. Click **Save**
+8. **Wait 5-10 minutes** for changes to propagate
+
+**Important:** The `/__/auth/handler` suffix is REQUIRED. Without it, the OAuth redirect will fail on mobile devices.
 
 ### Step 4: Set Environment Variable (Optional)
 
@@ -84,20 +92,43 @@ After configuring:
 
 ## Troubleshooting
 
+### Works on Desktop but NOT on Mobile? 🔍
+
+This is the exact issue you're experiencing! The problem is:
+
+1. **Desktop browsers** use popup flow, which can sometimes work even with misconfigured redirect URIs
+2. **Mobile browsers** (iOS Safari, Chrome Mobile) REQUIRE redirect flow
+3. **Redirect flow requires the exact URI** with `/__/auth/handler` suffix
+
+**Solution:**
+- Fix the Google Cloud Console redirect URI (Step 3 above)
+- Wait 5-10 minutes for changes to propagate
+- Clear your mobile browser cache
+- Try sign-in again on mobile
+
+The updated code in `src/lib/auth.ts` now:
+- Detects mobile devices automatically
+- Uses redirect flow on mobile (instead of popup)
+- Falls back to redirect if popup fails on desktop
+
 ### Still not working?
-- Check browser console for specific error messages
+- Check browser console for specific error messages (on mobile: use Safari Web Inspector or Chrome Remote Debugging)
 - Verify all domains are added (both Firebase and Google Cloud Console)
 - Make sure to use HTTPS (OAuth requires secure connections)
 - Try incognito/private browsing mode to rule out cached credentials
+- Wait at least 10 minutes after changing Google Cloud Console settings
 
 ### Error: "redirect_uri_mismatch"
 - The redirect URI in Google Cloud Console doesn't match
 - Format must be exact: `https://YOUR-DOMAIN/__/auth/handler`
-- No trailing slashes
+- No trailing slashes after `/handler`
+- Wait 5-10 minutes after fixing for Google to propagate changes
 
 ### Error: "auth/unauthorized-domain"
 - Domain not added to Firebase authorized domains
 - Check spelling and protocol (https vs http)
+- Firebase Console allows domains without the handler path
+- Google Cloud Console requires the full path with `/__/auth/handler`
 
 ## Quick Checklist
 
