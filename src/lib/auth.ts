@@ -90,10 +90,22 @@ export async function handleRedirectResult(): Promise<boolean> {
 }
 
 /**
+ * Detect if the user is on a mobile device.
+ * Mobile devices should use redirect flow instead of popup.
+ */
+function isMobileDevice(): boolean {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  );
+}
+
+/**
  * Sign in with Google.
  *
  * Simplified approach: Sign out anonymous user first, then sign in with Google.
  * This avoids the complexity of linkWithPopup which has cross-origin issues.
+ *
+ * Mobile devices use redirect flow, desktop uses popup with redirect fallback.
  *
  * Returns true if sign-in was successful.
  */
@@ -116,22 +128,33 @@ export async function signInWithGoogle(): Promise<boolean> {
       await firebaseSignOut(auth);
     }
 
-    // Now do a fresh Google sign-in
-    console.log('Starting Google sign-in...');
-    const result = await signInWithPopup(auth, googleProvider);
-    console.log('✅ Signed in with Google:', {
-      uid: result.user.uid,
-      email: result.user.email,
-      displayName: result.user.displayName,
-      isAnonymous: result.user.isAnonymous,
-      providerData: result.user.providerData,
-    });
-    return true;
+    // Mobile devices should use redirect flow directly
+    const useMobile = isMobileDevice();
+    console.log(`Starting Google sign-in (${useMobile ? 'redirect' : 'popup'} mode)...`);
+
+    if (useMobile) {
+      // Use redirect on mobile
+      await signInWithRedirect(auth, googleProvider);
+      return false; // Will complete after redirect
+    } else {
+      // Try popup on desktop
+      const result = await signInWithPopup(auth, googleProvider);
+      console.log('✅ Signed in with Google:', {
+        uid: result.user.uid,
+        email: result.user.email,
+        displayName: result.user.displayName,
+        isAnonymous: result.user.isAnonymous,
+        providerData: result.user.providerData,
+      });
+      return true;
+    }
   } catch (error: any) {
     console.error('Google sign-in error:', error.code, error.message);
 
-    if (error.code === 'auth/popup-blocked') {
-      console.log('Popup blocked, falling back to redirect');
+    if (error.code === 'auth/popup-blocked' ||
+        error.code === 'auth/popup-closed-by-user' ||
+        error.code === 'auth/cancelled-popup-request') {
+      console.log('Popup failed, falling back to redirect');
       await signInWithRedirect(auth, googleProvider);
       return false; // Will complete after redirect
     } else if (error.code === 'auth/popup-closed-by-user' ||
