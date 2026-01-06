@@ -26,7 +26,10 @@ export function isGoogleAuthInProgress(): boolean {
  * Returns true if a redirect was processed, false otherwise.
  */
 export async function handleRedirectResult(): Promise<boolean> {
-  console.log('Checking for redirect result...');
+  console.log('🔍 Checking for redirect result...');
+  console.log('Current URL:', window.location.href);
+  console.log('Auth domain configured:', auth.app.options.authDomain);
+
   try {
     const result = await getRedirectResult(auth);
     if (result) {
@@ -46,6 +49,7 @@ export async function handleRedirectResult(): Promise<boolean> {
     console.error('❌ Error handling redirect result:', error);
     console.error('Error code:', error.code);
     console.error('Error message:', error.message);
+    console.error('Error details:', JSON.stringify(error, null, 2));
 
     if (error.code === 'auth/credential-already-in-use') {
       // The Google account is already linked to a different Firebase user.
@@ -130,11 +134,16 @@ export async function signInWithGoogle(): Promise<boolean> {
 
     // Mobile devices should use redirect flow directly
     const useMobile = isMobileDevice();
-    console.log(`Starting Google sign-in (${useMobile ? 'redirect' : 'popup'} mode)...`);
+    console.log(`🔐 Starting Google sign-in (${useMobile ? 'redirect' : 'popup'} mode)...`);
+    console.log('User agent:', navigator.userAgent);
+    console.log('Auth domain:', auth.app.options.authDomain);
+    console.log('Current URL:', window.location.href);
 
     if (useMobile) {
       // Use redirect on mobile
+      console.log('📱 Initiating redirect flow for mobile...');
       await signInWithRedirect(auth, googleProvider);
+      console.log('✅ Redirect initiated, waiting for redirect...');
       return false; // Will complete after redirect
     } else {
       // Try popup on desktop
