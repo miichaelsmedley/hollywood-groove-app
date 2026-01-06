@@ -21,6 +21,17 @@ import Leaderboard from './pages/Leaderboard';
 import Profile from './pages/Profile';
 import { IS_TEST_MODE } from './lib/mode';
 
+// TEMPORARY: Mobile debugging console - remove after fixing auth
+if (typeof window !== 'undefined') {
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/eruda';
+  document.body.appendChild(script);
+  script.onload = () => {
+    (window as any).eruda?.init();
+    console.log('📱 Mobile console loaded - tap the icon to view logs');
+  };
+}
+
 export default function App() {
   // Handle auth initialization: redirect result first, then anonymous sign-in
   useEffect(() => {
