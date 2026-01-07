@@ -31,14 +31,26 @@
           ".write": "root.child('admins').child(auth.uid).val() === true"
         },
 
-        // Leaderboard and scores
+        // Leaderboard (admin only write)
         "leaderboard": {
           ".read": true,
           ".write": "root.child('admins').child(auth.uid).val() === true"
         },
+
+        // Scores - users can write their own, everyone can read
         "scores": {
           ".read": true,
-          ".write": "root.child('admins').child(auth.uid).val() === true"
+          "$uid": {
+            ".write": "auth != null && (auth.uid == $uid || root.child('admins').child(auth.uid).val() === true)"
+          }
+        },
+
+        // Attendees - users can write their own check-in
+        "attendees": {
+          ".read": true,
+          "$uid": {
+            ".write": "auth != null && (auth.uid == $uid || root.child('admins').child(auth.uid).val() === true)"
+          }
         },
 
         // Show settings (admin only)
@@ -77,6 +89,12 @@
     // Admin list - only readable/writable by existing admins
     "admins": {
       ".read": "root.child('admins').child(auth.uid).val() === true",
+      ".write": "root.child('admins').child(auth.uid).val() === true"
+    },
+
+    // Leaderboards - public read, admin write
+    "leaderboards": {
+      ".read": "auth != null",
       ".write": "root.child('admins').child(auth.uid).val() === true"
     }
   }
