@@ -37,6 +37,7 @@ export default function App() {
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
     let isMounted = true;
+    let hasProcessedInitialAuth = false;
 
     (async () => {
       // First, check for redirect result (Google sign-in completion)
@@ -44,6 +45,7 @@ export default function App() {
       let redirectProcessed = false;
       try {
         redirectProcessed = await handleRedirectResult();
+        console.log('Redirect result processed:', redirectProcessed);
       } catch (error) {
         console.error('Error handling redirect:', error);
       }
@@ -54,16 +56,50 @@ export default function App() {
       // Set up auth state listener for anonymous sign-in fallback
       // But skip anonymous sign-in if we just processed a redirect or Google auth is in progress
       unsubscribe = onAuthStateChanged(auth, async (user) => {
-        if (!user && !redirectProcessed && !isGoogleAuthInProgress()) {
-          try {
-            console.log('No user, signing in anonymously...');
-            await signInAnonymously(auth);
-          } catch (error) {
-            console.error('Firebase auth error:', error);
+        console.log('onAuthStateChanged fired:', user ? {
+          uid: user.uid,
+          isAnonymous: user.isAnonymous,
+          email: user.email,
+          providerData: user.providerData?.map(p => p.providerId),
+        } : 'null');
+
+        // Skip processing if we already handled the initial auth state
+        if (hasProcessedInitialAuth && user) {
+          console.log('Already processed initial auth, skipping');
+          return;
+        }
+
+        if (!user) {
+          // Check if Google auth is in progress - if so, wait for it
+          if (isGoogleAuthInProgress()) {
+            console.log('No user but Google auth in progress, waiting...');
+            // Wait a bit and check again - the auth state might still be loading
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Check again after waiting
+            if (auth.currentUser) {
+              console.log('User appeared after waiting:', auth.currentUser.email);
+              hasProcessedInitialAuth = true;
+              return;
+            }
+
+            // Still no user and redirect was pending - this is a failed redirect
+            if (isGoogleAuthInProgress()) {
+              console.log('Redirect seems to have failed, clearing pending flag and signing in anonymously');
+              // The redirect failed - sign in anonymously
+            }
           }
-        } else if (!user && isGoogleAuthInProgress()) {
-          console.log('No user but Google auth in progress, skipping anonymous sign-in');
-        } else if (user) {
+
+          if (!redirectProcessed) {
+            try {
+              console.log('No user, signing in anonymously...');
+              await signInAnonymously(auth);
+            } catch (error) {
+              console.error('Firebase auth error:', error);
+            }
+          }
+        } else {
+          hasProcessedInitialAuth = true;
           console.log('User signed in:', {
             uid: user.uid,
             isAnonymous: user.isAnonymous,

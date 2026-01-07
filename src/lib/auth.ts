@@ -50,6 +50,19 @@ export async function handleRedirectResult(): Promise<boolean> {
   await auth.authStateReady();
   console.log('Auth state ready');
 
+  // IMPORTANT: Check if user is already signed in with Google FIRST
+  // This handles the case where auth state was preserved but getRedirectResult returns null
+  if (auth.currentUser && auth.currentUser.providerData.some(p => p.providerId === 'google.com')) {
+    console.log('✅ User already signed in with Google (auth state preserved):', {
+      uid: auth.currentUser.uid,
+      email: auth.currentUser.email,
+      isAnonymous: auth.currentUser.isAnonymous,
+    });
+    // Clear the pending flag since auth is complete
+    setRedirectPending(false);
+    return true;
+  }
+
   console.log('Current user before getRedirectResult:', auth.currentUser ? {
     uid: auth.currentUser.uid,
     email: auth.currentUser.email,
