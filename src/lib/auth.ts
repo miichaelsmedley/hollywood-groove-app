@@ -156,22 +156,10 @@ export async function handleRedirectResult(): Promise<boolean> {
 }
 
 /**
- * Detect if the user is on a mobile device.
- * Mobile devices should use redirect flow instead of popup.
- */
-function isMobileDevice(): boolean {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-    navigator.userAgent
-  );
-}
-
-/**
  * Sign in with Google.
  *
- * Simplified approach: Sign out anonymous user first, then sign in with Google.
- * This avoids the complexity of linkWithPopup which has cross-origin issues.
- *
- * Mobile devices use redirect flow, desktop uses popup with redirect fallback.
+ * Uses popup flow for all devices - redirect flow has reliability issues on some
+ * mobile browsers where the auth state is lost during the redirect.
  *
  * Returns true if sign-in was successful.
  */
@@ -194,23 +182,14 @@ export async function signInWithGoogle(): Promise<boolean> {
       await firebaseSignOut(auth);
     }
 
-    // Mobile devices should use redirect flow directly
-    const useMobile = isMobileDevice();
-    console.log(`🔐 Starting Google sign-in (${useMobile ? 'redirect' : 'popup'} mode)...`);
+    console.log('🔐 Starting Google sign-in (popup mode)...');
     console.log('User agent:', navigator.userAgent);
     console.log('Auth domain:', auth.app.options.authDomain);
     console.log('Current URL:', window.location.href);
 
-    if (useMobile) {
-      // Use redirect on mobile
-      console.log('📱 Initiating redirect flow for mobile...');
-      // Set the pending flag before redirect so we know to check for result on reload
-      setRedirectPending(true);
-      await signInWithRedirect(auth, googleProvider);
-      console.log('✅ Redirect initiated, waiting for redirect...');
-      return false; // Will complete after redirect
-    } else {
-      // Try popup on desktop
+    // Always try popup first - it's more reliable across all browsers
+    // Most modern mobile browsers support popups now
+    try {
       const result = await signInWithPopup(auth, googleProvider);
       console.log('✅ Signed in with Google:', {
         uid: result.user.uid,
@@ -220,24 +199,32 @@ export async function signInWithGoogle(): Promise<boolean> {
         providerData: result.user.providerData,
       });
       return true;
+    } catch (popupError: any) {
+      console.log('Popup attempt result:', popupError.code, popupError.message);
+
+      // Only fall back to redirect if popup was actually blocked (not just closed)
+      if (popupError.code === 'auth/popup-blocked') {
+        console.log('📱 Popup blocked, falling back to redirect...');
+        setRedirectPending(true);
+        await signInWithRedirect(auth, googleProvider);
+        return false; // Will complete after redirect
+      } else if (popupError.code === 'auth/popup-closed-by-user' ||
+                 popupError.code === 'auth/cancelled-popup-request') {
+        console.log('User cancelled sign-in');
+        // Re-sign in anonymously since we signed out
+        await signInAnonymously(auth);
+        throw new Error('Sign-in cancelled');
+      } else {
+        throw popupError;
+      }
     }
   } catch (error: any) {
     console.error('Google sign-in error:', error.code, error.message);
-
-    if (error.code === 'auth/popup-blocked') {
-      console.log('Popup blocked, falling back to redirect');
-      setRedirectPending(true);
-      await signInWithRedirect(auth, googleProvider);
-      return false; // Will complete after redirect
-    } else if (error.code === 'auth/popup-closed-by-user' ||
-               error.code === 'auth/cancelled-popup-request') {
-      console.log('User cancelled sign-in');
-      // Re-sign in anonymously since we signed out
+    // Re-sign in anonymously on any error (if not already signed in)
+    if (!auth.currentUser) {
       await signInAnonymously(auth);
-      throw new Error('Sign-in cancelled');
-    } else {
-      throw error;
     }
+    throw error;
   } finally {
     googleAuthInProgress = false;
   }
