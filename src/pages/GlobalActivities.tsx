@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { onValue, ref } from 'firebase/database';
 import { ArrowLeft, Mic, Trophy, Vote, Users, Music, HelpCircle, Calendar, Sparkles, Coffee } from 'lucide-react';
-import { db, rtdbPath } from '../lib/firebase';
 import { CrowdActivity, ActivityType } from '../types/firebaseContract';
 
 // Activity type display config
@@ -32,28 +30,18 @@ export default function GlobalActivities() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Listen to global activities (activities not tied to a specific show)
-    // These would be stored at /activities/ or similar path
-    // For now, showing a placeholder until the global activities system is built
-    const globalActivitiesRef = ref(db, rtdbPath('global_activities'));
-    const unsubscribe = onValue(globalActivitiesRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const activityList: GlobalActivity[] = Object.entries(data).map(([activityId, activity]) => ({
-          ...(activity as CrowdActivity),
-          id: activityId,
-        }));
-        setActivities(activityList);
-      } else {
-        setActivities([]);
-      }
-      setLoading(false);
-    }, () => {
-      // Error handler - path might not exist yet
-      setLoading(false);
-    });
+    // Global activities are a future feature (Phase 3.5)
+    // For now, just show the empty state without attempting to read from Firebase
+    // This avoids permission errors until the global_activities path and rules are set up
+    setActivities([]);
+    setLoading(false);
 
-    return () => unsubscribe();
+    // TODO: When global activities are implemented:
+    // 1. Add 'global_activities' path to Firebase security rules
+    // 2. Uncomment the Firebase listener below
+    // const globalActivitiesRef = ref(db, rtdbPath('global_activities'));
+    // const unsubscribe = onValue(globalActivitiesRef, (snapshot) => { ... });
+    // return () => unsubscribe();
   }, []);
 
   const renderActivityCard = (activity: GlobalActivity) => {

@@ -47,20 +47,20 @@ export default function BreakMenuModal({ onSelect, onClose, currentMedian }: Bre
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-lg bg-cinema-900 rounded-t-2xl border-t border-cinema-700 p-4 pb-8 animate-slide-up">
+      <div className="relative w-full max-w-lg bg-cinema-50 rounded-t-2xl border-t border-cinema-200 p-4 pb-8 animate-slide-up">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-white">Take a Break</h3>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-cinema-800 transition-colors"
+            className="p-1.5 rounded-full hover:bg-cinema-100 transition-colors"
           >
-            <X className="w-5 h-5 text-cinema-400" />
+            <X className="w-5 h-5 text-cinema-500" />
           </button>
         </div>
 
         {/* Info */}
-        <p className="text-sm text-cinema-400 mb-4">
+        <p className="text-sm text-cinema-500 mb-4">
           Earn ~{currentMedian ?? 50} pts automatically while you're away. Auto-claims every minute (respects cooldown).
         </p>
 
@@ -70,14 +70,14 @@ export default function BreakMenuModal({ onSelect, onClose, currentMedian }: Bre
             <button
               key={option.mode}
               onClick={() => onSelect(option.mode)}
-              className="w-full flex items-center gap-3 p-3 rounded-xl bg-cinema-800/50 border border-cinema-700 hover:border-primary/50 hover:bg-cinema-800 transition-all active:scale-[0.98]"
+              className="w-full flex items-center gap-3 p-3 rounded-xl bg-cinema-100/50 border border-cinema-200 hover:border-primary/50 hover:bg-cinema-100 transition-all active:scale-[0.98]"
             >
               <span className="text-2xl">{option.icon}</span>
               <div className="flex-1 text-left">
                 <div className="font-semibold text-white">{option.label}</div>
-                <div className="text-xs text-cinema-400">{option.description}</div>
+                <div className="text-xs text-cinema-500">{option.description}</div>
               </div>
-              <div className="text-xs text-cinema-500 bg-cinema-900 px-2 py-1 rounded-full">
+              <div className="text-xs text-cinema-600 bg-cinema px-2 py-1 rounded-full">
                 {option.duration}
               </div>
             </button>

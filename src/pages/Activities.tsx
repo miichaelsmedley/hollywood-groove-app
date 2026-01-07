@@ -76,12 +76,39 @@ export default function Activities() {
     };
   }, [id]);
 
+  // Find activities that match current live state
+  const liveActivitiesFromCollection = activities.filter((a) =>
+    (liveActivity?.activityId === a.id && liveActivity?.status === 'active') ||
+    (liveTrivia?.activityId === a.id && liveTrivia?.phase !== 'idle')
+  );
+
+  // Build the live activities list, including live activity from state if not in collection
+  const buildLiveActivities = (): ActivityWithId[] => {
+    const result: ActivityWithId[] = [...liveActivitiesFromCollection];
+
+    // If there's an active live activity that's NOT in our activities collection,
+    // create a synthetic entry from the live state
+    if (liveActivity?.status === 'active' && liveActivity.activityId) {
+      const existsInCollection = activities.some((a) => a.id === liveActivity.activityId);
+      if (!existsInCollection) {
+        // Create a synthetic activity from live state
+        const syntheticActivity: ActivityWithId = {
+          id: liveActivity.activityId,
+          type: liveActivity.type,
+          title: liveActivity.prompt || liveActivity.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          prompt: liveActivity.prompt,
+          maxParticipants: liveActivity.slotsAvailable,
+        };
+        result.push(syntheticActivity);
+      }
+    }
+
+    return result;
+  };
+
   // Group activities by scope
   const groupedActivities = {
-    live: activities.filter((a) =>
-      (liveActivity?.activityId === a.id && liveActivity?.status === 'active') ||
-      (liveTrivia?.activityId === a.id && liveTrivia?.phase !== 'idle')
-    ),
+    live: buildLiveActivities(),
     show: activities.filter((a) => !a.songId && !a.setId && a.type !== 'trivia'),
     set: activities.filter((a) => a.setId && !a.songId),
     song: activities.filter((a) => a.songId),

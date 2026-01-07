@@ -8,6 +8,7 @@
 
     // Production rules
     "shows": {
+      ".read": "auth != null",
       "$showId": {
         // Show metadata
         "meta": {
