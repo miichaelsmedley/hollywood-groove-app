@@ -11,7 +11,35 @@ function normalizeRtdbPrefix(prefix: string): string {
     : `${withoutLeadingSlashes}/`;
 }
 
-const defaultRtdbPrefix = import.meta.env.DEV ? "test/" : "";
+// Check for test mode override via URL query parameter or localStorage
+function getTestModeOverride(): boolean {
+  if (typeof window !== 'undefined') {
+    const urlParams = new URLSearchParams(window.location.search);
+    // Allow ?testMode=true to enable test mode
+    if (urlParams.get('testMode') === 'true') {
+      localStorage.setItem('hg_test_mode', 'true');
+      return true;
+    }
+    // Allow ?testMode=false to disable test mode
+    if (urlParams.get('testMode') === 'false') {
+      localStorage.removeItem('hg_test_mode');
+      return false;
+    }
+    // Check localStorage for persisted test mode
+    if (localStorage.getItem('hg_test_mode') === 'true') {
+      return true;
+    }
+  }
+  return false;
+}
+
+const isTestModeOverride = getTestModeOverride();
+const defaultRtdbPrefix = import.meta.env.DEV || isTestModeOverride ? "test/" : "";
+
+// Log prefix for debugging
+if (typeof window !== 'undefined') {
+  console.log(`🔧 Firebase RTDB prefix: "${defaultRtdbPrefix}" (testMode override: ${isTestModeOverride})`);
+}
 
 export const RTDB_PREFIX = normalizeRtdbPrefix(
   typeof import.meta.env.VITE_RTDB_PREFIX === "string"
