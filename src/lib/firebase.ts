@@ -48,8 +48,11 @@ const defaultRtdbPrefix = import.meta.env.DEV || isTestModeOverride ? "test/" : 
 
 // Log prefix for debugging
 if (typeof window !== 'undefined') {
-  console.log(`🔧 Firebase RTDB prefix: "${defaultRtdbPrefix}" (testMode override: ${isTestModeOverride})`);
+  console.log(`🔧 Firebase RTDB prefix: "${defaultRtdbPrefix}" (testMode: ${isTestModeOverride}, DEV: ${import.meta.env.DEV})`);
 }
+
+// Export for debugging
+export const IS_TEST_MODE = isTestModeOverride || import.meta.env.DEV;
 
 export const RTDB_PREFIX = normalizeRtdbPrefix(
   typeof import.meta.env.VITE_RTDB_PREFIX === "string"
