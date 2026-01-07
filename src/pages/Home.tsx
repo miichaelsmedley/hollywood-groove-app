@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Calendar, Music, Sparkles } from 'lucide-react';
+import { Music, Sparkles, List } from 'lucide-react';
 
 export default function Home() {
   return (
@@ -25,19 +25,6 @@ export default function Home() {
         </Link>
 
         <Link
-          to="/upcoming"
-          className="block w-full rounded-2xl bg-cinema-50 border border-cinema-200 px-5 py-4 font-semibold text-cinema-900 hover:border-primary/60 transition"
-        >
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <div className="text-lg leading-tight">Upcoming events</div>
-              <div className="text-sm text-cinema-500">See what’s on next</div>
-            </div>
-            <Calendar className="h-6 w-6 text-primary" />
-          </div>
-        </Link>
-
-        <Link
           to="/shows"
           className="block w-full rounded-2xl bg-cinema-50 border border-cinema-200 px-5 py-4 font-semibold text-cinema-900 hover:border-primary/60 transition"
         >
@@ -47,6 +34,19 @@ export default function Home() {
               <div className="text-sm text-cinema-500">All shows (past and upcoming)</div>
             </div>
             <Music className="h-6 w-6 text-primary" />
+          </div>
+        </Link>
+
+        <Link
+          to="/activities"
+          className="block w-full rounded-2xl bg-cinema-50 border border-cinema-200 px-5 py-4 font-semibold text-cinema-900 hover:border-primary/60 transition"
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-lg leading-tight">Activities</div>
+              <div className="text-sm text-cinema-500">Trivia, polls, and more</div>
+            </div>
+            <List className="h-6 w-6 text-primary" />
           </div>
         </Link>
       </section>

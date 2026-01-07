@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { ref, onValue, set } from 'firebase/database';
 import { auth, db, rtdbPath } from '../lib/firebase';
 import { ShowSettings, LiveActivityState, LiveTriviaState } from '../types/firebaseContract';
@@ -8,6 +8,19 @@ interface DanceClaimRecord {
   claimCount: number;
   activityId: string;
 }
+
+// Break mode types
+export type BreakMode = 'off' | 'dancing' | 'toilet' | 'chatting';
+
+// Auto-timeout durations (in milliseconds)
+const BREAK_TIMEOUTS: Record<Exclude<BreakMode, 'off'>, number> = {
+  dancing: 10 * 60 * 1000,   // 10 minutes
+  toilet: 2 * 60 * 1000,     // 2 minutes
+  chatting: 5 * 60 * 1000,   // 5 minutes
+};
+
+// Auto-claim interval (check every 60 seconds)
+const AUTO_CLAIM_INTERVAL = 60 * 1000;
 
 interface ShowContextType {
   showId: number | null;
@@ -22,12 +35,16 @@ interface ShowContextType {
   cooldownRemaining: number; // seconds
   lastDanceClaim: DanceClaimRecord | null;
 
-  // Break state
-  isOnBreak: boolean;
-  setIsOnBreak: (value: boolean) => void;
+  // Enhanced break state
+  breakMode: BreakMode;
+  pointsEarnedOnBreak: number;
+  breakStartedAt: number | null;
+  isOnBreak: boolean; // Convenience getter (breakMode !== 'off')
 
   // Actions
   claimDancePoints: () => Promise<boolean>;
+  enterBreakMode: (mode: Exclude<BreakMode, 'off'>) => Promise<void>;
+  exitBreakMode: () => void;
 }
 
 const ShowContext = createContext<ShowContextType | undefined>(undefined);
@@ -50,8 +67,16 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
   const [liveActivity, setLiveActivity] = useState<LiveActivityState | null>(null);
   const [liveTrivia, setLiveTrivia] = useState<LiveTriviaState | null>(null);
   const [lastDanceClaim, setLastDanceClaim] = useState<DanceClaimRecord | null>(null);
-  const [isOnBreak, setIsOnBreak] = useState(false);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
+
+  // Enhanced break mode state
+  const [breakMode, setBreakMode] = useState<BreakMode>('off');
+  const [pointsEarnedOnBreak, setPointsEarnedOnBreak] = useState(0);
+  const [breakStartedAt, setBreakStartedAt] = useState<number | null>(null);
+
+  // Refs for cleanup
+  const breakTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoClaimIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Listen to show settings
   useEffect(() => {
@@ -128,9 +153,13 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
     ? liveActivity.currentMedian
     : effectiveSettings.dancing_floor;
 
-  const canClaimDance = dancingEnabled && !isOnBreak && cooldownRemaining === 0;
+  // Convenience derived state
+  const isOnBreak = breakMode !== 'off';
 
-  // Claim dance points
+  // Can claim if dancing is enabled and cooldown is done (break mode doesn't prevent claiming)
+  const canClaimDance = dancingEnabled && cooldownRemaining === 0;
+
+  // Claim dance points - returns points claimed or 0 if failed
   const claimDancePoints = useCallback(async (): Promise<boolean> => {
     const uid = auth.currentUser?.uid;
     if (!uid || !canClaimDance) return false;
@@ -141,12 +170,14 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
         ? liveActivity.activityId
         : `dance-persistent-${showId}`;
 
+      const claimedMedian = currentMedian ?? effectiveSettings.dancing_floor;
+
       // Write to responses (for scoring by Cloud Functions)
       await set(ref(db, rtdbPath(`shows/${showId}/responses/${activityId}/${uid}`)), {
         type: 'dance_claim',
         claimedAt: Date.now(),
         displayName: auth.currentUser?.displayName || 'Anonymous',
-        median: currentMedian,
+        median: claimedMedian,
       });
 
       // Update dance claims record for cooldown tracking
@@ -157,12 +188,79 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
         activityId,
       });
 
+      // If on break, track points earned
+      if (isOnBreak) {
+        setPointsEarnedOnBreak((prev) => prev + claimedMedian);
+      }
+
       return true;
     } catch (error) {
       console.error('Failed to claim dance points:', error);
       return false;
     }
-  }, [showId, canClaimDance, liveActivity, currentMedian, lastDanceClaim]);
+  }, [showId, canClaimDance, liveActivity, currentMedian, lastDanceClaim, effectiveSettings.dancing_floor, isOnBreak]);
+
+  // Clear break timers
+  const clearBreakTimers = useCallback(() => {
+    if (breakTimeoutRef.current) {
+      clearTimeout(breakTimeoutRef.current);
+      breakTimeoutRef.current = null;
+    }
+    if (autoClaimIntervalRef.current) {
+      clearInterval(autoClaimIntervalRef.current);
+      autoClaimIntervalRef.current = null;
+    }
+  }, []);
+
+  // Enter break mode
+  const enterBreakMode = useCallback(async (mode: Exclude<BreakMode, 'off'>) => {
+    // Clear any existing timers
+    clearBreakTimers();
+
+    // Set break state
+    setBreakMode(mode);
+    setBreakStartedAt(Date.now());
+    setPointsEarnedOnBreak(0);
+
+    // Auto-claim dance points immediately when entering break mode
+    if (canClaimDance) {
+      await claimDancePoints();
+    }
+
+    // Set up auto-timeout
+    const timeoutDuration = BREAK_TIMEOUTS[mode];
+    breakTimeoutRef.current = setTimeout(() => {
+      setBreakMode('off');
+      setBreakStartedAt(null);
+      clearBreakTimers();
+    }, timeoutDuration);
+
+    // Set up periodic auto-claim (respects cooldown via canClaimDance check)
+    autoClaimIntervalRef.current = setInterval(async () => {
+      // Need to check dancingEnabled and cooldownRemaining directly since
+      // canClaimDance might not update within the closure
+      if (dancingEnabled) {
+        // Attempt claim - claimDancePoints already checks canClaimDance
+        await claimDancePoints();
+      }
+    }, AUTO_CLAIM_INTERVAL);
+  }, [clearBreakTimers, canClaimDance, claimDancePoints, dancingEnabled]);
+
+  // Exit break mode
+  const exitBreakMode = useCallback(() => {
+    clearBreakTimers();
+    setBreakMode('off');
+    setBreakStartedAt(null);
+    // Don't reset pointsEarnedOnBreak immediately - let UI show it briefly
+    setTimeout(() => setPointsEarnedOnBreak(0), 2000);
+  }, [clearBreakTimers]);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      clearBreakTimers();
+    };
+  }, [clearBreakTimers]);
 
   return (
     <ShowContext.Provider
@@ -176,9 +274,13 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
         canClaimDance,
         cooldownRemaining,
         lastDanceClaim,
+        breakMode,
+        pointsEarnedOnBreak,
+        breakStartedAt,
         isOnBreak,
-        setIsOnBreak,
         claimDancePoints,
+        enterBreakMode,
+        exitBreakMode,
       }}
     >
       {children}

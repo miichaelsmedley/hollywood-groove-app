@@ -14,6 +14,8 @@ import ShowDetail from './pages/ShowDetail';
 import JoinShow from './pages/JoinShow';
 import Trivia from './pages/Trivia';
 import Activity from './pages/Activity';
+import Activities from './pages/Activities';
+import GlobalActivities from './pages/GlobalActivities';
 import FirebaseTest from './pages/FirebaseTest';
 import JoinCurrentShow from './pages/JoinCurrentShow';
 import Scores from './pages/Scores';
@@ -128,6 +130,7 @@ export default function App() {
             <Route path="scores" element={<Scores />} />
             <Route path="leaderboard" element={<Leaderboard />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="activities" element={<GlobalActivities />} />
             <Route path="shows/:id" element={<ShowDetail />} />
             {IS_TEST_MODE && (
               <>
@@ -144,6 +147,7 @@ export default function App() {
           <Route path="shows/:id" element={<ShowLayout />}>
             <Route path="trivia" element={<Trivia />} />
             <Route path="activity" element={<Activity />} />
+            <Route path="activities" element={<Activities />} />
           </Route>
         </Routes>
       </UserProvider>
