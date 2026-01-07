@@ -17,9 +17,9 @@ const BREAK_OPTIONS: {
   {
     mode: 'dancing',
     icon: '💃',
-    label: 'Dancing',
-    description: 'Earn dance points while you groove',
-    duration: '10 min',
+    label: 'Dance',
+    description: 'Get on the dance floor!',
+    duration: 'No limit',
   },
   {
     mode: 'toilet',
@@ -42,42 +42,42 @@ export default function BreakMenuModal({ onSelect, onClose, currentMedian }: Bre
     <div className="fixed inset-0 z-50 flex items-end justify-center">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={onClose}
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-lg bg-cinema-50 rounded-t-2xl border-t border-cinema-200 p-4 pb-8 animate-slide-up">
+      <div className="relative w-full max-w-lg bg-gray-900 rounded-t-2xl border-t border-gray-700 p-4 pb-8 animate-slide-up">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-bold text-white">Take a Break</h3>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-cinema-100 transition-colors"
+            className="p-2 rounded-full bg-gray-800 hover:bg-gray-700 transition-colors"
           >
-            <X className="w-5 h-5 text-cinema-500" />
+            <X className="w-5 h-5 text-gray-400" />
           </button>
         </div>
 
         {/* Info */}
-        <p className="text-sm text-cinema-500 mb-4">
+        <p className="text-sm text-gray-400 mb-4">
           Earn ~{currentMedian ?? 50} pts automatically while you're away. Auto-claims every minute (respects cooldown).
         </p>
 
         {/* Options */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           {BREAK_OPTIONS.map((option) => (
             <button
               key={option.mode}
               onClick={() => onSelect(option.mode)}
-              className="w-full flex items-center gap-3 p-3 rounded-xl bg-cinema-100/50 border border-cinema-200 hover:border-primary/50 hover:bg-cinema-100 transition-all active:scale-[0.98]"
+              className="w-full flex items-center gap-4 p-4 rounded-xl bg-gray-800 border-2 border-gray-700 hover:border-primary hover:bg-gray-800/80 transition-all active:scale-[0.98]"
             >
-              <span className="text-2xl">{option.icon}</span>
+              <span className="text-3xl">{option.icon}</span>
               <div className="flex-1 text-left">
-                <div className="font-semibold text-white">{option.label}</div>
-                <div className="text-xs text-cinema-500">{option.description}</div>
+                <div className="font-bold text-white text-base">{option.label}</div>
+                <div className="text-sm text-gray-400">{option.description}</div>
               </div>
-              <div className="text-xs text-cinema-600 bg-cinema px-2 py-1 rounded-full">
+              <div className="text-sm text-gray-500 bg-gray-900 px-3 py-1.5 rounded-full font-medium">
                 {option.duration}
               </div>
             </button>

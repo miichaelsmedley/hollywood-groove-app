@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Coffee, Mic, Trophy, Vote, Users, List, Music } from 'lucide-react';
+import { Mic, Trophy, Vote, Users, List, Music, ArrowLeft } from 'lucide-react';
 import { useShow } from '../../contexts/ShowContext';
 import TriviaButton from './TriviaButton';
 import BreakMenuModal from './BreakMenuModal';
@@ -16,11 +16,9 @@ const BREAK_MODE_LABELS: Record<Exclude<BreakMode, 'off'>, string> = {
 /**
  * Action bar displayed above the bottom navigation on trivia/activity pages.
  * Simplified UX:
- * - Top row: Trivia button (if live) + Live activity button (if active) + Take a Break button
- * - Bottom row: Activities list button
- *
- * The "Take a Break" button opens a modal where user can choose break type.
- * All break types auto-claim dance points.
+ * - Single "Dance / Take a Break" button that opens modal
+ * - When on break, shows "Return to Trivia" button
+ * - Activities list button at bottom
  */
 export default function ActionBar() {
   const { id } = useParams<{ id: string }>();
@@ -29,27 +27,15 @@ export default function ActionBar() {
   const {
     dancingEnabled,
     currentMedian,
-    canClaimDance,
-    cooldownRemaining,
     isOnBreak,
     breakMode,
     pointsEarnedOnBreak,
     enterBreakMode,
     exitBreakMode,
-    claimDancePoints,
     liveActivity,
   } = useShow();
 
   const [showBreakMenu, setShowBreakMenu] = useState(false);
-  const [isClaiming, setIsClaiming] = useState(false);
-  const [justClaimed, setJustClaimed] = useState(false);
-
-  // Format cooldown time as M:SS
-  const formatCooldown = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
 
   const handleBreakSelect = async (mode: Exclude<BreakMode, 'off'>) => {
     setShowBreakMenu(false);
@@ -63,21 +49,6 @@ export default function ActionBar() {
   const handleActivitiesClick = () => {
     if (id) {
       navigate(`/shows/${id}/activities`);
-    }
-  };
-
-  // Quick dance claim (without entering break mode)
-  const handleQuickDanceClaim = async () => {
-    if (!canClaimDance || isClaiming) return;
-    setIsClaiming(true);
-    try {
-      const success = await claimDancePoints();
-      if (success) {
-        setJustClaimed(true);
-        setTimeout(() => setJustClaimed(false), 2000);
-      }
-    } finally {
-      setIsClaiming(false);
     }
   };
 
@@ -108,7 +79,6 @@ export default function ActionBar() {
   };
 
   const ActivityIcon = hasNonDanceActivity ? getActivityIcon(liveActivity.type) : Users;
-  const isOnCooldown = cooldownRemaining > 0;
 
   // Don't render if nothing to show
   if (!dancingEnabled && !hasNonDanceActivity) {
@@ -117,7 +87,7 @@ export default function ActionBar() {
 
   return (
     <>
-      <div className="bg-cinema-900/95 backdrop-blur-sm border-t border-cinema-700 px-3 py-2">
+      <div className="bg-gray-950 border-t border-gray-800 px-3 py-2 pb-4 safe-area-pb">
         <div className="flex flex-col gap-2 max-w-lg mx-auto">
           {/* Top row: Trivia + Activity + Dance/Break */}
           <div className="flex items-stretch gap-2">
@@ -128,85 +98,54 @@ export default function ActionBar() {
             {hasNonDanceActivity && !isOnActivityPage && (
               <button
                 onClick={() => navigate(`/shows/${id}/activity`)}
-                className="flex-1 flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-lg bg-accent-green/20 border border-accent-green/50 text-accent-green hover:bg-accent-green/30 transition-all"
+                className="flex-1 flex flex-col items-center justify-center gap-0.5 px-3 py-3 rounded-xl bg-green-600 text-white font-semibold shadow-lg hover:bg-green-500 transition-all active:scale-95"
               >
-                <ActivityIcon className="w-4 h-4" />
-                <span className="text-xs font-semibold">Join Activity</span>
+                <ActivityIcon className="w-5 h-5" />
+                <span className="text-sm font-bold">Join Activity</span>
                 {liveActivity.fixedPoints && (
-                  <span className="text-[10px] opacity-75">+{liveActivity.fixedPoints} pts</span>
+                  <span className="text-xs opacity-90">+{liveActivity.fixedPoints} pts</span>
                 )}
               </button>
             )}
 
-            {/* Dance/Break Button - Combined UX */}
+            {/* Dance/Break Button - Single button UX */}
             {dancingEnabled && (
               isOnBreak && breakMode !== 'off' ? (
-                // On break - show status and return button
+                // On break - show "Return to Trivia" button
                 <button
                   onClick={handleReturnFromBreak}
-                  className="flex-1 flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-400 hover:bg-amber-500/30 transition-all"
+                  className="flex-1 flex flex-col items-center justify-center gap-1 px-4 py-3 rounded-xl bg-amber-500 text-gray-900 font-semibold shadow-lg hover:bg-amber-400 transition-all active:scale-95"
                 >
-                  <Coffee className="w-4 h-4" />
-                  <span className="text-xs font-semibold">On Break ({BREAK_MODE_LABELS[breakMode]})</span>
-                  {pointsEarnedOnBreak > 0 && (
-                    <span className="text-[10px] text-accent-green font-semibold">+{pointsEarnedOnBreak} pts earned</span>
-                  )}
-                  <span className="text-[10px] opacity-75">Tap to return</span>
-                </button>
-              ) : justClaimed ? (
-                // Just claimed animation
-                <button
-                  disabled
-                  className="flex-1 flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-lg bg-accent-green/20 border border-accent-green/50 text-accent-green animate-pulse"
-                >
-                  <Music className="w-4 h-4" />
-                  <span className="text-xs font-semibold">+{currentMedian} pts!</span>
-                </button>
-              ) : isOnCooldown ? (
-                // On cooldown - show timer and break option
-                <button
-                  onClick={() => setShowBreakMenu(true)}
-                  className="flex-1 flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-lg bg-cinema-800/80 border border-cinema-700 text-cinema-400 hover:border-cinema-600 transition-all"
-                >
-                  <Coffee className="w-4 h-4" />
-                  <span className="text-xs font-semibold">Take a Break</span>
-                  <span className="text-[10px] opacity-75">Dance in {formatCooldown(cooldownRemaining)}</span>
+                  <div className="flex items-center gap-2">
+                    <ArrowLeft className="w-5 h-5" />
+                    <span className="text-sm font-bold">Return to Trivia</span>
+                  </div>
+                  <span className="text-xs opacity-80">
+                    {BREAK_MODE_LABELS[breakMode]} • {pointsEarnedOnBreak > 0 ? `+${pointsEarnedOnBreak} pts earned` : 'Auto-claiming pts'}
+                  </span>
                 </button>
               ) : (
-                // Ready to claim - tap to claim, long press for break menu
-                <div className="flex-1 flex gap-1">
-                  <button
-                    onClick={handleQuickDanceClaim}
-                    disabled={isClaiming}
-                    className="flex-1 flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-lg bg-primary/20 border border-primary text-primary hover:bg-primary/30 transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    <Music className="w-4 h-4" />
-                    <span className="text-xs font-bold">Dance!</span>
-                    <span className="text-[10px] opacity-80">~{currentMedian} pts</span>
-                  </button>
-                  <button
-                    onClick={() => setShowBreakMenu(true)}
-                    className="flex flex-col items-center justify-center gap-0.5 px-2 py-2 rounded-lg bg-cinema-800 border border-cinema-600 text-cinema-400 hover:border-cinema-500 hover:text-cinema-300 transition-all"
-                    title="Take a break (auto-claims)"
-                  >
-                    <Coffee className="w-4 h-4" />
-                    <span className="text-[10px]">Break</span>
-                  </button>
-                </div>
+                // Not on break - show "Dance / Take a Break" button
+                <button
+                  onClick={() => setShowBreakMenu(true)}
+                  className="flex-1 flex flex-col items-center justify-center gap-1 px-4 py-3 rounded-xl bg-primary text-gray-900 font-semibold shadow-lg hover:bg-primary-400 transition-all active:scale-95"
+                >
+                  <Music className="w-5 h-5" />
+                  <span className="text-sm font-bold">Dance / Take a Break</span>
+                  <span className="text-xs opacity-80">~{currentMedian ?? 50} pts</span>
+                </button>
               )
             )}
           </div>
 
           {/* Bottom row: Activities list button */}
-          <div className="flex items-stretch gap-2">
-            <button
-              onClick={handleActivitiesClick}
-              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-cinema-800 border border-cinema-600 text-cinema-300 hover:border-primary/50 hover:text-white transition-all"
-            >
-              <List className="w-4 h-4" />
-              <span className="text-xs font-semibold">See All Activities</span>
-            </button>
-          </div>
+          <button
+            onClick={handleActivitiesClick}
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white transition-all active:scale-98"
+          >
+            <List className="w-4 h-4" />
+            <span className="text-sm font-medium">See All Activities</span>
+          </button>
         </div>
       </div>
 

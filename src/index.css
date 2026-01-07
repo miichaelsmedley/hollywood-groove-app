@@ -110,3 +110,18 @@ a {
 .animate-slide-up {
   animation: slide-up 0.3s ease-out forwards;
 }
+
+/* Safe area padding for iOS devices with home indicator / notch */
+.safe-area-pb {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+.safe-area-pt {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+
+/* Ensure body accounts for safe areas */
+html {
+  /* Prevent content from going under the home indicator */
+  padding-bottom: env(safe-area-inset-bottom);
+}

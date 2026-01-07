@@ -13,10 +13,11 @@ interface DanceClaimRecord {
 export type BreakMode = 'off' | 'dancing' | 'toilet' | 'chatting';
 
 // Auto-timeout durations (in milliseconds)
+// Dancing has no auto-timeout (user exits manually), set to 4 hours as a safety limit
 const BREAK_TIMEOUTS: Record<Exclude<BreakMode, 'off'>, number> = {
-  dancing: 10 * 60 * 1000,   // 10 minutes
-  toilet: 2 * 60 * 1000,     // 2 minutes
-  chatting: 5 * 60 * 1000,   // 5 minutes
+  dancing: 4 * 60 * 60 * 1000, // 4 hours (effectively no limit)
+  toilet: 2 * 60 * 1000,       // 2 minutes
+  chatting: 5 * 60 * 1000,     // 5 minutes
 };
 
 // Auto-claim interval (check every 60 seconds)
