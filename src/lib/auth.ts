@@ -16,8 +16,20 @@ googleProvider.addScope('profile');
 // Flag to prevent auto-anonymous sign-in during Google auth flow
 let googleAuthInProgress = false;
 
+// Storage key to track pending redirect across page loads
+const REDIRECT_PENDING_KEY = 'hg_google_auth_redirect_pending';
+
 export function isGoogleAuthInProgress(): boolean {
-  return googleAuthInProgress;
+  // Check both in-memory flag and localStorage (for cross-redirect detection)
+  return googleAuthInProgress || localStorage.getItem(REDIRECT_PENDING_KEY) === 'true';
+}
+
+function setRedirectPending(pending: boolean): void {
+  if (pending) {
+    localStorage.setItem(REDIRECT_PENDING_KEY, 'true');
+  } else {
+    localStorage.removeItem(REDIRECT_PENDING_KEY);
+  }
 }
 
 /**
@@ -26,12 +38,30 @@ export function isGoogleAuthInProgress(): boolean {
  * Returns true if a redirect was processed, false otherwise.
  */
 export async function handleRedirectResult(): Promise<boolean> {
+  const wasRedirectPending = localStorage.getItem(REDIRECT_PENDING_KEY) === 'true';
+
   console.log('🔍 Checking for redirect result...');
   console.log('Current URL:', window.location.href);
   console.log('Auth domain configured:', auth.app.options.authDomain);
+  console.log('Redirect was pending:', wasRedirectPending);
+
+  // Wait for auth to be ready before checking redirect result
+  // This is important because getRedirectResult needs auth to be initialized
+  await auth.authStateReady();
+  console.log('Auth state ready');
+
+  console.log('Current user before getRedirectResult:', auth.currentUser ? {
+    uid: auth.currentUser.uid,
+    email: auth.currentUser.email,
+    isAnonymous: auth.currentUser.isAnonymous,
+  } : 'null');
 
   try {
     const result = await getRedirectResult(auth);
+
+    // Clear the pending flag regardless of result
+    setRedirectPending(false);
+
     if (result) {
       console.log('✅ Successfully signed in/linked with Google after redirect:', {
         uid: result.user.uid,
@@ -42,10 +72,29 @@ export async function handleRedirectResult(): Promise<boolean> {
       });
       return true;
     } else {
+      // Check if we were expecting a redirect but didn't get a result
+      if (wasRedirectPending) {
+        console.log('⚠️ Redirect was pending but no result returned');
+        console.log('Current user after getRedirectResult:', auth.currentUser ? {
+          uid: auth.currentUser.uid,
+          email: auth.currentUser.email,
+          isAnonymous: auth.currentUser.isAnonymous,
+          providerData: auth.currentUser.providerData,
+        } : 'null');
+
+        // The user might already be signed in - check currentUser
+        if (auth.currentUser && !auth.currentUser.isAnonymous) {
+          console.log('✅ User is already signed in (auth state was preserved)');
+          return true;
+        }
+      }
       console.log('No redirect result found (normal page load)');
       return false;
     }
   } catch (error: any) {
+    // Clear the pending flag on error too
+    setRedirectPending(false);
+
     console.error('❌ Error handling redirect result:', error);
     console.error('Error code:', error.code);
     console.error('Error message:', error.message);
@@ -142,6 +191,8 @@ export async function signInWithGoogle(): Promise<boolean> {
     if (useMobile) {
       // Use redirect on mobile
       console.log('📱 Initiating redirect flow for mobile...');
+      // Set the pending flag before redirect so we know to check for result on reload
+      setRedirectPending(true);
       await signInWithRedirect(auth, googleProvider);
       console.log('✅ Redirect initiated, waiting for redirect...');
       return false; // Will complete after redirect
@@ -160,10 +211,9 @@ export async function signInWithGoogle(): Promise<boolean> {
   } catch (error: any) {
     console.error('Google sign-in error:', error.code, error.message);
 
-    if (error.code === 'auth/popup-blocked' ||
-        error.code === 'auth/popup-closed-by-user' ||
-        error.code === 'auth/cancelled-popup-request') {
-      console.log('Popup failed, falling back to redirect');
+    if (error.code === 'auth/popup-blocked') {
+      console.log('Popup blocked, falling back to redirect');
+      setRedirectPending(true);
       await signInWithRedirect(auth, googleProvider);
       return false; // Will complete after redirect
     } else if (error.code === 'auth/popup-closed-by-user' ||

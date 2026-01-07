@@ -1,5 +1,5 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, browserLocalPersistence, setPersistence } from "firebase/auth";
 import { getDatabase } from "firebase/database";
 
 function normalizeRtdbPrefix(prefix: string): string {
@@ -43,5 +43,15 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 export const db = getDatabase(app);
 export const auth = getAuth(app);
+
+// Set persistence to localStorage for better reliability across redirects
+// This ensures auth state survives the OAuth redirect on mobile browsers
+setPersistence(auth, browserLocalPersistence)
+  .then(() => {
+    console.log('✅ Firebase auth persistence set to localStorage');
+  })
+  .catch((error) => {
+    console.error('⚠️ Failed to set auth persistence:', error);
+  });
 
 export default app;
