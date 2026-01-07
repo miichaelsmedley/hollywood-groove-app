@@ -23,8 +23,7 @@ jobs:
 
       - name: Build for production
         run: npm run build
-        env:
-          VITE_RTDB_PREFIX: ""
+        # Note: Don't set VITE_RTDB_PREFIX here - let the runtime detect test mode via ?testMode=true
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
