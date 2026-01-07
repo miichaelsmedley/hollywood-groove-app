@@ -15,20 +15,30 @@ function normalizeRtdbPrefix(prefix: string): string {
 function getTestModeOverride(): boolean {
   if (typeof window !== 'undefined') {
     const urlParams = new URLSearchParams(window.location.search);
+    const currentTestMode = localStorage.getItem('hg_test_mode') === 'true';
+
     // Allow ?testMode=true to enable test mode
     if (urlParams.get('testMode') === 'true') {
-      localStorage.setItem('hg_test_mode', 'true');
+      if (!currentTestMode) {
+        localStorage.setItem('hg_test_mode', 'true');
+        // Reload without query param to apply new mode
+        window.location.href = window.location.pathname;
+        return true;
+      }
       return true;
     }
     // Allow ?testMode=false to disable test mode
     if (urlParams.get('testMode') === 'false') {
-      localStorage.removeItem('hg_test_mode');
+      if (currentTestMode) {
+        localStorage.removeItem('hg_test_mode');
+        // Reload without query param to apply new mode
+        window.location.href = window.location.pathname;
+        return false;
+      }
       return false;
     }
     // Check localStorage for persisted test mode
-    if (localStorage.getItem('hg_test_mode') === 'true') {
-      return true;
-    }
+    return currentTestMode;
   }
   return false;
 }
