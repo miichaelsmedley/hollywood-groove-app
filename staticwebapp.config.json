@@ -1,0 +1,12 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/assets/*", "/*.js", "/*.css", "/*.png", "/*.ico", "/*.svg", "/*.webmanifest"]
+  },
+  "routes": [
+    {
+      "route": "/__/auth/*",
+      "rewrite": "/index.html"
+    }
+  ]
+}
