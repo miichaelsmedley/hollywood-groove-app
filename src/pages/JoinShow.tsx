@@ -45,6 +45,7 @@ export default function JoinShow() {
     isGoogleUser,
     googlePhotoURL,
     userProfile,
+    loading: userLoading,
   } = useUser();
 
   const [showMeta, setShowMeta] = useState<ShowMeta | null>(null);
@@ -368,9 +369,18 @@ export default function JoinShow() {
       return;
     }
 
+    // Check if we have an authenticated user
+    if (!auth.currentUser) {
+      console.error('No authenticated user - cannot register');
+      alert('Session expired. Please refresh the page and try again.');
+      return;
+    }
+
     setSubmitting(true);
+    console.log('📝 Starting registration for user:', auth.currentUser.uid);
 
     try {
+      console.log('📝 Calling registerUser...');
       await registerUser({
         displayName: displayName.trim(),
         email: email.trim() || undefined,
@@ -378,26 +388,47 @@ export default function JoinShow() {
         marketingEmails: email.trim() ? marketingConsent : false,
         marketingSMS: phone.trim() ? marketingConsent : false,
       });
+      console.log('✅ registerUser completed');
 
       if (id) {
+        console.log('📝 Calling ensureJoinRecords...');
         await ensureJoinRecords({
           displayName: displayName.trim(),
           emailOptIn: email.trim() ? marketingConsent : false,
           smsOptIn: phone.trim() ? marketingConsent : false,
         });
+        console.log('✅ ensureJoinRecords completed');
+
+        console.log('📝 Calling addShowAttended...');
         await addShowAttended(id);
+        console.log('✅ addShowAttended completed');
+
+        console.log('📝 Calling updateLastSeen...');
         await updateLastSeen();
+        console.log('✅ updateLastSeen completed');
       }
 
+      console.log('✅ Registration complete, navigating to show...');
       navigate(`/shows/${id}`);
-    } catch (error) {
-      console.error('Registration error:', error);
-      alert('Failed to register. Please try again.');
+    } catch (error: any) {
+      console.error('❌ Registration error:', error);
+      console.error('Error code:', error?.code);
+      console.error('Error message:', error?.message);
+
+      // Provide more specific error messages
+      if (error?.code === 'PERMISSION_DENIED' || error?.message?.includes('permission')) {
+        alert('Unable to save your profile. Please try signing in with Google instead.');
+      } else if (error?.code === 'auth/requires-recent-login') {
+        alert('Your session has expired. Please refresh the page and try again.');
+      } else {
+        alert('Failed to register. Please try again or sign in with Google.');
+      }
       setSubmitting(false);
     }
   };
 
-  if (loading) {
+  // Wait for both show metadata AND user auth to load
+  if (loading || userLoading) {
     return (
       <div className="min-h-screen bg-cinema flex items-center justify-center">
         <div className="text-center space-y-4 animate-fade-in">
@@ -405,7 +436,9 @@ export default function JoinShow() {
             <div className="animate-spin rounded-full h-16 w-16 border-4 border-cinema-200 border-t-primary mx-auto"></div>
             <Sparkles className="w-6 h-6 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
           </div>
-          <p className="text-cinema-500 font-medium">Loading show...</p>
+          <p className="text-cinema-500 font-medium">
+            {userLoading ? 'Checking your account...' : 'Loading show...'}
+          </p>
         </div>
       </div>
     );
