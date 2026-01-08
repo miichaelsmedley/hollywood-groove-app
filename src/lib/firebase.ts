@@ -15,10 +15,22 @@ function normalizeRtdbPrefix(prefix: string): string {
 function getTestModeOverride(): boolean {
   if (typeof window !== 'undefined') {
     const urlParams = new URLSearchParams(window.location.search);
-    const currentTestMode = localStorage.getItem('hg_test_mode') === 'true';
+    let currentTestMode = localStorage.getItem('hg_test_mode') === 'true';
+    const hasTestAccess = localStorage.getItem('hg_test_access') === 'true';
+    const allowTestModeOverride = hasTestAccess || import.meta.env.DEV;
+
+    if (!allowTestModeOverride && currentTestMode) {
+      localStorage.removeItem('hg_test_mode');
+      currentTestMode = false;
+    }
 
     // Allow ?testMode=true to enable test mode
     if (urlParams.get('testMode') === 'true') {
+      if (!allowTestModeOverride) {
+        // Strip unauthorized attempts to toggle test mode
+        window.location.href = window.location.pathname;
+        return false;
+      }
       if (!currentTestMode) {
         localStorage.setItem('hg_test_mode', 'true');
         // Reload without query param to apply new mode
@@ -38,7 +50,7 @@ function getTestModeOverride(): boolean {
       return false;
     }
     // Check localStorage for persisted test mode
-    return currentTestMode;
+    return allowTestModeOverride ? currentTestMode : false;
   }
   return false;
 }

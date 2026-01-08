@@ -73,24 +73,10 @@ export default function App() {
         }
 
         if (!user) {
-          // Check if Google auth is in progress - if so, wait for it
+          // If Google auth is in progress, don't force anonymous sign-in
           if (isGoogleAuthInProgress()) {
-            console.log('No user but Google auth in progress, waiting...');
-            // Wait a bit and check again - the auth state might still be loading
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            // Check again after waiting
-            if (auth.currentUser) {
-              console.log('User appeared after waiting:', auth.currentUser.email);
-              hasProcessedInitialAuth = true;
-              return;
-            }
-
-            // Still no user and redirect was pending - this is a failed redirect
-            if (isGoogleAuthInProgress()) {
-              console.log('Redirect seems to have failed, clearing pending flag and signing in anonymously');
-              // The redirect failed - sign in anonymously
-            }
+            console.log('No user but Google auth in progress, skipping anonymous sign-in');
+            return;
           }
 
           if (!redirectProcessed) {

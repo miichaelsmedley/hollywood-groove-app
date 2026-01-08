@@ -11,6 +11,7 @@ interface UserContextType {
   loading: boolean;
   isGoogleUser: boolean;
   googlePhotoURL: string | null;
+  canUseTestMode: boolean;
   registerUser: (data: RegisterUserData) => Promise<void>;
   updateLastSeen: () => Promise<void>;
   addShowAttended: (showId: string) => Promise<void>;
@@ -33,6 +34,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isGoogleUser, setIsGoogleUser] = useState(false);
   const [googlePhotoURL, setGooglePhotoURL] = useState<string | null>(null);
+  const [canUseTestMode, setCanUseTestMode] = useState(false);
 
   useEffect(() => {
     // Load user profile from Firebase when auth changes
@@ -41,6 +43,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setUserProfile(null);
         setIsGoogleUser(false);
         setGooglePhotoURL(null);
+        setCanUseTestMode(false);
+        localStorage.removeItem('hg_test_access');
         setLoading(false);
         return;
       }
@@ -56,6 +60,28 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Update Google auth state
       setIsGoogleUser(isSignedInWithGoogle());
       setGooglePhotoURL(getGooglePhotoURL());
+
+      // Test mode access is only granted to non-anonymous users explicitly flagged in RTDB
+      if (!user.isAnonymous) {
+        try {
+          const testerRef = ref(db, `testers/${user.uid}`);
+          const testerSnap = await get(testerRef);
+          const allowed = Boolean(testerSnap.val());
+          setCanUseTestMode(allowed);
+          if (allowed) {
+            localStorage.setItem('hg_test_access', 'true');
+          } else {
+            localStorage.removeItem('hg_test_access');
+          }
+        } catch (error) {
+          console.warn('Failed to check test mode access:', error);
+          setCanUseTestMode(false);
+          localStorage.removeItem('hg_test_access');
+        }
+      } else {
+        setCanUseTestMode(false);
+        localStorage.removeItem('hg_test_access');
+      }
 
       // Check if user profile exists in Firebase (/members/ path per contract)
       const userRef = ref(db, rtdbPath(`members/${user.uid}`));
@@ -215,6 +241,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         loading,
         isGoogleUser,
         googlePhotoURL,
+        canUseTestMode,
         registerUser,
         updateLastSeen,
         addShowAttended,

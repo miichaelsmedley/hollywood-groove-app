@@ -2,9 +2,12 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
+  linkWithPopup,
+  linkWithRedirect,
   getRedirectResult,
   signOut as firebaseSignOut,
   signInAnonymously,
+  signInWithCredential,
 } from 'firebase/auth';
 import { auth } from './firebase';
 
@@ -126,7 +129,6 @@ export async function handleRedirectResult(): Promise<boolean> {
           // Sign out the anonymous user first
           await firebaseSignOut(auth);
           // Sign in with the credential (this will sign in as the existing Google user)
-          const { signInWithCredential } = await import('firebase/auth');
           const result = await signInWithCredential(auth, credential);
           console.log('✅ Signed in with existing Google account:', {
             uid: result.user.uid,
@@ -176,16 +178,55 @@ export async function signInWithGoogle(): Promise<boolean> {
   googleAuthInProgress = true;
 
   try {
-    // Sign out any existing user (anonymous or otherwise)
-    if (currentUser) {
-      console.log('Signing out current user before Google sign-in...');
-      await firebaseSignOut(auth);
-    }
-
     console.log('🔐 Starting Google sign-in (popup mode)...');
     console.log('User agent:', navigator.userAgent);
     console.log('Auth domain:', auth.app.options.authDomain);
     console.log('Current URL:', window.location.href);
+
+    if (currentUser?.isAnonymous) {
+      console.log('Linking anonymous user with Google...');
+      try {
+        const result = await linkWithPopup(currentUser, googleProvider);
+        console.log('✅ Linked anonymous user with Google:', {
+          uid: result.user.uid,
+          email: result.user.email,
+          displayName: result.user.displayName,
+          isAnonymous: result.user.isAnonymous,
+          providerData: result.user.providerData,
+        });
+        return true;
+      } catch (popupError: any) {
+        console.log('Popup attempt result:', popupError.code, popupError.message);
+
+        if (popupError.code === 'auth/popup-blocked') {
+          console.log('📱 Popup blocked, falling back to redirect...');
+          setRedirectPending(true);
+          await linkWithRedirect(currentUser, googleProvider);
+          return false; // Will complete after redirect
+        } else if (popupError.code === 'auth/credential-already-in-use') {
+          console.warn('Google account already linked to another user. Signing in with existing account...');
+          const credential = GoogleAuthProvider.credentialFromError(popupError);
+          if (credential) {
+            await firebaseSignOut(auth);
+            const result = await signInWithCredential(auth, credential);
+            console.log('✅ Signed in with existing Google account:', {
+              uid: result.user.uid,
+              email: result.user.email,
+            });
+            return true;
+          }
+          throw popupError;
+        } else if (
+          popupError.code === 'auth/popup-closed-by-user' ||
+          popupError.code === 'auth/cancelled-popup-request'
+        ) {
+          console.log('User cancelled sign-in');
+          throw new Error('Sign-in cancelled');
+        } else {
+          throw popupError;
+        }
+      }
+    }
 
     // Always try popup first - it's more reliable across all browsers
     // Most modern mobile browsers support popups now
@@ -208,11 +249,14 @@ export async function signInWithGoogle(): Promise<boolean> {
         setRedirectPending(true);
         await signInWithRedirect(auth, googleProvider);
         return false; // Will complete after redirect
-      } else if (popupError.code === 'auth/popup-closed-by-user' ||
-                 popupError.code === 'auth/cancelled-popup-request') {
+      } else if (
+        popupError.code === 'auth/popup-closed-by-user' ||
+        popupError.code === 'auth/cancelled-popup-request'
+      ) {
         console.log('User cancelled sign-in');
-        // Re-sign in anonymously since we signed out
-        await signInAnonymously(auth);
+        if (!auth.currentUser) {
+          await signInAnonymously(auth);
+        }
         throw new Error('Sign-in cancelled');
       } else {
         throw popupError;

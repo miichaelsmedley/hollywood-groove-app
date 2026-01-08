@@ -638,6 +638,16 @@ export default function JoinShow() {
               )}
             </button>
 
+            {/* Warning for non-Google users */}
+            {!isGoogleUser && (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <p className="text-xs text-amber-700 text-center">
+                  <strong>Tip:</strong> Sign in with Google above to save your progress permanently.
+                  Manual registration may be lost if you clear browser data.
+                </p>
+              </div>
+            )}
+
             <p className="text-xs text-center text-cinema-600">
               By joining, you agree to our{' '}
               <a href="#" className="text-primary hover:underline">terms</a>
