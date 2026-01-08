@@ -113,7 +113,7 @@ export default function Activity() {
   if (!isLive || !liveActivity) {
     return (
       <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 pb-40">
           <Link
             to={`/shows/${id}`}
             className="inline-flex items-center space-x-2 text-gray-400 hover:text-gray-100 transition-colors mb-4"
@@ -130,7 +130,10 @@ export default function Activity() {
             </p>
           </div>
         </div>
-        <ActionBar />
+        {/* Sticky ActionBar at bottom */}
+        <div className="fixed bottom-0 left-0 right-0 z-50">
+          <ActionBar />
+        </div>
       </div>
     );
   }
@@ -138,7 +141,7 @@ export default function Activity() {
   if (!activity) {
     return (
       <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 pb-40">
           <Link
             to={`/shows/${id}`}
             className="inline-flex items-center space-x-2 text-gray-400 hover:text-gray-100 transition-colors mb-4"
@@ -152,14 +155,17 @@ export default function Activity() {
             <p className="text-gray-400 text-sm">Fetching the activity details...</p>
           </div>
         </div>
-        <ActionBar />
+        {/* Sticky ActionBar at bottom */}
+        <div className="fixed bottom-0 left-0 right-0 z-50">
+          <ActionBar />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 pb-40">
         <div className="max-w-lg mx-auto space-y-4">
           <Link
             to={`/shows/${id}`}
@@ -245,7 +251,10 @@ export default function Activity() {
           )}
         </div>
       </div>
-      <ActionBar />
+      {/* Sticky ActionBar at bottom */}
+      <div className="fixed bottom-0 left-0 right-0 z-50">
+        <ActionBar />
+      </div>
     </div>
   );
 }

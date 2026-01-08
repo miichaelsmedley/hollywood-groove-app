@@ -212,7 +212,7 @@ export default function Trivia() {
   if (!liveTrivia || liveTrivia.phase === 'idle') {
     return (
       <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
-        <div className="flex-1 p-4">
+        <div className="flex-1 p-4 pb-40">
           <Link
             to={`/shows/${id}`}
             className="inline-flex items-center space-x-2 text-gray-400 hover:text-gray-100 transition-colors mb-6"
@@ -229,7 +229,10 @@ export default function Trivia() {
             </p>
           </div>
         </div>
-        <ActionBar />
+        {/* Sticky ActionBar at bottom */}
+        <div className="fixed bottom-0 left-0 right-0 z-50">
+          <ActionBar />
+        </div>
       </div>
     );
   }
@@ -238,7 +241,7 @@ export default function Trivia() {
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto">
-        <div className="p-4 pb-2 max-w-lg mx-auto">
+        <div className="p-4 pb-40 max-w-lg mx-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-3">
             <Link
@@ -499,8 +502,10 @@ export default function Trivia() {
         </div>
       </div>
 
-      {/* Action Bar - Fixed at bottom */}
-      <ActionBar />
+      {/* Sticky ActionBar at bottom */}
+      <div className="fixed bottom-0 left-0 right-0 z-50">
+        <ActionBar />
+      </div>
     </div>
   );
 }
