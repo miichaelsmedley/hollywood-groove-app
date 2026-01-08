@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { onValue, ref } from 'firebase/database';
-import { ArrowLeft, Mic, Trophy, Vote, Users, Music, HelpCircle, Calendar, Sparkles } from 'lucide-react';
+import { ArrowLeft, Mic, Trophy, Vote, Users, Music, HelpCircle, Calendar, Sparkles, ChevronRight } from 'lucide-react';
 import { db, rtdbPath } from '../lib/firebase';
 import { CrowdActivity, ActivityType, LiveActivityState, LiveTriviaState } from '../types/firebaseContract';
 import ActionBar from '../components/show/ActionBar';
@@ -25,6 +25,7 @@ type ActivityWithId = CrowdActivity & {
 
 export default function Activities() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [activities, setActivities] = useState<ActivityWithId[]>([]);
   const [liveActivity, setLiveActivity] = useState<LiveActivityState | null>(null);
   const [liveTrivia, setLiveTrivia] = useState<LiveTriviaState | null>(null);
@@ -120,17 +121,48 @@ export default function Activities() {
   groupedActivities.set = groupedActivities.set.filter((a) => !liveIds.has(a.id));
   groupedActivities.song = groupedActivities.song.filter((a) => !liveIds.has(a.id));
 
+  // Determine if an activity is joinable (can be signed up for at any time)
+  const isJoinableActivity = (activity: ActivityWithId) => {
+    // Trivia and dancing are handled via live state, not direct signup
+    if (activity.type === 'trivia' || activity.type === 'dancing') return false;
+    // All other activities can be joined
+    return true;
+  };
+
+  const handleActivityClick = (activity: ActivityWithId, isLive: boolean) => {
+    // If it's live trivia, go to trivia page
+    if (isLive && activity.type === 'trivia') {
+      navigate(`/shows/${id}/trivia`);
+      return;
+    }
+    // If it's live non-trivia activity, go to activity page
+    if (isLive && activity.type !== 'trivia') {
+      navigate(`/shows/${id}/activity`);
+      return;
+    }
+    // For joinable activities (show/set level), go to detail page
+    if (isJoinableActivity(activity)) {
+      navigate(`/shows/${id}/activities/${activity.id}`);
+    }
+  };
+
   const renderActivityCard = (activity: ActivityWithId, isLive = false) => {
     const config = ACTIVITY_CONFIG[activity.type] || ACTIVITY_CONFIG.stage_participation;
     const Icon = config.icon;
+    const isClickable = isLive || isJoinableActivity(activity);
 
     return (
-      <div
+      <button
         key={activity.id}
-        className={`p-3 rounded-lg border transition-all ${
+        type="button"
+        onClick={() => handleActivityClick(activity, isLive)}
+        disabled={!isClickable}
+        className={`w-full text-left p-3 rounded-lg border transition-all ${
           isLive
-            ? 'bg-primary/10 border-primary/50 animate-pulse'
-            : 'bg-cinema-900/60 border-cinema-700 hover:border-cinema-600'
+            ? 'bg-primary/10 border-primary/50 animate-pulse cursor-pointer'
+            : isClickable
+              ? 'bg-cinema-900/60 border-cinema-700 hover:border-cinema-500 hover:bg-cinema-800/60 cursor-pointer active:scale-[0.98]'
+              : 'bg-cinema-900/60 border-cinema-700 opacity-60 cursor-not-allowed'
         }`}
       >
         <div className="flex items-start gap-3">
@@ -159,8 +191,12 @@ export default function Activities() {
               )}
             </div>
           </div>
+          {/* Chevron for clickable items */}
+          {isClickable && (
+            <ChevronRight className="w-4 h-4 text-cinema-500 flex-shrink-0 self-center" />
+          )}
         </div>
-      </div>
+      </button>
     );
   };
 
@@ -184,7 +220,7 @@ export default function Activities() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
-        <div className="flex-1 p-4">
+        <div className="flex-1 p-4 pb-40">
           <Link
             to={`/shows/${id}`}
             className="inline-flex items-center space-x-2 text-gray-400 hover:text-gray-100 transition-colors mb-4"
@@ -194,14 +230,18 @@ export default function Activities() {
           </Link>
           <div className="text-center py-12 text-cinema-400">Loading activities...</div>
         </div>
-        <ActionBar />
+        {/* Sticky ActionBar at bottom */}
+        <div className="fixed bottom-0 left-0 right-0 z-50">
+          <ActionBar />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
-      <div className="flex-1 overflow-y-auto p-4 pb-2">
+      {/* Scrollable content with bottom padding for sticky ActionBar */}
+      <div className="flex-1 overflow-y-auto p-4 pb-40">
         <div className="max-w-lg mx-auto space-y-4">
           {/* Header */}
           <div className="flex items-center justify-between">
@@ -241,7 +281,10 @@ export default function Activities() {
         </div>
       </div>
 
-      <ActionBar />
+      {/* Sticky ActionBar at bottom */}
+      <div className="fixed bottom-0 left-0 right-0 z-50">
+        <ActionBar />
+      </div>
     </div>
   );
 }

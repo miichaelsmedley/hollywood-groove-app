@@ -15,6 +15,7 @@ import JoinShow from './pages/JoinShow';
 import Trivia from './pages/Trivia';
 import Activity from './pages/Activity';
 import Activities from './pages/Activities';
+import ActivityDetail from './pages/ActivityDetail';
 import GlobalActivities from './pages/GlobalActivities';
 import FirebaseTest from './pages/FirebaseTest';
 import JoinCurrentShow from './pages/JoinCurrentShow';
@@ -148,6 +149,7 @@ export default function App() {
             <Route path="trivia" element={<Trivia />} />
             <Route path="activity" element={<Activity />} />
             <Route path="activities" element={<Activities />} />
+            <Route path="activities/:activityId" element={<ActivityDetail />} />
           </Route>
         </Routes>
       </UserProvider>

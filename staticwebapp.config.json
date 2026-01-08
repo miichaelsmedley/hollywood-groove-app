@@ -8,5 +8,17 @@
       "route": "/__/auth/*",
       "rewrite": "/index.html"
     }
-  ]
+  ],
+  "globalHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY"
+  },
+  "responseOverrides": {
+    "404": {
+      "rewrite": "/index.html"
+    }
+  },
+  "mimeTypes": {
+    ".webmanifest": "application/manifest+json"
+  }
 }
