@@ -44,21 +44,45 @@ function getTestModeOverride(): boolean {
 }
 
 const isTestModeOverride = getTestModeOverride();
-const defaultRtdbPrefix = import.meta.env.DEV || isTestModeOverride ? "test/" : "";
+
+// Determine RTDB prefix:
+// 1. If VITE_RTDB_PREFIX is explicitly set to a non-empty string, use it
+// 2. If testMode override is enabled (via ?testMode=true or localStorage), use "test/"
+// 3. If in dev mode (import.meta.env.DEV), use "test/"
+// 4. Otherwise, use empty string (production)
+function determineRtdbPrefix(): string {
+  const envPrefix = import.meta.env.VITE_RTDB_PREFIX;
+
+  // If env var is set to a non-empty string, it takes precedence (unless test mode is explicitly enabled)
+  if (typeof envPrefix === "string" && envPrefix.trim().length > 0) {
+    return envPrefix;
+  }
+
+  // Test mode override always takes precedence over implicit defaults
+  if (isTestModeOverride) {
+    return "test/";
+  }
+
+  // Dev mode uses test prefix
+  if (import.meta.env.DEV) {
+    return "test/";
+  }
+
+  // Production without test mode: empty prefix
+  return "";
+}
+
+const computedPrefix = determineRtdbPrefix();
 
 // Log prefix for debugging
 if (typeof window !== 'undefined') {
-  console.log(`🔧 Firebase RTDB prefix: "${defaultRtdbPrefix}" (testMode: ${isTestModeOverride}, DEV: ${import.meta.env.DEV})`);
+  console.log(`🔧 Firebase RTDB prefix: "${computedPrefix}" (testMode: ${isTestModeOverride}, DEV: ${import.meta.env.DEV})`);
 }
 
 // Export for debugging
 export const IS_TEST_MODE = isTestModeOverride || import.meta.env.DEV;
 
-export const RTDB_PREFIX = normalizeRtdbPrefix(
-  typeof import.meta.env.VITE_RTDB_PREFIX === "string"
-    ? import.meta.env.VITE_RTDB_PREFIX
-    : defaultRtdbPrefix
-);
+export const RTDB_PREFIX = normalizeRtdbPrefix(computedPrefix);
 
 export function rtdbPath(path: string): string {
   const trimmed = path.replace(/^\/+/, "");

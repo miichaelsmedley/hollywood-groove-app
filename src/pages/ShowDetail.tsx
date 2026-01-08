@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { onValue, ref } from 'firebase/database';
 import { Calendar, MapPin, ArrowLeft, Trophy } from 'lucide-react';
-import { db, rtdbPath } from '../lib/firebase';
+import { db, rtdbPath, RTDB_PREFIX, IS_TEST_MODE } from '../lib/firebase';
 import { ShowMeta, LiveTriviaState, LiveActivityState } from '../types/firebaseContract';
 
 export default function ShowDetail() {
@@ -26,10 +26,17 @@ export default function ShowDetail() {
       }
     );
 
+    const liveTriviaPath = rtdbPath(`shows/${showId}/live/trivia`);
+    console.log(`🔴 ShowDetail: Subscribing to live/trivia`);
+    console.log(`🔴 RTDB_PREFIX: "${RTDB_PREFIX}", IS_TEST_MODE: ${IS_TEST_MODE}`);
+    console.log(`🔴 Full path: ${liveTriviaPath}`);
+
     const unsubscribeLive = onValue(
-      ref(db, rtdbPath(`shows/${showId}/live/trivia`)),
+      ref(db, liveTriviaPath),
       (snapshot) => {
-        setLiveTrivia((snapshot.val() as LiveTriviaState | null) ?? null);
+        const data = snapshot.val() as LiveTriviaState | null;
+        console.log(`🔴 ShowDetail live/trivia data for show ${showId}:`, data);
+        setLiveTrivia(data ?? null);
       }
     );
 
