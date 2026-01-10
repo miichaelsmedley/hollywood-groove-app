@@ -303,8 +303,8 @@ export default function JoinShow() {
     setCheckingNickname(true);
 
     try {
-      const usersRef = ref(db, 'users');
-      const nicknameQuery = query(usersRef, orderByChild('displayName'), equalTo(nickname));
+      const membersRef = ref(db, 'members');
+      const nicknameQuery = query(membersRef, orderByChild('display_name'), equalTo(nickname));
       const snapshot = await get(nicknameQuery);
 
       if (snapshot.exists()) {
@@ -316,6 +316,7 @@ export default function JoinShow() {
       }
     } catch (error) {
       console.error('Error checking nickname:', error);
+      // On error, allow the nickname (server will validate)
       setNicknameAvailable(true);
     } finally {
       setCheckingNickname(false);
@@ -324,11 +325,11 @@ export default function JoinShow() {
 
   const generateSuggestions = async (baseName: string) => {
     const suggestions: string[] = [];
-    const usersRef = ref(db, 'users');
+    const membersRef = ref(db, 'members');
 
     for (let i = 1; i <= 5; i++) {
       const candidate = `${baseName}_${String(i).padStart(3, '0')}`;
-      const candidateQuery = query(usersRef, orderByChild('displayName'), equalTo(candidate));
+      const candidateQuery = query(membersRef, orderByChild('display_name'), equalTo(candidate));
       const snapshot = await get(candidateQuery);
 
       if (!snapshot.exists()) {
@@ -338,7 +339,7 @@ export default function JoinShow() {
     }
 
     const yearCandidate = `${baseName}_${new Date().getFullYear()}`;
-    const yearQuery = query(usersRef, orderByChild('displayName'), equalTo(yearCandidate));
+    const yearQuery = query(membersRef, orderByChild('display_name'), equalTo(yearCandidate));
     const yearSnapshot = await get(yearQuery);
     if (!yearSnapshot.exists() && suggestions.length < 3) {
       suggestions.push(yearCandidate);
