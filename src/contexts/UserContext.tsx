@@ -43,8 +43,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setUserProfile(null);
         setIsGoogleUser(false);
         setGooglePhotoURL(null);
-        setCanUseTestMode(false);
-        localStorage.removeItem('hg_test_access');
+        // Keep test access if it was granted via URL code (don't clear hg_test_access)
+        const hasLocalTestAccess = localStorage.getItem('hg_test_access') === 'true';
+        setCanUseTestMode(hasLocalTestAccess);
         setLoading(false);
         return;
       }
@@ -61,8 +62,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
       setIsGoogleUser(isSignedInWithGoogle());
       setGooglePhotoURL(getGooglePhotoURL());
 
-      // Test mode access is only granted to non-anonymous users explicitly flagged in RTDB
-      if (!user.isAnonymous) {
+      // Test mode access can be granted via:
+      // 1. URL test code (?testCode=groove2024) - sets hg_test_access in localStorage
+      // 2. Firebase /testers/{uid} entry for non-anonymous users
+      const hasLocalTestAccess = localStorage.getItem('hg_test_access') === 'true';
+
+      if (hasLocalTestAccess) {
+        // Already has test access (from URL code or previous Firebase check)
+        setCanUseTestMode(true);
+      } else if (!user.isAnonymous) {
+        // Check Firebase testers list for non-anonymous users
         try {
           const testerRef = ref(db, `testers/${user.uid}`);
           const testerSnap = await get(testerRef);
@@ -70,17 +79,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
           setCanUseTestMode(allowed);
           if (allowed) {
             localStorage.setItem('hg_test_access', 'true');
-          } else {
-            localStorage.removeItem('hg_test_access');
           }
         } catch (error) {
           console.warn('Failed to check test mode access:', error);
           setCanUseTestMode(false);
-          localStorage.removeItem('hg_test_access');
         }
       } else {
         setCanUseTestMode(false);
-        localStorage.removeItem('hg_test_access');
       }
 
       // Check if user profile exists in Firebase (/members/ path per contract)

@@ -11,12 +11,27 @@ function normalizeRtdbPrefix(prefix: string): string {
     : `${withoutLeadingSlashes}/`;
 }
 
+// Test access code for easy tester onboarding (shared secret)
+const TEST_ACCESS_CODE = 'groove2024';
+
 // Check for test mode override via URL query parameter or localStorage
 function getTestModeOverride(): boolean {
   if (typeof window !== 'undefined') {
     const urlParams = new URLSearchParams(window.location.search);
     let currentTestMode = localStorage.getItem('hg_test_mode') === 'true';
     const hasTestAccess = localStorage.getItem('hg_test_access') === 'true';
+
+    // Check for test access code in URL - grants persistent test access
+    const testCode = urlParams.get('testCode');
+    if (testCode === TEST_ACCESS_CODE) {
+      console.log('✅ Test access granted via code');
+      localStorage.setItem('hg_test_access', 'true');
+      localStorage.setItem('hg_test_mode', 'true');
+      // Reload without query param to apply new mode
+      window.location.href = window.location.pathname;
+      return true;
+    }
+
     const allowTestModeOverride = hasTestAccess || import.meta.env.DEV;
 
     if (!allowTestModeOverride && currentTestMode) {
