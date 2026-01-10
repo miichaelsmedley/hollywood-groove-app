@@ -136,14 +136,18 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const db = getDatabase(app);
 export const auth = getAuth(app);
 
-// Set persistence to localStorage for better reliability across redirects
-// This ensures auth state survives the OAuth redirect on mobile browsers
-setPersistence(auth, browserLocalPersistence)
-  .then(() => {
+// Promise that resolves when auth persistence is configured
+// Components should await this before relying on auth state
+export const authPersistenceReady: Promise<void> = (async () => {
+  try {
+    // Set persistence to localStorage for better reliability across redirects
+    // This ensures auth state survives the OAuth redirect on mobile browsers
+    // IMPORTANT: In incognito mode, localStorage is available but cleared when window closes
+    await setPersistence(auth, browserLocalPersistence);
     console.log('✅ Firebase auth persistence set to localStorage');
-  })
-  .catch((error) => {
+  } catch (error) {
     console.error('⚠️ Failed to set auth persistence:', error);
-  });
+  }
+})();
 
 export default app;

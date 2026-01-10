@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged, signInAnonymously, onIdTokenChanged } from 'firebase/auth';
-import { auth } from './lib/firebase';
+import { auth, authPersistenceReady } from './lib/firebase';
 import { handleRedirectResult, isGoogleAuthInProgress } from './lib/auth';
 import { UserProvider } from './contexts/UserContext';
 
@@ -47,7 +47,11 @@ export default function App() {
     let hasProcessedInitialAuth = false;
 
     (async () => {
-      // Wait for Firebase auth to restore any persisted session
+      // Wait for auth persistence to be configured first
+      console.log('⏳ Waiting for auth persistence to be configured...');
+      await authPersistenceReady;
+
+      // Then wait for Firebase auth to restore any persisted session
       console.log('⏳ Waiting for auth state to be ready...');
       await auth.authStateReady();
       console.log('✅ Auth state ready, current user:', auth.currentUser ? {

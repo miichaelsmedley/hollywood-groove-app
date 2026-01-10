@@ -37,8 +37,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [canUseTestMode, setCanUseTestMode] = useState(false);
 
   useEffect(() => {
+    console.log('🔍 UserContext: Setting up auth listener');
+
     // Load user profile from Firebase when auth changes
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      console.log('🔍 UserContext: onAuthStateChanged fired', user ? { uid: user.uid, isAnonymous: user.isAnonymous } : 'null');
+
       if (!user) {
         setUserProfile(null);
         setIsGoogleUser(false);
@@ -119,20 +123,24 @@ export function UserProvider({ children }: { children: ReactNode }) {
           await updateProfile(user, { displayName: normalizedProfile.displayName });
         }
       } else {
-        console.log('Profile does NOT exist in Firebase');
+        console.log('🔍 Profile does NOT exist in Firebase for UID:', user.uid);
         // Check localStorage for cached profile ONLY if UID matches
         const cached = localStorage.getItem('userProfile');
+        console.log('🔍 Checking localStorage cache:', cached ? 'found' : 'not found');
         if (cached) {
           const profile = JSON.parse(cached) as UserProfile;
+          console.log('🔍 Cached profile UID:', profile.uid, 'Current UID:', user.uid);
           // Verify UID matches - if not, clear stale cache
           if (profile.uid === user.uid) {
+            console.log('🔍 UID matches, using cached profile');
             setUserProfile(profile);
           } else {
-            console.warn('UID mismatch in cached profile, clearing cache');
+            console.warn('🔍 UID mismatch in cached profile, clearing cache');
             localStorage.removeItem('userProfile');
             setUserProfile(null);
           }
         } else {
+          console.log('🔍 No cached profile, user not registered');
           setUserProfile(null);
         }
       }
