@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { Mail, Phone, User, CheckCircle, AlertCircle, Settings, LogOut } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 import { IS_TEST_MODE, isAdminEmail } from '../lib/mode';
-import { RTDB_PREFIX, auth } from '../lib/firebase';
+import { auth } from '../lib/firebase';
 import { useState } from 'react';
 
 export default function Profile() {
@@ -269,7 +269,7 @@ export default function Profile() {
         <div className="bg-primary/10 border border-primary/30 rounded-2xl p-5 space-y-3">
           <div className="text-sm font-semibold text-cinema-800">Testing</div>
           <div className="text-sm text-cinema-700">
-            RTDB prefix: <code className="text-primary">{RTDB_PREFIX.length > 0 ? RTDB_PREFIX : '(none)'}</code>
+            Mode: <code className="text-primary">Single path (no prefix)</code>
           </div>
           <Link
             to="/__testing/firebase"

@@ -6,6 +6,7 @@ export interface ShowMeta {
   venueName: string;
   schemaVersion: number;
   publishedAt: number; // Timestamp
+  isTestShow?: boolean; // If true, only visible to testers
 }
 
 // 2. Crowd Activity (Public read)

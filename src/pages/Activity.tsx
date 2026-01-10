@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { onValue, ref, set } from 'firebase/database';
 import { CalendarCheck, ArrowLeft, Users } from 'lucide-react';
-import { auth, db, rtdbPath } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import { CrowdActivity, LiveActivityState } from '../types/firebaseContract';
 import ActionBar from '../components/show/ActionBar';
 
@@ -18,7 +18,7 @@ export default function Activity() {
     const showId = Number(id);
 
     const unsubscribe = onValue(
-      ref(db, rtdbPath(`shows/${showId}/live/activity`)),
+      ref(db, `shows/${showId}/live/activity`),
       (snapshot) => {
         const state = snapshot.val() as LiveActivityState | null;
         setLiveActivity(state);
@@ -37,7 +37,7 @@ export default function Activity() {
     }
 
     const showId = Number(id);
-    const activityRef = ref(db, rtdbPath(`shows/${showId}/activities/${liveActivity.activityId}`));
+    const activityRef = ref(db, `shows/${showId}/activities/${liveActivity.activityId}`);
     const unsubscribe = onValue(activityRef, (snapshot) => {
       setActivity(snapshot.val() as CrowdActivity | null);
     });
@@ -51,7 +51,7 @@ export default function Activity() {
     const uid = auth.currentUser.uid;
 
     try {
-      await set(ref(db, rtdbPath(`shows/${showId}/responses/${liveActivity.activityId}/${uid}`)), {
+      await set(ref(db, `shows/${showId}/responses/${liveActivity.activityId}/${uid}`), {
         action: 'join',
         joinedAt: Date.now(),
         displayName: auth.currentUser.displayName || 'Anonymous',
@@ -68,7 +68,7 @@ export default function Activity() {
     const uid = auth.currentUser.uid;
 
     try {
-      await set(ref(db, rtdbPath(`shows/${showId}/responses/${liveActivity.activityId}/${uid}`)), {
+      await set(ref(db, `shows/${showId}/responses/${liveActivity.activityId}/${uid}`), {
         type: 'dance_claim',
         claimedAt: Date.now(),
         displayName: auth.currentUser.displayName || 'Anonymous',
@@ -85,7 +85,7 @@ export default function Activity() {
     const uid = auth.currentUser.uid;
 
     try {
-      await set(ref(db, rtdbPath(`shows/${showId}/responses/${liveActivity.activityId}/${uid}`)), {
+      await set(ref(db, `shows/${showId}/responses/${liveActivity.activityId}/${uid}`), {
         optionIndex,
         optionText,
         votedAt: Date.now(),

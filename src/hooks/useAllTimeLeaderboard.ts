@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { onValue, ref } from 'firebase/database';
-import { db, rtdbPath } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { AllTimeLeaderboard, AllTimeLeaderboardEntry } from '../types/firebaseContract';
 
 interface AllTimeLeaderboardState {
@@ -19,7 +19,7 @@ export function useAllTimeLeaderboard() {
   });
 
   useEffect(() => {
-    const leaderboardRef = ref(db, rtdbPath('leaderboards/all_time'));
+    const leaderboardRef = ref(db, 'leaderboards/all_time');
     const unsubscribe = onValue(
       leaderboardRef,
       (snapshot) => {

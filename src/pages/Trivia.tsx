@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { onValue, ref, set } from 'firebase/database';
 import { ArrowLeft, Clock, Trophy, CheckCircle } from 'lucide-react';
-import { db, auth, rtdbPath } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { LiveTriviaState, CrowdActivity, UserScore } from '../types/firebaseContract';
 import ActionBar from '../components/show/ActionBar';
 
@@ -25,7 +25,7 @@ export default function Trivia() {
 
     // Listen to live trivia state
     const unsubscribeLive = onValue(
-      ref(db, rtdbPath(`shows/${showId}/live/trivia`)),
+      ref(db, `shows/${showId}/live/trivia`),
       (snapshot) => {
         const state = snapshot.val() as LiveTriviaState | null;
         setLiveTrivia(state);
@@ -41,7 +41,7 @@ export default function Trivia() {
 
         // Load the current activity
         if (state?.activityId) {
-          const activityRef = ref(db, rtdbPath(`shows/${showId}/activities/${state.activityId}`));
+          const activityRef = ref(db, `shows/${showId}/activities/${state.activityId}`);
           onValue(activityRef, (activitySnapshot) => {
             setCurrentActivity(activitySnapshot.val() as CrowdActivity | null);
           });
@@ -53,7 +53,7 @@ export default function Trivia() {
     const uid = auth.currentUser?.uid;
     if (uid) {
       const unsubscribeScore = onValue(
-        ref(db, rtdbPath(`shows/${showId}/scores/${uid}`)),
+        ref(db, `shows/${showId}/scores/${uid}`),
         (snapshot) => {
           setMyScore(snapshot.val() as UserScore | null);
         }
@@ -120,7 +120,7 @@ export default function Trivia() {
 
     try {
       await set(
-        ref(db, rtdbPath(`shows/${showId}/responses/${liveTrivia.activityId}/${uid}`)),
+        ref(db, `shows/${showId}/responses/${liveTrivia.activityId}/${uid}`),
         {
           optionIndex,
           answeredAt,
@@ -148,7 +148,7 @@ export default function Trivia() {
     const responseTime = Math.max(0, answeredAt - startedAt);
 
     try {
-      await set(ref(db, rtdbPath(`shows/${showId}/responses/${liveTrivia.activityId}/${uid}`)), {
+      await set(ref(db, `shows/${showId}/responses/${liveTrivia.activityId}/${uid}`), {
         text: trimmed,
         answeredAt,
         responseTime,
@@ -171,7 +171,7 @@ export default function Trivia() {
     const responseTime = Math.max(0, answeredAt - startedAt);
 
     try {
-      await set(ref(db, rtdbPath(`shows/${showId}/responses/${liveTrivia.activityId}/${uid}`)), {
+      await set(ref(db, `shows/${showId}/responses/${liveTrivia.activityId}/${uid}`), {
         booleanValue: value,
         answeredAt,
         responseTime,
@@ -196,7 +196,7 @@ export default function Trivia() {
     const responseTime = Math.max(0, answeredAt - startedAt);
 
     try {
-      await set(ref(db, rtdbPath(`shows/${showId}/responses/${liveTrivia.activityId}/${uid}`)), {
+      await set(ref(db, `shows/${showId}/responses/${liveTrivia.activityId}/${uid}`), {
         scaleValue: value,
         answeredAt,
         responseTime,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { onValue, ref, get, query, orderByChild, equalTo, set, update, runTransaction } from 'firebase/database';
-import { db, rtdbPath, auth } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
 import { MemberProfile, ShowMeta } from '../types/firebaseContract';
 import { Music, Mail, Phone, User, Check, Sparkles, AlertCircle, CheckCircle } from 'lucide-react';
@@ -46,6 +46,7 @@ export default function JoinShow() {
     googlePhotoURL,
     userProfile,
     loading: userLoading,
+    canUseTestMode,
   } = useUser();
 
   const [showMeta, setShowMeta] = useState<ShowMeta | null>(null);
@@ -97,7 +98,7 @@ export default function JoinShow() {
   useEffect(() => {
     if (!id) return;
 
-    const showRef = ref(db, rtdbPath(`shows/${id}/meta`));
+    const showRef = ref(db, `shows/${id}/meta`);
     const unsubscribe = onValue(showRef, (snapshot) => {
       setShowMeta(snapshot.val() as ShowMeta | null);
       setLoading(false);
@@ -125,7 +126,7 @@ export default function JoinShow() {
       const authProvider =
         user.providerData?.[0]?.providerId || (user.isAnonymous ? 'anonymous' : 'unknown');
 
-      const memberRef = ref(db, rtdbPath(`members/${uid}`));
+      const memberRef = ref(db, `members/${uid}`);
       const memberSnap = await get(memberRef);
       let member: MemberProfile;
 
@@ -170,7 +171,7 @@ export default function JoinShow() {
       const starsTotal = member.stars?.total ?? 0;
       const { tier, bonus } = resolveTierAndBonus(starsTotal);
 
-      const attendeeRef = ref(db, rtdbPath(`shows/${id}/attendees/${uid}`));
+      const attendeeRef = ref(db, `shows/${id}/attendees/${uid}`);
       const attendeeSnap = await get(attendeeRef);
       if (!attendeeSnap.exists()) {
         await set(attendeeRef, {
@@ -201,7 +202,7 @@ export default function JoinShow() {
         await update(attendeeRef, { display_name: resolvedDisplayName });
       }
 
-      const scoreRef = ref(db, rtdbPath(`shows/${id}/scores/${uid}`));
+      const scoreRef = ref(db, `shows/${id}/scores/${uid}`);
       await runTransaction(scoreRef, (current) => {
         const existing = (current ?? {}) as Record<string, any>;
         const existingBreakdown = (existing.breakdown ?? {}) as Record<string, any>;
@@ -231,7 +232,7 @@ export default function JoinShow() {
         };
       });
 
-      const memberShowRef = ref(db, rtdbPath(`members/${uid}/shows/${id}`));
+      const memberShowRef = ref(db, `members/${uid}/shows/${id}`);
       const memberShowSnap = await get(memberShowRef);
       if (!memberShowSnap.exists()) {
         const showDate = resolveShowDate(showMeta?.startDate);
@@ -240,7 +241,7 @@ export default function JoinShow() {
           stars_earned: 1,
         });
 
-        const starsRef = ref(db, rtdbPath(`members/${uid}/stars`));
+        const starsRef = ref(db, `members/${uid}/stars`);
         await runTransaction(starsRef, (current) => {
           const existing = (current ?? {}) as Record<string, any>;
           const existingTotal = typeof existing.total === 'number' ? existing.total : 0;
@@ -302,7 +303,7 @@ export default function JoinShow() {
     setCheckingNickname(true);
 
     try {
-      const usersRef = ref(db, rtdbPath('users'));
+      const usersRef = ref(db, 'users');
       const nicknameQuery = query(usersRef, orderByChild('displayName'), equalTo(nickname));
       const snapshot = await get(nicknameQuery);
 
@@ -323,7 +324,7 @@ export default function JoinShow() {
 
   const generateSuggestions = async (baseName: string) => {
     const suggestions: string[] = [];
-    const usersRef = ref(db, rtdbPath('users'));
+    const usersRef = ref(db, 'users');
 
     for (let i = 1; i <= 5; i++) {
       const candidate = `${baseName}_${String(i).padStart(3, '0')}`;
@@ -447,6 +448,23 @@ export default function JoinShow() {
   // Check for show not found BEFORE checking isRegistered
   // Otherwise we'd show "Joining show..." forever for a non-existent show
   if (!showMeta) {
+    return (
+      <div className="min-h-screen bg-cinema flex items-center justify-center p-4">
+        <div className="text-center space-y-4 animate-slide-up">
+          <div className="w-20 h-20 rounded-full bg-cinema-50 border-2 border-cinema-200 flex items-center justify-center mx-auto">
+            <Music className="w-10 h-10 text-cinema-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-cinema-900">Show Not Found</h2>
+          <p className="text-cinema-500 max-w-sm mx-auto">
+            This show doesn't exist or hasn't been published yet.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Check for test show access - only testers can see test shows
+  if (showMeta.isTestShow && !canUseTestMode) {
     return (
       <div className="min-h-screen bg-cinema flex items-center justify-center p-4">
         <div className="text-center space-y-4 animate-slide-up">

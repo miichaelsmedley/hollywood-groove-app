@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { updateProfile } from 'firebase/auth';
 import { ref, set, get, update } from 'firebase/database';
-import { auth, db, rtdbPath } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import { UserProfile } from '../types/firebaseContract';
 import { signInWithGoogle, signOut as authSignOut, isSignedInWithGoogle, getGooglePhotoURL } from '../lib/auth';
 
@@ -93,8 +93,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
 
       // Check if user profile exists in Firebase (/members/ path per contract)
-      const userRef = ref(db, rtdbPath(`members/${user.uid}`));
-      console.log('Fetching profile from:', rtdbPath(`members/${user.uid}`));
+      const userRef = ref(db, `members/${user.uid}`);
+      console.log('Fetching profile from:', `members/${user.uid}`);
       const snapshot = await get(userRef);
 
       if (snapshot.exists()) {
@@ -198,7 +198,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     };
 
     // Save to Firebase (/members/ path per contract)
-    await set(ref(db, rtdbPath(`members/${user.uid}`)), firebaseProfile);
+    await set(ref(db, `members/${user.uid}`), firebaseProfile);
 
     // Build local profile in UserProfile format (camelCase) for PWA state
     const localProfile: UserProfile = {
@@ -233,7 +233,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       lastSeenAt: Date.now(),
     };
 
-    await update(ref(db, rtdbPath(`members/${user.uid}`)), updates);
+    await update(ref(db, `members/${user.uid}`), updates);
 
     setUserProfile({ ...userProfile, ...updates });
     localStorage.setItem('userProfile', JSON.stringify({ ...userProfile, ...updates }));
@@ -251,7 +251,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const updatedShows = [...currentShows, showId];
 
-    await update(ref(db, rtdbPath(`members/${user.uid}`)), {
+    await update(ref(db, `members/${user.uid}`), {
       showsAttended: updatedShows,
       lastSeenAt: Date.now(),
     });

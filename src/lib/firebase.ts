@@ -2,23 +2,14 @@ import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth, browserLocalPersistence, setPersistence } from "firebase/auth";
 import { getDatabase } from "firebase/database";
 
-function normalizeRtdbPrefix(prefix: string): string {
-  const trimmed = prefix.trim();
-  if (trimmed.length === 0) return "";
-  const withoutLeadingSlashes = trimmed.replace(/^\/+/, "");
-  return withoutLeadingSlashes.endsWith("/")
-    ? withoutLeadingSlashes
-    : `${withoutLeadingSlashes}/`;
-}
-
 // Test access code for easy tester onboarding (shared secret)
 const TEST_ACCESS_CODE = 'groove2024';
 
-// Check for test mode override via URL query parameter or localStorage
-function getTestModeOverride(): boolean {
+// Check for test access via URL query parameter
+// This grants the user tester privileges (can see test shows)
+function checkTestAccess(): boolean {
   if (typeof window !== 'undefined') {
     const urlParams = new URLSearchParams(window.location.search);
-    let currentTestMode = localStorage.getItem('hg_test_mode') === 'true';
     const hasTestAccess = localStorage.getItem('hg_test_access') === 'true';
 
     // Check for test access code in URL - grants persistent test access
@@ -26,95 +17,19 @@ function getTestModeOverride(): boolean {
     if (testCode === TEST_ACCESS_CODE) {
       console.log('✅ Test access granted via code');
       localStorage.setItem('hg_test_access', 'true');
-      localStorage.setItem('hg_test_mode', 'true');
-      // Reload without query param to apply new mode
+      // Reload without query param
       window.location.href = window.location.pathname;
       return true;
     }
 
-    const allowTestModeOverride = hasTestAccess || import.meta.env.DEV;
-
-    if (!allowTestModeOverride && currentTestMode) {
-      localStorage.removeItem('hg_test_mode');
-      currentTestMode = false;
-    }
-
-    // Allow ?testMode=true to enable test mode
-    if (urlParams.get('testMode') === 'true') {
-      if (!allowTestModeOverride) {
-        // Strip unauthorized attempts to toggle test mode
-        window.location.href = window.location.pathname;
-        return false;
-      }
-      if (!currentTestMode) {
-        localStorage.setItem('hg_test_mode', 'true');
-        // Reload without query param to apply new mode
-        window.location.href = window.location.pathname;
-        return true;
-      }
-      return true;
-    }
-    // Allow ?testMode=false to disable test mode
-    if (urlParams.get('testMode') === 'false') {
-      if (currentTestMode) {
-        localStorage.removeItem('hg_test_mode');
-        // Reload without query param to apply new mode
-        window.location.href = window.location.pathname;
-        return false;
-      }
-      return false;
-    }
-    // Check localStorage for persisted test mode
-    return allowTestModeOverride ? currentTestMode : false;
+    return hasTestAccess;
   }
   return false;
 }
 
-const isTestModeOverride = getTestModeOverride();
-
-// Determine RTDB prefix:
-// 1. If VITE_RTDB_PREFIX is explicitly set to a non-empty string, use it
-// 2. If testMode override is enabled (via ?testMode=true or localStorage), use "test/"
-// 3. If in dev mode (import.meta.env.DEV), use "test/"
-// 4. Otherwise, use empty string (production)
-function determineRtdbPrefix(): string {
-  const envPrefix = import.meta.env.VITE_RTDB_PREFIX;
-
-  // If env var is set to a non-empty string, it takes precedence (unless test mode is explicitly enabled)
-  if (typeof envPrefix === "string" && envPrefix.trim().length > 0) {
-    return envPrefix;
-  }
-
-  // Test mode override always takes precedence over implicit defaults
-  if (isTestModeOverride) {
-    return "test/";
-  }
-
-  // Dev mode uses test prefix
-  if (import.meta.env.DEV) {
-    return "test/";
-  }
-
-  // Production without test mode: empty prefix
-  return "";
-}
-
-const computedPrefix = determineRtdbPrefix();
-
-// Log prefix for debugging
-if (typeof window !== 'undefined') {
-  console.log(`🔧 Firebase RTDB prefix: "${computedPrefix}" (testMode: ${isTestModeOverride}, DEV: ${import.meta.env.DEV})`);
-}
-
-// Export for debugging
-export const IS_TEST_MODE = isTestModeOverride || import.meta.env.DEV;
-
-export const RTDB_PREFIX = normalizeRtdbPrefix(computedPrefix);
-
-export function rtdbPath(path: string): string {
-  const trimmed = path.replace(/^\/+/, "");
-  return `${RTDB_PREFIX}${trimmed}`;
-}
+// Whether this user has test access (can see test shows)
+// This is set via URL code or Firebase /testers/{uid} entry
+export const HAS_LOCAL_TEST_ACCESS = checkTestAccess();
 
 // Firebase configuration - uses environment variables from Azure
 const firebaseConfig = {
@@ -129,7 +44,7 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-8NMHF3ZPWQ",
 };
 
-console.log('🔧 Firebase authDomain configured as:', firebaseConfig.authDomain);
+console.log('🔧 Firebase initialized (single path mode - no test prefix)');
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 

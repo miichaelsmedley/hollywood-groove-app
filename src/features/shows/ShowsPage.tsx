@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { onValue, ref } from 'firebase/database';
-import { db, rtdbPath } from '../../lib/firebase';
+import { db } from '../../lib/firebase';
 import { ShowMeta } from '../../types/firebaseContract';
 import ShowCard from './ShowCard';
 import { Calendar, AlertCircle } from 'lucide-react';
@@ -20,7 +20,7 @@ export default function ShowsPage({ mode = 'upcoming' }: { mode?: ShowsPageMode 
 
   useEffect(() => {
     // Listen to all shows in Firebase
-    const showsRef = ref(db, rtdbPath('shows'));
+    const showsRef = ref(db, 'shows');
 
     const unsubscribe = onValue(
       showsRef,

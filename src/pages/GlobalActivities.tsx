@@ -39,7 +39,7 @@ export default function GlobalActivities() {
     // TODO: When global activities are implemented:
     // 1. Add 'global_activities' path to Firebase security rules
     // 2. Uncomment the Firebase listener below
-    // const globalActivitiesRef = ref(db, rtdbPath('global_activities'));
+    // const globalActivitiesRef = ref(db, 'global_activities');
     // const unsubscribe = onValue(globalActivitiesRef, (snapshot) => { ... });
     // return () => unsubscribe();
   }, []);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { onValue, ref } from 'firebase/database';
-import { db, rtdbPath } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { LeaderboardEntry, ShowLeaderboard } from '../types/firebaseContract';
 
 interface LeaderboardState {
@@ -26,7 +26,7 @@ export function useLeaderboard(showId: string | null, currentUserId?: string | n
 
     setState((current) => ({ ...current, isLoading: true, error: null }));
 
-    const leaderboardRef = ref(db, rtdbPath(`shows/${showId}/leaderboard`));
+    const leaderboardRef = ref(db, `shows/${showId}/leaderboard`);
     const unsubscribe = onValue(
       leaderboardRef,
       (snapshot) => {

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { onValue, ref } from 'firebase/database';
 import { ArrowLeft, Mic, Trophy, Vote, Users, Music, HelpCircle, Calendar, Sparkles, ChevronRight } from 'lucide-react';
-import { db, rtdbPath } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { CrowdActivity, ActivityType, LiveActivityState, LiveTriviaState } from '../types/firebaseContract';
 import ActionBar from '../components/show/ActionBar';
 
@@ -36,7 +36,7 @@ export default function Activities() {
     const showId = Number(id);
 
     // Listen to activities
-    const activitiesRef = ref(db, rtdbPath(`shows/${showId}/activities`));
+    const activitiesRef = ref(db, `shows/${showId}/activities`);
     const unsubscribeActivities = onValue(activitiesRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
@@ -59,13 +59,13 @@ export default function Activities() {
     });
 
     // Listen to live activity state
-    const liveActivityRef = ref(db, rtdbPath(`shows/${showId}/live/activity`));
+    const liveActivityRef = ref(db, `shows/${showId}/live/activity`);
     const unsubscribeLiveActivity = onValue(liveActivityRef, (snapshot) => {
       setLiveActivity(snapshot.val() as LiveActivityState | null);
     });
 
     // Listen to live trivia state
-    const liveTriviaRef = ref(db, rtdbPath(`shows/${showId}/live/trivia`));
+    const liveTriviaRef = ref(db, `shows/${showId}/live/trivia`);
     const unsubscribeLiveTrivia = onValue(liveTriviaRef, (snapshot) => {
       setLiveTrivia(snapshot.val() as LiveTriviaState | null);
     });

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { onValue, ref, set } from 'firebase/database';
 import { CalendarCheck, ArrowLeft, Users, CheckCircle, Clock, Trophy } from 'lucide-react';
-import { auth, db, rtdbPath } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import { CrowdActivity } from '../types/firebaseContract';
 import ActionBar from '../components/show/ActionBar';
 
@@ -29,7 +29,7 @@ export default function ActivityDetail() {
     if (!id || !activityId) return;
     const showId = Number(id);
 
-    const activityRef = ref(db, rtdbPath(`shows/${showId}/activities/${activityId}`));
+    const activityRef = ref(db, `shows/${showId}/activities/${activityId}`);
     const unsubscribe = onValue(activityRef, (snapshot) => {
       setActivity(snapshot.val() as CrowdActivity | null);
       setLoading(false);
@@ -44,7 +44,7 @@ export default function ActivityDetail() {
     const showId = Number(id);
     const uid = auth.currentUser.uid;
 
-    const responseRef = ref(db, rtdbPath(`shows/${showId}/responses/${activityId}/${uid}`));
+    const responseRef = ref(db, `shows/${showId}/responses/${activityId}/${uid}`);
     const unsubscribe = onValue(responseRef, (snapshot) => {
       const response = snapshot.val() as UserResponse | null;
       if (response) {
@@ -66,7 +66,7 @@ export default function ActivityDetail() {
 
     setSubmitting(true);
     try {
-      await set(ref(db, rtdbPath(`shows/${showId}/responses/${activityId}/${uid}`)), {
+      await set(ref(db, `shows/${showId}/responses/${activityId}/${uid}`), {
         action: 'join',
         joinedAt: Date.now(),
         displayName: auth.currentUser.displayName || 'Anonymous',
@@ -86,7 +86,7 @@ export default function ActivityDetail() {
 
     setSubmitting(true);
     try {
-      await set(ref(db, rtdbPath(`shows/${showId}/responses/${activityId}/${uid}`)), {
+      await set(ref(db, `shows/${showId}/responses/${activityId}/${uid}`), {
         optionIndex,
         optionText,
         votedAt: Date.now(),

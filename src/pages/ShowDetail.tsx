@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { onValue, ref } from 'firebase/database';
 import { Calendar, MapPin, ArrowLeft, Trophy } from 'lucide-react';
-import { db, rtdbPath, RTDB_PREFIX, IS_TEST_MODE } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { ShowMeta, LiveTriviaState, LiveActivityState } from '../types/firebaseContract';
+import { useUser } from '../contexts/UserContext';
 
 export default function ShowDetail() {
   const { id } = useParams<{ id: string }>();
+  const { canUseTestMode } = useUser();
   const [showMeta, setShowMeta] = useState<ShowMeta | null>(null);
   const [liveTrivia, setLiveTrivia] = useState<LiveTriviaState | null>(null);
   const [liveActivity, setLiveActivity] = useState<LiveActivityState | null>(null);
@@ -19,16 +21,16 @@ export default function ShowDetail() {
     const showId = Number(id);
 
     const unsubscribeMeta = onValue(
-      ref(db, rtdbPath(`shows/${showId}/meta`)),
+      ref(db, `shows/${showId}/meta`),
       (snapshot) => {
         setShowMeta((snapshot.val() as ShowMeta | null) ?? null);
         setLoading(false);
       }
     );
 
-    const liveTriviaPath = rtdbPath(`shows/${showId}/live/trivia`);
+    const liveTriviaPath = `shows/${showId}/live/trivia`;
     console.log(`🔴 ShowDetail: Subscribing to live/trivia`);
-    console.log(`🔴 RTDB_PREFIX: "${RTDB_PREFIX}", IS_TEST_MODE: ${IS_TEST_MODE}`);
+    console.log('🔴 Using single path mode (no prefix)');
     console.log(`🔴 Full path: ${liveTriviaPath}`);
 
     const unsubscribeLive = onValue(
@@ -41,7 +43,7 @@ export default function ShowDetail() {
     );
 
     const unsubscribeActivity = onValue(
-      ref(db, rtdbPath(`shows/${showId}/live/activity`)),
+      ref(db, `shows/${showId}/live/activity`),
       (snapshot) => {
         setLiveActivity((snapshot.val() as LiveActivityState | null) ?? null);
       }
@@ -76,7 +78,32 @@ export default function ShowDetail() {
         <div className="bg-cinema-50 rounded-2xl p-6 border border-cinema-200 text-center">
           <h1 className="text-2xl font-bold mb-2">Show not found</h1>
           <p className="text-cinema-500 text-sm">
-            This show hasn’t been published yet.
+            This show hasn't been published yet.
+          </p>
+          <Link to="/join" className="inline-block mt-5 btn-primary">
+            Join current show
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Check for test show access - only testers can see test shows
+  if (showMeta.isTestShow && !canUseTestMode) {
+    return (
+      <div className="space-y-6">
+        <Link
+          to="/shows"
+          className="inline-flex items-center space-x-2 text-cinema-500 hover:text-cinema-900 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Shows</span>
+        </Link>
+
+        <div className="bg-cinema-50 rounded-2xl p-6 border border-cinema-200 text-center">
+          <h1 className="text-2xl font-bold mb-2">Show not found</h1>
+          <p className="text-cinema-500 text-sm">
+            This show hasn't been published yet.
           </p>
           <Link to="/join" className="inline-block mt-5 btn-primary">
             Join current show

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { onValue, ref } from 'firebase/database';
 import { BarChart3, Trophy } from 'lucide-react';
-import { auth, db, rtdbPath } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
 import { UserScore } from '../types/firebaseContract';
 import { Link } from 'react-router-dom';
@@ -16,7 +16,7 @@ export default function Scores() {
   const uid = auth.currentUser?.uid ?? null;
 
   useEffect(() => {
-    const showsRef = ref(db, rtdbPath('shows'));
+    const showsRef = ref(db, 'shows');
     const unsubscribe = onValue(
       showsRef,
       (snapshot) => {
@@ -77,7 +77,7 @@ export default function Scores() {
     setIsMyScoreLoading(true);
     setMyScoreError(null);
 
-    const scoreRef = ref(db, rtdbPath(`shows/${selectedShowId}/scores/${uid}`));
+    const scoreRef = ref(db, `shows/${selectedShowId}/scores/${uid}`);
     const unsubscribe = onValue(
       scoreRef,
       (snapshot) => {

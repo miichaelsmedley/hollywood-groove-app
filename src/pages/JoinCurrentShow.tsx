@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { onValue, ref } from 'firebase/database';
-import { db, rtdbPath } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { ShowMeta } from '../types/firebaseContract';
 import { AlertCircle, Sparkles } from 'lucide-react';
 
@@ -18,7 +18,7 @@ export default function JoinCurrentShow() {
   const [liveShows, setLiveShows] = useState<LiveShow[]>([]);
 
   useEffect(() => {
-    const showsRef = ref(db, rtdbPath('shows'));
+    const showsRef = ref(db, 'shows');
 
     const unsubscribe = onValue(
       showsRef,

@@ -5,7 +5,7 @@
  */
 
 import { ref, get, set, update, runTransaction } from 'firebase/database';
-import { db, rtdbPath } from './firebase';
+import { db } from './firebase';
 import {
   getSettings,
   getMelbourneDateString,
@@ -387,7 +387,7 @@ export async function updateMemberStars(
   userId: string,
   starsToAdd: number
 ): Promise<void> {
-  const memberRef = ref(db, rtdbPath(`members/${userId}`));
+  const memberRef = ref(db, `members/${userId}`);
 
   await runTransaction(memberRef, (currentData) => {
     if (!currentData) {

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { ref, onValue, set } from 'firebase/database';
-import { auth, db, rtdbPath } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import { ShowSettings, LiveActivityState, LiveTriviaState } from '../types/firebaseContract';
 
 interface DanceClaimRecord {
@@ -81,7 +81,7 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
 
   // Listen to show settings
   useEffect(() => {
-    const settingsRef = ref(db, rtdbPath(`shows/${showId}/settings`));
+    const settingsRef = ref(db, `shows/${showId}/settings`);
     const unsubscribe = onValue(settingsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
@@ -95,7 +95,7 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
 
   // Listen to live activity state
   useEffect(() => {
-    const activityRef = ref(db, rtdbPath(`shows/${showId}/live/activity`));
+    const activityRef = ref(db, `shows/${showId}/live/activity`);
     const unsubscribe = onValue(activityRef, (snapshot) => {
       const data = snapshot.val();
       setLiveActivity(data as LiveActivityState | null);
@@ -105,7 +105,7 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
 
   // Listen to live trivia state
   useEffect(() => {
-    const triviaRef = ref(db, rtdbPath(`shows/${showId}/live/trivia`));
+    const triviaRef = ref(db, `shows/${showId}/live/trivia`);
     const unsubscribe = onValue(triviaRef, (snapshot) => {
       const data = snapshot.val();
       setLiveTrivia(data as LiveTriviaState | null);
@@ -118,7 +118,7 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
 
-    const claimsRef = ref(db, rtdbPath(`shows/${showId}/dance_claims/${uid}`));
+    const claimsRef = ref(db, `shows/${showId}/dance_claims/${uid}`);
     const unsubscribe = onValue(claimsRef, (snapshot) => {
       const data = snapshot.val();
       setLastDanceClaim(data as DanceClaimRecord | null);
@@ -174,7 +174,7 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
       const claimedMedian = currentMedian ?? effectiveSettings.dancing_floor;
 
       // Write to responses (for scoring by Cloud Functions)
-      await set(ref(db, rtdbPath(`shows/${showId}/responses/${activityId}/${uid}`)), {
+      await set(ref(db, `shows/${showId}/responses/${activityId}/${uid}`), {
         type: 'dance_claim',
         claimedAt: Date.now(),
         displayName: auth.currentUser?.displayName || 'Anonymous',
@@ -183,7 +183,7 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
 
       // Update dance claims record for cooldown tracking
       const newClaimCount = (lastDanceClaim?.claimCount || 0) + 1;
-      await set(ref(db, rtdbPath(`shows/${showId}/dance_claims/${uid}`)), {
+      await set(ref(db, `shows/${showId}/dance_claims/${uid}`), {
         lastClaimAt: Date.now(),
         claimCount: newClaimCount,
         activityId,

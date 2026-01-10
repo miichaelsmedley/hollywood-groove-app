@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref, set, onValue } from 'firebase/database';
-import { auth, db, rtdbPath, RTDB_PREFIX } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import { CheckCircle, XCircle, RefreshCw, Database } from 'lucide-react';
 
 export default function FirebaseTest() {
@@ -27,7 +27,7 @@ export default function FirebaseTest() {
 
   // Test 2: Read existing data
   useEffect(() => {
-    const testRef = ref(db, rtdbPath('diagnostics/connection'));
+    const testRef = ref(db, 'diagnostics/connection');
     const unsubscribe = onValue(testRef, (snapshot) => {
       setTestData(snapshot.val());
     }, (error) => {
@@ -41,7 +41,7 @@ export default function FirebaseTest() {
   const writeTestData = async () => {
     setDbStatus('writing');
     try {
-      await set(ref(db, rtdbPath('diagnostics/connection')), {
+      await set(ref(db, 'diagnostics/connection'), {
         message: 'Hello from Hollywood Groove PWA!',
         timestamp: Date.now(),
         userAgent: navigator.userAgent,
@@ -56,7 +56,7 @@ export default function FirebaseTest() {
 
   // Test 4: Real-time updates (shows/101/meta)
   useEffect(() => {
-    const showRef = ref(db, rtdbPath('shows/101/meta'));
+    const showRef = ref(db, 'shows/101/meta');
     const unsubscribe = onValue(showRef, (snapshot) => {
       setRealtimeTest(snapshot.val());
     });
@@ -115,7 +115,7 @@ export default function FirebaseTest() {
 
           <div className="space-y-4">
             <p className="text-sm text-gray-400">
-              Path: <code className="text-primary">{rtdbPath('diagnostics/connection')}</code>
+              Path: <code className="text-primary">{'diagnostics/connection'}</code>
             </p>
 
             <button
@@ -149,7 +149,7 @@ export default function FirebaseTest() {
 
           <div className="space-y-2">
             <p className="text-sm text-gray-400">
-              Path: <code className="text-primary">{rtdbPath('diagnostics/connection')}</code>
+              Path: <code className="text-primary">{'diagnostics/connection'}</code>
             </p>
 
             {testData ? (
@@ -173,7 +173,7 @@ export default function FirebaseTest() {
 
           <div className="space-y-2">
             <p className="text-sm text-gray-400">
-              Path: <code className="text-primary">{rtdbPath('shows/101/meta')}</code>
+              Path: <code className="text-primary">{'shows/101/meta'}</code>
             </p>
 
             {realtimeTest ? (
@@ -200,7 +200,7 @@ export default function FirebaseTest() {
             <div className="flex items-center justify-between">
               <span className="text-gray-400">RTDB Prefix:</span>
               <span className="text-gray-300 font-mono text-xs">
-                {RTDB_PREFIX.length > 0 ? RTDB_PREFIX : '(none)'}
+                Single path (no prefix)
               </span>
             </div>
             <div className="flex items-center justify-between">
