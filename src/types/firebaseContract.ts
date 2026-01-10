@@ -205,3 +205,135 @@ export interface UserProfile {
     notifications: boolean;
   };
 }
+
+// ============================================
+// TRIVIA LIBRARY (Between-Show Engagement)
+// ============================================
+// Path: trivia_library/
+
+// Path: trivia_library/settings
+export interface TriviaLibrarySettings {
+  global_daily_limit: number;      // Max questions ANY user can answer per day
+  default_user_limit: number;      // Default per-user daily limit
+  timezone: string;                // For midnight reset (e.g., "Australia/Melbourne")
+  star_daily_cap: number;          // Max stars earnable per day from trivia
+  star_weekly_cap: number;         // Max stars earnable per week from trivia
+  stars_per_threshold: number;     // Stars earned when threshold met (usually 1)
+  star_threshold: number;          // Sum of star_values needed for 1 star (e.g., 3.0)
+}
+
+// Path: trivia_library/categories/{categoryId}
+export interface TriviaLibraryCategory {
+  name: string;
+  description: string;
+  icon: string;                    // Lucide icon name
+  color: string;                   // Hex color for UI
+  subcategories?: string[];        // Optional groupings
+  question_count: number;          // Auto-updated count
+  activity_count: number;
+  created_at: number;
+  updated_at: number;
+}
+
+// Question option structure
+export interface TriviaQuestionOption {
+  index: number;
+  text: string;
+}
+
+// Path: trivia_library/questions/{questionId}
+export type TriviaQuestionDifficulty = 'easy' | 'medium' | 'hard';
+
+export interface TriviaLibraryQuestion {
+  // Core fields
+  category_id: string;
+  subcategory?: string;
+  type: 'multiple_choice';
+
+  // Question content
+  question: string;
+  options: TriviaQuestionOption[];
+  correct_index: number;
+
+  // Metadata
+  difficulty: TriviaQuestionDifficulty;
+  star_value: number;              // Contribution toward star threshold (e.g., 1.0)
+  image_url?: string | null;
+  explanation?: string;            // Shown after answer
+
+  // AI generation metadata (optional for seed data)
+  created_at: number;
+  created_by: string;              // "manual" or "ai_generator"
+  model_used?: string;
+  prompt_version?: string;
+
+  // Usage stats
+  times_served: number;
+  times_correct: number;
+  correct_rate: number;
+
+  // Flags
+  active: boolean;
+  reviewed: boolean;
+}
+
+// Path: trivia_library/activities/{activityId}
+export type TriviaActivityType = 'yes_no' | 'rating' | 'poll' | 'opinion';
+
+export interface TriviaLibraryActivity {
+  // Core fields
+  category_id: string;
+  subcategory?: string;
+  type: TriviaActivityType;
+
+  // Activity content
+  question: string;
+  options?: TriviaQuestionOption[];  // For yes_no, poll
+
+  // For ratings
+  rating_min?: number;
+  rating_max?: number;
+  rating_labels?: string[];
+
+  // Metadata
+  star_value: number;              // Participation = credit (e.g., 0.5)
+
+  // Same metadata as questions
+  created_at: number;
+  created_by: string;
+  active: boolean;
+  times_served: number;
+}
+
+// Path: trivia_library/schedule/{date} (key format: "YYYY-MM-DD")
+export interface TriviaLibrarySchedule {
+  category_id: string;
+  subcategory?: string;
+  theme_name: string;
+  description: string;
+  priority: number;                // If multiple schedules, highest wins
+}
+
+// Path: trivia_library/usage/{userId}
+export interface TriviaLibraryUsage {
+  // Daily tracking (reset at midnight in configured timezone)
+  questions_today: number;
+  activities_today: number;
+  last_activity_date: string;      // "YYYY-MM-DD" format
+
+  // Star progress
+  star_progress_today: number;     // Sum of star_values today
+  stars_earned_today: number;      // Stars awarded today
+  stars_earned_this_week: number;  // Stars awarded this week
+  week_start_date: string;         // Monday of current week "YYYY-MM-DD"
+
+  // History (avoid repeats)
+  recent_questions: string[];      // Last N question IDs answered
+  recent_activities: string[];     // Last N activity IDs completed
+
+  // Lifetime stats
+  total_questions_answered: number;
+  total_correct: number;
+  total_activities_completed: number;
+  total_stars_from_engagement: number;
+}

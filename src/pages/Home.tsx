@@ -1,13 +1,15 @@
 import { Link, useSearchParams } from 'react-router-dom';
-import { Music, Sparkles, List, FlaskConical, X } from 'lucide-react';
+import { Music, Sparkles, List, FlaskConical, X, Brain } from 'lucide-react';
 import { IS_TEST_MODE } from '../lib/mode';
 import { useEffect, useState } from 'react';
 import { useUser } from '../contexts/UserContext';
+import { useTriviaHome } from '../lib/triviaLibraryService';
 
 export default function Home() {
   const [searchParams] = useSearchParams();
   const [showTestBanner, setShowTestBanner] = useState(false);
   const { canUseTestMode } = useUser();
+  const { schedule, remaining, loading: triviaLoading } = useTriviaHome();
 
   // Check if we just enabled test mode
   useEffect(() => {
@@ -88,6 +90,38 @@ export default function Home() {
               <div className="text-sm text-cinema-500">Trivia, polls, and more</div>
             </div>
             <List className="h-6 w-6 text-primary" />
+          </div>
+        </Link>
+
+        {/* Quick Trivia Button */}
+        <Link
+          to="/play"
+          className="block w-full rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 px-5 py-4 text-white font-bold shadow-lg active:scale-[0.99] transition"
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-lg leading-tight">Quick Trivia</div>
+              <div className="text-sm font-semibold opacity-80">
+                {triviaLoading ? (
+                  'Loading...'
+                ) : schedule ? (
+                  `Today: ${schedule.theme_name}`
+                ) : (
+                  'Test your knowledge'
+                )}
+              </div>
+              {!triviaLoading && remaining !== null && remaining > 0 && (
+                <div className="text-xs opacity-70 mt-1">
+                  {remaining} question{remaining !== 1 ? 's' : ''} left today
+                </div>
+              )}
+              {!triviaLoading && remaining === 0 && (
+                <div className="text-xs opacity-70 mt-1">
+                  Come back tomorrow for more!
+                </div>
+              )}
+            </div>
+            <Brain className="h-6 w-6" />
           </div>
         </Link>
 

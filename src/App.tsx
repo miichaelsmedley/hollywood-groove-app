@@ -22,6 +22,7 @@ import JoinCurrentShow from './pages/JoinCurrentShow';
 import Scores from './pages/Scores';
 import Leaderboard from './pages/Leaderboard';
 import Profile from './pages/Profile';
+import Play from './pages/Play';
 import { IS_TEST_MODE } from './lib/mode';
 
 // TEMPORARY: Mobile debugging console - remove after fixing auth
@@ -118,6 +119,7 @@ export default function App() {
             <Route path="leaderboard" element={<Leaderboard />} />
             <Route path="profile" element={<Profile />} />
             <Route path="activities" element={<GlobalActivities />} />
+            <Route path="play" element={<Play />} />
             <Route path="shows/:id" element={<ShowDetail />} />
             {IS_TEST_MODE && (
               <>
