@@ -99,17 +99,28 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       if (snapshot.exists()) {
         console.log('Profile exists in Firebase:', snapshot.val());
-        const profile = snapshot.val() as UserProfile;
+        const rawProfile = snapshot.val();
 
-        // Ensure required fields exist (for profiles created by controller)
+        // Handle both snake_case (MemberProfile from Controller/new saves)
+        // and camelCase (old UserProfile format)
+        const displayName = rawProfile.display_name || rawProfile.displayName || user.displayName || 'Guest';
+        const createdAt = rawProfile.created_at || rawProfile.createdAt || Date.now();
+        const emailOptIn = rawProfile.email_opt_in ?? rawProfile.preferences?.marketingEmails ?? false;
+        const smsOptIn = rawProfile.sms_opt_in ?? rawProfile.preferences?.marketingSMS ?? false;
+
+        // Normalize to UserProfile format for PWA state
         const normalizedProfile: UserProfile = {
-          ...profile,
           uid: user.uid,
-          showsAttended: profile.showsAttended || [],
-          preferences: profile.preferences || {
-            marketingEmails: false,
-            marketingSMS: false,
-            notifications: true,
+          displayName,
+          email: rawProfile.email,
+          phone: rawProfile.phone,
+          createdAt,
+          lastSeenAt: rawProfile.lastSeenAt || Date.now(),
+          showsAttended: rawProfile.showsAttended || rawProfile.shows ? Object.keys(rawProfile.shows) : [],
+          preferences: {
+            marketingEmails: emailOptIn,
+            marketingSMS: smsOptIn,
+            notifications: rawProfile.preferences?.notifications ?? true,
           },
         };
 
@@ -155,8 +166,42 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const user = auth.currentUser;
     if (!user) throw new Error('Not authenticated');
 
-    // Build profile object, only including email/phone if provided
-    const profile: UserProfile = {
+    const authProvider =
+      user.providerData?.[0]?.providerId || (user.isAnonymous ? 'anonymous' : 'unknown');
+
+    // Build profile in MemberProfile format (snake_case) for Firebase
+    // This matches what the Controller expects
+    const firebaseProfile = {
+      display_name: data.displayName,
+      created_at: Date.now(),
+      auth_provider: authProvider,
+      stars: {
+        total: 0,
+        tier: 'extra',
+        starting_bonus: 0,
+        breakdown: {
+          shows_attended: 0,
+          trivia_participated: 0,
+          dancing_engaged: 0,
+          stage_participation: 0,
+          between_show_trivia: 0,
+          referrals: 0,
+          early_tickets: 0,
+          social_shares: 0,
+          feedback_given: 0,
+        },
+      },
+      email_opt_in: data.marketingEmails,
+      sms_opt_in: data.marketingSMS,
+      ...(data.email && { email: data.email }),
+      ...(data.phone && { phone: data.phone }),
+    };
+
+    // Save to Firebase (/members/ path per contract)
+    await set(ref(db, rtdbPath(`members/${user.uid}`)), firebaseProfile);
+
+    // Build local profile in UserProfile format (camelCase) for PWA state
+    const localProfile: UserProfile = {
       uid: user.uid,
       displayName: data.displayName,
       ...(data.email && { email: data.email }),
@@ -171,16 +216,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
       },
     };
 
-    // Save to Firebase (/members/ path per contract)
-    await set(ref(db, rtdbPath(`members/${user.uid}`)), profile);
-
     // Save to localStorage
-    localStorage.setItem('userProfile', JSON.stringify(profile));
+    localStorage.setItem('userProfile', JSON.stringify(localProfile));
 
     // Update auth profile
     await updateProfile(user, { displayName: data.displayName });
 
-    setUserProfile(profile);
+    setUserProfile(localProfile);
   };
 
   const updateLastSeen = async () => {

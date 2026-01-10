@@ -428,8 +428,7 @@ export default function JoinShow() {
   };
 
   // Wait for both show metadata AND user auth to load
-  // Also show loading if user is already registered (redirect is happening via useEffect)
-  if (loading || userLoading || isRegistered) {
+  if (loading || userLoading) {
     return (
       <div className="min-h-screen bg-cinema flex items-center justify-center">
         <div className="text-center space-y-4 animate-fade-in">
@@ -438,13 +437,15 @@ export default function JoinShow() {
             <Sparkles className="w-6 h-6 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
           </div>
           <p className="text-cinema-500 font-medium">
-            {userLoading ? 'Checking your account...' : isRegistered ? 'Joining show...' : 'Loading show...'}
+            {userLoading ? 'Checking your account...' : 'Loading show...'}
           </p>
         </div>
       </div>
     );
   }
 
+  // Check for show not found BEFORE checking isRegistered
+  // Otherwise we'd show "Joining show..." forever for a non-existent show
   if (!showMeta) {
     return (
       <div className="min-h-screen bg-cinema flex items-center justify-center p-4">
@@ -456,6 +457,21 @@ export default function JoinShow() {
           <p className="text-cinema-500 max-w-sm mx-auto">
             This show doesn't exist or hasn't been published yet.
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  // User is already registered - show loading while useEffect handles the join
+  if (isRegistered) {
+    return (
+      <div className="min-h-screen bg-cinema flex items-center justify-center">
+        <div className="text-center space-y-4 animate-fade-in">
+          <div className="relative">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-cinema-200 border-t-primary mx-auto"></div>
+            <Sparkles className="w-6 h-6 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+          </div>
+          <p className="text-cinema-500 font-medium">Joining show...</p>
         </div>
       </div>
     );
