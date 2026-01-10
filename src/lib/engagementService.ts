@@ -77,7 +77,7 @@ export async function getUserUsage(userId: string): Promise<UsageData> {
   const today = getMelbourneDateString();
   const weekStart = getMelbourneWeekStart();
 
-  const snapshot = await get(ref(db, rtdbPath(`trivia_library/usage/${userId}`)));
+  const snapshot = await get(ref(db, `trivia_library/usage/${userId}`));
 
   if (!snapshot.exists()) {
     const defaults = getDefaultUsage(today, weekStart);
@@ -167,7 +167,7 @@ export async function resetDailyIfNeeded(userId: string): Promise<boolean> {
   const today = getMelbourneDateString();
   const weekStart = getMelbourneWeekStart();
 
-  const usageRef = ref(db, rtdbPath(`trivia_library/usage/${userId}`));
+  const usageRef = ref(db, `trivia_library/usage/${userId}`);
   const snapshot = await get(usageRef);
 
   if (!snapshot.exists()) {
@@ -217,7 +217,7 @@ export async function recordAnswer(
   const today = getMelbourneDateString();
   const weekStart = getMelbourneWeekStart();
 
-  const usageRef = ref(db, rtdbPath(`trivia_library/usage/${userId}`));
+  const usageRef = ref(db, `trivia_library/usage/${userId}`);
 
   // Use transaction to ensure atomic updates
   const result = await runTransaction(usageRef, (currentData) => {
@@ -314,7 +314,7 @@ export async function recordActivity(
   const today = getMelbourneDateString();
   const weekStart = getMelbourneWeekStart();
 
-  const usageRef = ref(db, rtdbPath(`trivia_library/usage/${userId}`));
+  const usageRef = ref(db, `trivia_library/usage/${userId}`);
 
   const result = await runTransaction(usageRef, (currentData) => {
     const data = currentData || getDefaultUsage(today, weekStart);

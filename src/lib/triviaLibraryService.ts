@@ -6,7 +6,10 @@
 
 import { useState, useEffect } from 'react';
 import { ref, get } from 'firebase/database';
-import { db, auth, rtdbPath } from './firebase';
+import { db, auth } from './firebase';
+
+// Note: trivia_library is stored at root, NOT under test/ prefix
+// This is intentional - trivia content is shared across test/prod
 import type {
   TriviaLibrarySettings,
   TriviaLibrarySchedule,
@@ -54,7 +57,7 @@ let cachedSettings: TriviaLibrarySettings | null = null;
 export async function getSettings(): Promise<TriviaLibrarySettings> {
   if (cachedSettings) return cachedSettings;
 
-  const snapshot = await get(ref(db, rtdbPath('trivia_library/settings')));
+  const snapshot = await get(ref(db, 'trivia_library/settings'));
   if (snapshot.exists()) {
     cachedSettings = snapshot.val() as TriviaLibrarySettings;
     return cachedSettings;
@@ -81,7 +84,7 @@ export async function getSettings(): Promise<TriviaLibrarySettings> {
  */
 export async function getTodaySchedule(): Promise<TriviaLibrarySchedule | null> {
   const today = getMelbourneDateString();
-  const snapshot = await get(ref(db, rtdbPath(`trivia_library/schedule/${today}`)));
+  const snapshot = await get(ref(db, `trivia_library/schedule/${today}`));
 
   if (snapshot.exists()) {
     return snapshot.val() as TriviaLibrarySchedule;
@@ -97,7 +100,7 @@ export async function getTodaySchedule(): Promise<TriviaLibrarySchedule | null> 
  * Get all categories
  */
 export async function getCategories(): Promise<Record<string, TriviaLibraryCategory>> {
-  const snapshot = await get(ref(db, rtdbPath('trivia_library/categories')));
+  const snapshot = await get(ref(db, 'trivia_library/categories'));
   if (snapshot.exists()) {
     return snapshot.val() as Record<string, TriviaLibraryCategory>;
   }
@@ -115,7 +118,7 @@ export async function getActiveQuestions(
   categoryId?: string,
   subcategory?: string
 ): Promise<Record<string, TriviaLibraryQuestion>> {
-  const snapshot = await get(ref(db, rtdbPath('trivia_library/questions')));
+  const snapshot = await get(ref(db, 'trivia_library/questions'));
 
   if (!snapshot.exists()) return {};
 
@@ -171,7 +174,7 @@ export async function getQuestion(
   questionId: string
 ): Promise<TriviaLibraryQuestion | null> {
   const snapshot = await get(
-    ref(db, rtdbPath(`trivia_library/questions/${questionId}`))
+    ref(db, `trivia_library/questions/${questionId}`)
   );
   if (snapshot.exists()) {
     return snapshot.val() as TriviaLibraryQuestion;
@@ -189,7 +192,7 @@ export async function getQuestion(
 export async function getActiveActivities(
   categoryId?: string
 ): Promise<Record<string, TriviaLibraryActivity>> {
-  const snapshot = await get(ref(db, rtdbPath('trivia_library/activities')));
+  const snapshot = await get(ref(db, 'trivia_library/activities'));
 
   if (!snapshot.exists()) return {};
 
@@ -265,7 +268,7 @@ export function useTriviaHome(): TriviaHomeData {
         if (uid) {
           const today = getMelbourneDateString();
           const usageSnapshot = await get(
-            ref(db, rtdbPath(`trivia_library/usage/${uid}`))
+            ref(db, `trivia_library/usage/${uid}`)
           );
 
           if (usageSnapshot.exists()) {
@@ -346,7 +349,7 @@ export function useTriviaPlay(): TriviaPlayData {
         const uid = auth.currentUser?.uid;
         if (uid) {
           const usageSnapshot = await get(
-            ref(db, rtdbPath(`trivia_library/usage/${uid}`))
+            ref(db, `trivia_library/usage/${uid}`)
           );
           if (usageSnapshot.exists()) {
             const usage = usageSnapshot.val();
