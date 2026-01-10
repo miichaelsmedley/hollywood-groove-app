@@ -7,8 +7,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, XCircle, Star, Loader2, Brain, Trophy } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Star, Loader2, Brain, Trophy, User, Mail, Phone, Check } from 'lucide-react';
 import { auth } from '../lib/firebase';
+import { useUser } from '../contexts/UserContext';
+import { signInWithGoogle } from '../lib/auth';
 import { useTriviaPlay, getSettings } from '../lib/triviaLibraryService';
 import {
   getUserUsage,
@@ -24,6 +26,8 @@ import type { TriviaLibrarySettings } from '../types/firebaseContract';
 type GameState = 'loading' | 'ready' | 'answered' | 'limit_reached' | 'no_questions' | 'star_earned';
 
 export default function Play() {
+  const { isRegistered, loading: userLoading, registerUser, isGoogleUser, googlePhotoURL } = useUser();
+
   const {
     schedule,
     currentQuestion,
@@ -39,6 +43,14 @@ export default function Play() {
   const [canPlayResult, setCanPlayResult] = useState<CanPlayResult | null>(null);
   const [settings, setSettings] = useState<TriviaLibrarySettings | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Registration form state
+  const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [marketingConsent, setMarketingConsent] = useState(true);
+  const [registering, setRegistering] = useState(false);
+  const [signingInWithGoogle, setSigningInWithGoogle] = useState(false);
 
   // Initialize - check usage and limits
   useEffect(() => {
@@ -235,6 +247,251 @@ export default function Play() {
       </div>
     );
   };
+
+  // Pre-fill form when user signs in with Google
+  useEffect(() => {
+    if (isGoogleUser && auth.currentUser) {
+      const user = auth.currentUser;
+      if (user.displayName && !displayName) {
+        setDisplayName(user.displayName);
+      }
+      if (user.email && !email) {
+        setEmail(user.email);
+      }
+    }
+  }, [isGoogleUser, displayName, email]);
+
+  const handleGoogleSignIn = async () => {
+    setSigningInWithGoogle(true);
+    try {
+      await signInWithGoogle();
+    } catch (error: any) {
+      console.error('Google sign-in error:', error);
+      if (error?.message !== 'Sign-in cancelled') {
+        alert('Failed to sign in with Google. Please try again.');
+      }
+    } finally {
+      setSigningInWithGoogle(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!displayName.trim()) return;
+    if (!email.trim() && !phone.trim()) {
+      alert('Please provide either an email address or mobile number.');
+      return;
+    }
+
+    if (!auth.currentUser) {
+      alert('Session expired. Please refresh the page and try again.');
+      return;
+    }
+
+    setRegistering(true);
+
+    try {
+      await registerUser({
+        displayName: displayName.trim(),
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
+        marketingEmails: email.trim() ? marketingConsent : false,
+        marketingSMS: phone.trim() ? marketingConsent : false,
+      });
+      // After registration, the game will load automatically
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      if (error?.code === 'PERMISSION_DENIED' || error?.message?.includes('permission')) {
+        alert('Unable to save your profile. Please try signing in with Google instead.');
+      } else {
+        alert('Failed to register. Please try again or sign in with Google.');
+      }
+    } finally {
+      setRegistering(false);
+    }
+  };
+
+  // User loading state
+  if (userLoading) {
+    return (
+      <div className="mx-auto max-w-lg space-y-6">
+        <header className="flex items-center gap-3">
+          <Link to="/" className="p-2 rounded-lg hover:bg-gray-800 transition">
+            <ArrowLeft className="w-5 h-5 text-gray-400" />
+          </Link>
+          <h1 className="text-xl font-bold">Quick Trivia</h1>
+        </header>
+        <div className="flex flex-col items-center justify-center py-12">
+          <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
+          <p className="text-gray-400">Checking your account...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Registration gate - show registration form if user is not registered
+  if (!isRegistered) {
+    return (
+      <div className="mx-auto max-w-lg space-y-6">
+        <header className="flex items-center gap-3">
+          <Link to="/" className="p-2 rounded-lg hover:bg-gray-800 transition">
+            <ArrowLeft className="w-5 h-5 text-gray-400" />
+          </Link>
+          <h1 className="text-xl font-bold">Quick Trivia</h1>
+        </header>
+
+        <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
+          <div className="text-center mb-6">
+            <Brain className="w-12 h-12 text-primary mx-auto mb-3" />
+            <h2 className="text-xl font-bold mb-2">Join Hollywood Groove</h2>
+            <p className="text-gray-400 text-sm">
+              Create your profile to play trivia, earn stars, and track your progress!
+            </p>
+          </div>
+
+          <form onSubmit={handleRegister} className="space-y-4">
+            {/* Google Sign-In Option */}
+            {!isGoogleUser && (
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={signingInWithGoogle}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-600 bg-gray-800 text-white font-semibold hover:border-primary/60 hover:bg-gray-700 transition flex items-center justify-center gap-3 disabled:opacity-50"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                  </svg>
+                  {signingInWithGoogle ? 'Signing in...' : 'Sign in with Google'}
+                </button>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-700"></div>
+                  </div>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="px-2 bg-gray-900 text-gray-500">or fill out manually</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Google User Indicator */}
+            {isGoogleUser && (
+              <div className="flex items-center gap-3 p-3 bg-green-500/10 border border-green-500/30 rounded-xl">
+                {googlePhotoURL && (
+                  <img src={googlePhotoURL} alt="Profile" className="w-8 h-8 rounded-full border-2 border-green-500/30" />
+                )}
+                <div className="flex-1 text-sm">
+                  <div className="font-medium text-white">Signed in with Google</div>
+                  <div className="text-xs text-gray-400">Info pre-filled below</div>
+                </div>
+                <CheckCircle className="w-5 h-5 text-green-400" />
+              </div>
+            )}
+
+            {/* Nickname */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 mb-1.5">Nickname</label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Enter your nickname"
+                  required
+                  autoFocus
+                  className="w-full pl-10 pr-3 py-3 bg-gray-800 border-2 border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-primary focus:outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Email */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 mb-1.5">
+                Email <span className="text-gray-600 font-normal">(or phone)</span>
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="email@example.com"
+                  className="w-full pl-10 pr-3 py-3 bg-gray-800 border-2 border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-primary focus:outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Phone */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 mb-1.5">
+                Phone <span className="text-gray-600 font-normal">(or email)</span>
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="04XX XXX XXX"
+                  className="w-full pl-10 pr-3 py-3 bg-gray-800 border-2 border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-primary focus:outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Marketing Consent */}
+            {(email || phone) && (
+              <label className="flex items-start gap-2 cursor-pointer p-3 bg-gray-800 border border-gray-700 rounded-lg">
+                <div className="relative flex-shrink-0 mt-0.5">
+                  <input
+                    type="checkbox"
+                    checked={marketingConsent}
+                    onChange={(e) => setMarketingConsent(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-5 h-5 border-2 border-gray-600 rounded peer-checked:border-primary peer-checked:bg-primary transition-all flex items-center justify-center">
+                    {marketingConsent && <Check className="w-3 h-3 text-gray-900 font-bold" />}
+                  </div>
+                </div>
+                <span className="text-xs text-gray-300">
+                  Get show updates and trivia notifications between shows
+                </span>
+              </label>
+            )}
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={!displayName.trim() || (!email.trim() && !phone.trim()) || registering}
+              className="w-full py-3 rounded-xl bg-primary text-gray-900 font-bold hover:bg-primary-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {registering ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Joining...
+                </span>
+              ) : (
+                'Start Playing'
+              )}
+            </button>
+
+            {/* Warning for non-Google users */}
+            {!isGoogleUser && (
+              <p className="text-xs text-center text-amber-400/80">
+                <strong>Tip:</strong> Sign in with Google to save your progress permanently.
+              </p>
+            )}
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   // Loading state
   if (gameState === 'loading' || questionLoading) {
