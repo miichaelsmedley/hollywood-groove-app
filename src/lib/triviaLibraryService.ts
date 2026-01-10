@@ -120,19 +120,46 @@ export async function getActiveQuestions(
 ): Promise<Record<string, TriviaLibraryQuestion>> {
   const snapshot = await get(ref(db, 'trivia_library/questions'));
 
-  if (!snapshot.exists()) return {};
+  if (!snapshot.exists()) {
+    console.log('🎯 No questions found at trivia_library/questions');
+    return {};
+  }
 
   const allQuestions = snapshot.val() as Record<string, TriviaLibraryQuestion>;
+  console.log('🎯 Total questions in DB:', Object.keys(allQuestions).length);
 
   // Filter to active questions matching criteria
   const filtered: Record<string, TriviaLibraryQuestion> = {};
+  let skippedInactive = 0;
+  let skippedCategory = 0;
+  let skippedSubcategory = 0;
 
   for (const [id, question] of Object.entries(allQuestions)) {
-    if (!question.active) continue;
-    if (categoryId && question.category_id !== categoryId) continue;
-    if (subcategory && question.subcategory !== subcategory) continue;
+    if (!question.active) {
+      skippedInactive++;
+      continue;
+    }
+    if (categoryId && question.category_id !== categoryId) {
+      skippedCategory++;
+      continue;
+    }
+    if (subcategory && question.subcategory !== subcategory) {
+      skippedSubcategory++;
+      continue;
+    }
     filtered[id] = question;
   }
+
+  console.log('🎯 Question filtering:', {
+    categoryId,
+    subcategory,
+    totalInDB: Object.keys(allQuestions).length,
+    skippedInactive,
+    skippedCategory,
+    skippedSubcategory,
+    matched: Object.keys(filtered).length,
+    sampleCategoryIds: Object.values(allQuestions).slice(0, 3).map(q => q.category_id),
+  });
 
   return filtered;
 }
@@ -360,7 +387,16 @@ export function useTriviaPlay(): TriviaPlayData {
         // Fetch first question
         const categoryId = scheduleData?.category_id;
         const subcategory = scheduleData?.subcategory;
+
+        console.log('🎯 Trivia init:', {
+          scheduleData,
+          categoryId,
+          subcategory,
+        });
+
         const question = await getRandomQuestion([], categoryId, subcategory);
+
+        console.log('🎯 Question result:', question ? `Found: ${question.id}` : 'No questions found');
 
         if (isMounted) {
           setCurrentQuestion(question);
