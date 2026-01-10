@@ -125,20 +125,37 @@ export default function Home() {
           </div>
         </Link>
 
-        {/* Tester Mode Entry Point */}
-        {!IS_TEST_MODE && canUseTestMode && (
-          <button
-            onClick={handleEnableTestMode}
-            className="block w-full rounded-2xl bg-purple-500/10 border border-purple-500/30 px-5 py-4 font-semibold text-purple-300 hover:border-purple-400/60 hover:bg-purple-500/20 transition text-left"
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <div className="text-lg leading-tight">Join as Tester</div>
-                <div className="text-sm text-purple-400/80">Access test shows for demo purposes</div>
-              </div>
-              <FlaskConical className="h-6 w-6 text-purple-400" />
-            </div>
-          </button>
+        {/* Tester Mode Entry Point - Shows for assigned testers */}
+        {canUseTestMode && (
+          <>
+            {!IS_TEST_MODE ? (
+              <button
+                onClick={handleEnableTestMode}
+                className="block w-full rounded-2xl bg-purple-500/10 border border-purple-500/30 px-5 py-4 font-semibold text-purple-300 hover:border-purple-400/60 hover:bg-purple-500/20 transition text-left"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="text-lg leading-tight">Join Test Show</div>
+                    <div className="text-sm text-purple-400/80">You're a tester - tap to access test shows</div>
+                  </div>
+                  <FlaskConical className="h-6 w-6 text-purple-400" />
+                </div>
+              </button>
+            ) : (
+              <Link
+                to="/join"
+                className="block w-full rounded-2xl bg-purple-600 px-5 py-4 text-white font-bold shadow-lg active:scale-[0.99] transition"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="text-lg leading-tight">Join Test Show</div>
+                    <div className="text-sm font-semibold opacity-80">Test mode active - join show 101</div>
+                  </div>
+                  <FlaskConical className="h-6 w-6" />
+                </div>
+              </Link>
+            )}
+          </>
         )}
       </section>
     </div>
