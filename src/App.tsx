@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
+import { onAuthStateChanged, signInAnonymously, onIdTokenChanged } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import { handleRedirectResult, isGoogleAuthInProgress } from './lib/auth';
 import { UserProvider } from './contexts/UserContext';
@@ -37,13 +37,25 @@ if (typeof window !== 'undefined') {
 }
 
 export default function App() {
+  const [authReady, setAuthReady] = useState(false);
+
   // Handle auth initialization: redirect result first, then anonymous sign-in
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
+    let tokenUnsubscribe: (() => void) | undefined;
     let isMounted = true;
     let hasProcessedInitialAuth = false;
 
     (async () => {
+      // Wait for Firebase auth to restore any persisted session
+      console.log('⏳ Waiting for auth state to be ready...');
+      await auth.authStateReady();
+      console.log('✅ Auth state ready, current user:', auth.currentUser ? {
+        uid: auth.currentUser.uid,
+        isAnonymous: auth.currentUser.isAnonymous,
+        email: auth.currentUser.email,
+      } : 'null');
+
       // First, check for redirect result (Google sign-in completion)
       // This returns true if a redirect was processed (user is now signed in with Google)
       let redirectProcessed = false;
@@ -56,6 +68,15 @@ export default function App() {
 
       // Only set up auth listener if component is still mounted
       if (!isMounted) return;
+
+      // Set up token refresh listener to maintain session across long periods
+      tokenUnsubscribe = onIdTokenChanged(auth, async (user) => {
+        if (user) {
+          // Store last token refresh time for debugging
+          localStorage.setItem('hg_last_token_refresh', new Date().toISOString());
+          console.log('🔄 Auth token refreshed for:', user.uid);
+        }
+      });
 
       // Set up auth state listener for anonymous sign-in fallback
       // But skip anonymous sign-in if we just processed a redirect or Google auth is in progress
@@ -77,6 +98,7 @@ export default function App() {
           // If Google auth is in progress, don't force anonymous sign-in
           if (isGoogleAuthInProgress()) {
             console.log('No user but Google auth in progress, skipping anonymous sign-in');
+            setAuthReady(true);
             return;
           }
 
@@ -97,14 +119,30 @@ export default function App() {
             providerData: user.providerData,
           });
         }
+
+        // Mark auth as ready once we have a user or have processed the state
+        setAuthReady(true);
       });
     })();
 
     return () => {
       isMounted = false;
       unsubscribe?.();
+      tokenUnsubscribe?.();
     };
   }, []);
+
+  // Show loading state while auth is initializing
+  if (!authReady) {
+    return (
+      <div className="min-h-screen bg-cinema-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-cinema-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <BrowserRouter>
