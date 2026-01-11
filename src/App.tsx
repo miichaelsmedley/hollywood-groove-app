@@ -12,6 +12,7 @@ import Home from './pages/Home';
 import ShowsPage from './features/shows/ShowsPage';
 import ShowDetail from './pages/ShowDetail';
 import JoinShow from './pages/JoinShow';
+import Signup from './pages/Signup';
 import Trivia from './pages/Trivia';
 import Activity from './pages/Activity';
 import Activities from './pages/Activities';
@@ -173,6 +174,7 @@ export default function App() {
           </Route>
           {/* Full-screen pages (no main layout) */}
           <Route path="shows/:id/join" element={<JoinShow />} />
+          <Route path="signup" element={<Signup />} />
 
           {/* Show pages with FAB overlay */}
           <Route path="shows/:id" element={<ShowLayout />}>
