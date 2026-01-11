@@ -110,20 +110,38 @@ export default function JoinShow() {
   useEffect(() => {
     if (!id) return;
 
+    console.log('[JoinShow] Fetching show meta from:', getPath(id, 'meta'));
     const showRef = ref(db, getPath(id, 'meta'));
-    const unsubscribe = onValue(showRef, (snapshot) => {
-      setShowMeta(snapshot.val() as ShowMeta | null);
-      setLoading(false);
-    });
+    const unsubscribe = onValue(
+      showRef,
+      (snapshot) => {
+        const data = snapshot.val() as ShowMeta | null;
+        console.log('[JoinShow] Show meta received:', data ? 'found' : 'null');
+        setShowMeta(data);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('[JoinShow] Error fetching show meta:', error);
+        setShowMeta(null);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
-  }, [id]);
+  }, [id, getPath]);
 
   const ensureJoinRecords = useCallback(
     async (options?: { displayName?: string; emailOptIn?: boolean; smsOptIn?: boolean }) => {
-      if (!id || !showMeta) return;
+      console.log('[ensureJoinRecords] Starting with:', { id, hasShowMeta: !!showMeta, hasUser: !!auth.currentUser });
+      if (!id || !showMeta) {
+        console.log('[ensureJoinRecords] Early return - missing id or showMeta');
+        return;
+      }
       const user = auth.currentUser;
-      if (!user) return;
+      if (!user) {
+        console.log('[ensureJoinRecords] Early return - no user');
+        return;
+      }
 
       const uid = user.uid;
       const resolvedDisplayName =
@@ -138,8 +156,10 @@ export default function JoinShow() {
       const authProvider =
         user.providerData?.[0]?.providerId || (user.isAnonymous ? 'anonymous' : 'unknown');
 
+      console.log('[ensureJoinRecords] Getting member profile...');
       const memberRef = ref(db, `members/${uid}`);
       const memberSnap = await get(memberRef);
+      console.log('[ensureJoinRecords] Member exists:', memberSnap.exists());
       let member: MemberProfile;
 
       if (memberSnap.exists()) {
@@ -182,9 +202,12 @@ export default function JoinShow() {
 
       const starsTotal = member.stars?.total ?? 0;
       const { tier, bonus } = resolveTierAndBonus(starsTotal);
+      console.log('[ensureJoinRecords] Member setup complete, tier:', tier, 'bonus:', bonus);
 
+      console.log('[ensureJoinRecords] Checking attendee at:', getPath(id, `attendees/${uid}`));
       const attendeeRef = ref(db, getPath(id, `attendees/${uid}`));
       const attendeeSnap = await get(attendeeRef);
+      console.log('[ensureJoinRecords] Attendee exists:', attendeeSnap.exists());
       if (!attendeeSnap.exists()) {
         await set(attendeeRef, {
           member_id: uid,
@@ -213,7 +236,9 @@ export default function JoinShow() {
       } else if (resolvedDisplayName) {
         await update(attendeeRef, { display_name: resolvedDisplayName });
       }
+      console.log('[ensureJoinRecords] Attendee setup complete');
 
+      console.log('[ensureJoinRecords] Running score transaction at:', getPath(id, `scores/${uid}`));
       const scoreRef = ref(db, getPath(id, `scores/${uid}`));
       await runTransaction(scoreRef, (current) => {
         const existing = (current ?? {}) as Record<string, any>;
@@ -279,26 +304,49 @@ export default function JoinShow() {
           };
         });
       }
+      console.log('[ensureJoinRecords] All records created successfully');
     },
     [id, showMeta, userProfile, getPath]
   );
 
   useEffect(() => {
-    if (!isRegistered || !showMeta || !id) return;
+    if (!isRegistered || !showMeta || !id) {
+      console.log('[JoinShow] Join effect skipped:', { isRegistered, hasShowMeta: !!showMeta, id });
+      return;
+    }
     let cancelled = false;
 
-    ensureJoinRecords()
-      .then(async () => {
+    console.log('[JoinShow] Starting join flow for show:', id, 'isTestShow:', isTestShow);
+
+    const runJoinFlow = async () => {
+      try {
+        console.log('[JoinShow] ensureJoinRecords...');
+        await ensureJoinRecords();
         if (cancelled) return;
+
+        console.log('[JoinShow] addShowAttended...');
         await addShowAttended(id);
+        if (cancelled) return;
+
+        console.log('[JoinShow] updateLastSeen...');
         await updateLastSeen();
+        if (cancelled) return;
+
+        const targetPath = `/shows/${id}${isTestShow ? '?test=true' : ''}`;
+        console.log('[JoinShow] Join complete, navigating to:', targetPath);
+        navigate(targetPath);
+      } catch (error) {
+        console.error('[JoinShow] Join flow error:', error);
+        // Don't leave user stuck on "Joining show..." - navigate anyway
+        const targetPath = `/shows/${id}${isTestShow ? '?test=true' : ''}`;
+        console.log('[JoinShow] Error occurred, navigating anyway to:', targetPath);
         if (!cancelled) {
-          navigate(`/shows/${id}${isTestShow ? '?test=true' : ''}`);
+          navigate(targetPath);
         }
-      })
-      .catch((error) => {
-        console.error('Join flow error:', error);
-      });
+      }
+    };
+
+    runJoinFlow();
 
     return () => {
       cancelled = true;
