@@ -203,7 +203,7 @@ export default function Home() {
                 </button>
               ) : (
                 <Link
-                  to={`/shows/${activeTestShow.showId}/join`}
+                  to={`/shows/${activeTestShow.showId}/join?test=true`}
                   className="block w-full rounded-2xl bg-purple-600 px-5 py-4 text-white font-bold shadow-lg active:scale-[0.99] transition"
                 >
                   <div className="flex items-center justify-between gap-4">

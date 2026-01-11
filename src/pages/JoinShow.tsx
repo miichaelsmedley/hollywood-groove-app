@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { onValue, ref, get, query, orderByChild, equalTo, set, update, runTransaction } from 'firebase/database';
 import { db, auth } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
 import { MemberProfile, ShowMeta } from '../types/firebaseContract';
 import { Music, Mail, Phone, User, Check, Sparkles, AlertCircle, CheckCircle } from 'lucide-react';
 import { signInWithGoogle } from '../lib/auth';
-import { getShowPath } from '../lib/mode';
+import { getShowPath, getTestShowPath } from '../lib/mode';
 
 const defaultStarBreakdown = {
   shows_attended: 0,
@@ -38,6 +38,7 @@ function resolveShowDate(startDate?: string) {
 export default function JoinShow() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const {
     isRegistered,
     registerUser,
@@ -49,6 +50,16 @@ export default function JoinShow() {
     loading: userLoading,
     canUseTestMode,
   } = useUser();
+
+  // Check if this is a test show via query param
+  const isTestShow = searchParams.get('test') === 'true';
+
+  // Helper to get the correct path based on whether it's a test show
+  const getPath = useMemo(() => {
+    return (showId: string, suffix?: string) => {
+      return isTestShow ? getTestShowPath(showId, suffix) : getShowPath(showId, suffix);
+    };
+  }, [isTestShow]);
 
   const [showMeta, setShowMeta] = useState<ShowMeta | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,7 +110,7 @@ export default function JoinShow() {
   useEffect(() => {
     if (!id) return;
 
-    const showRef = ref(db, getShowPath(id, 'meta'));
+    const showRef = ref(db, getPath(id, 'meta'));
     const unsubscribe = onValue(showRef, (snapshot) => {
       setShowMeta(snapshot.val() as ShowMeta | null);
       setLoading(false);
@@ -172,7 +183,7 @@ export default function JoinShow() {
       const starsTotal = member.stars?.total ?? 0;
       const { tier, bonus } = resolveTierAndBonus(starsTotal);
 
-      const attendeeRef = ref(db, getShowPath(id, `attendees/${uid}`));
+      const attendeeRef = ref(db, getPath(id, `attendees/${uid}`));
       const attendeeSnap = await get(attendeeRef);
       if (!attendeeSnap.exists()) {
         await set(attendeeRef, {
@@ -203,7 +214,7 @@ export default function JoinShow() {
         await update(attendeeRef, { display_name: resolvedDisplayName });
       }
 
-      const scoreRef = ref(db, getShowPath(id, `scores/${uid}`));
+      const scoreRef = ref(db, getPath(id, `scores/${uid}`));
       await runTransaction(scoreRef, (current) => {
         const existing = (current ?? {}) as Record<string, any>;
         const existingBreakdown = (existing.breakdown ?? {}) as Record<string, any>;
@@ -269,7 +280,7 @@ export default function JoinShow() {
         });
       }
     },
-    [id, showMeta, userProfile]
+    [id, showMeta, userProfile, getPath]
   );
 
   useEffect(() => {
@@ -282,7 +293,7 @@ export default function JoinShow() {
         await addShowAttended(id);
         await updateLastSeen();
         if (!cancelled) {
-          navigate(`/shows/${id}`);
+          navigate(`/shows/${id}${isTestShow ? '?test=true' : ''}`);
         }
       })
       .catch((error) => {
@@ -292,7 +303,7 @@ export default function JoinShow() {
     return () => {
       cancelled = true;
     };
-  }, [isRegistered, showMeta, id, navigate, addShowAttended, updateLastSeen, ensureJoinRecords]);
+  }, [isRegistered, showMeta, id, navigate, addShowAttended, updateLastSeen, ensureJoinRecords, isTestShow]);
 
   const checkNicknameAvailability = useCallback(async (nickname: string) => {
     if (!nickname.trim()) {
@@ -412,7 +423,7 @@ export default function JoinShow() {
       }
 
       console.log('✅ Registration complete, navigating to show...');
-      navigate(`/shows/${id}`);
+      navigate(`/shows/${id}${isTestShow ? '?test=true' : ''}`);
     } catch (error: any) {
       console.error('❌ Registration error:', error);
       console.error('Error code:', error?.code);

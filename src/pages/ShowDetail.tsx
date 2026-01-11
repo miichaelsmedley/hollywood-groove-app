@@ -1,32 +1,43 @@
-import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { onValue, ref } from 'firebase/database';
 import { Calendar, MapPin, ArrowLeft, Trophy } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { ShowMeta, LiveTriviaState, LiveActivityState } from '../types/firebaseContract';
 import { useUser } from '../contexts/UserContext';
-import { getShowPath } from '../lib/mode';
+import { getShowPath, getTestShowPath } from '../lib/mode';
 
 export default function ShowDetail() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const { canUseTestMode } = useUser();
   const [showMeta, setShowMeta] = useState<ShowMeta | null>(null);
   const [liveTrivia, setLiveTrivia] = useState<LiveTriviaState | null>(null);
   const [liveActivity, setLiveActivity] = useState<LiveActivityState | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Check if this is a test show via query param
+  const isTestShow = searchParams.get('test') === 'true';
+
+  // Helper to get the correct path based on whether it's a test show
+  const getPath = useMemo(() => {
+    return (showId: string, suffix?: string) => {
+      return isTestShow ? getTestShowPath(showId, suffix) : getShowPath(showId, suffix);
+    };
+  }, [isTestShow]);
+
   useEffect(() => {
     if (!id) return;
 
     const unsubscribeMeta = onValue(
-      ref(db, getShowPath(id, 'meta')),
+      ref(db, getPath(id, 'meta')),
       (snapshot) => {
         setShowMeta((snapshot.val() as ShowMeta | null) ?? null);
         setLoading(false);
       }
     );
 
-    const liveTriviaPath = getShowPath(id, 'live/trivia');
+    const liveTriviaPath = getPath(id, 'live/trivia');
 
     const unsubscribeLive = onValue(
       ref(db, liveTriviaPath),
@@ -37,7 +48,7 @@ export default function ShowDetail() {
     );
 
     const unsubscribeActivity = onValue(
-      ref(db, getShowPath(id, 'live/activity')),
+      ref(db, getPath(id, 'live/activity')),
       (snapshot) => {
         setLiveActivity((snapshot.val() as LiveActivityState | null) ?? null);
       }
@@ -48,7 +59,7 @@ export default function ShowDetail() {
       unsubscribeLive();
       unsubscribeActivity();
     };
-  }, [id]);
+  }, [id, getPath]);
 
   if (loading) {
     return (
@@ -160,7 +171,7 @@ export default function ShowDetail() {
             <div className="flex items-center gap-2">
               {showActivityCTA && (
                 <Link
-                  to={`/shows/${id}/activity`}
+                  to={`/shows/${id}/activity${isTestShow ? '?test=true' : ''}`}
                   className="px-4 py-2 bg-primary text-cinema font-semibold rounded-xl hover:bg-primary-600 transition-colors"
                 >
                   Join Activity
@@ -168,7 +179,7 @@ export default function ShowDetail() {
               )}
               {liveTrivia?.phase === 'question' && (
                 <Link
-                  to={`/shows/${id}/trivia`}
+                  to={`/shows/${id}/trivia${isTestShow ? '?test=true' : ''}`}
                   className="px-4 py-2 bg-primary text-cinema font-semibold rounded-xl hover:bg-primary-600 transition-colors"
                 >
                   Join Trivia

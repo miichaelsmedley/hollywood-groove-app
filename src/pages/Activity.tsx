@@ -1,24 +1,35 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useState, useMemo } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { onValue, ref, set } from 'firebase/database';
 import { CalendarCheck, ArrowLeft, Users } from 'lucide-react';
 import { auth, db } from '../lib/firebase';
 import { CrowdActivity, LiveActivityState } from '../types/firebaseContract';
 import ActionBar from '../components/show/ActionBar';
-import { getShowPath } from '../lib/mode';
+import { getShowPath, getTestShowPath } from '../lib/mode';
 
 export default function Activity() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const [liveActivity, setLiveActivity] = useState<LiveActivityState | null>(null);
   const [activity, setActivity] = useState<CrowdActivity | null>(null);
   const [hasResponded, setHasResponded] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
 
+  // Check if this is a test show via query param
+  const isTestShow = searchParams.get('test') === 'true';
+
+  // Helper to get the correct path based on whether it's a test show
+  const getPath = useMemo(() => {
+    return (showId: string, suffix?: string) => {
+      return isTestShow ? getTestShowPath(showId, suffix) : getShowPath(showId, suffix);
+    };
+  }, [isTestShow]);
+
   useEffect(() => {
     if (!id) return;
 
     const unsubscribe = onValue(
-      ref(db, getShowPath(id, 'live/activity')),
+      ref(db, getPath(id, 'live/activity')),
       (snapshot) => {
         const state = snapshot.val() as LiveActivityState | null;
         setLiveActivity(state);
@@ -28,7 +39,7 @@ export default function Activity() {
     );
 
     return () => unsubscribe();
-  }, [id]);
+  }, [id, getPath]);
 
   useEffect(() => {
     if (!id || !liveActivity?.activityId) {
@@ -36,20 +47,20 @@ export default function Activity() {
       return;
     }
 
-    const activityRef = ref(db, getShowPath(id, `activities/${liveActivity.activityId}`));
+    const activityRef = ref(db, getPath(id, `activities/${liveActivity.activityId}`));
     const unsubscribe = onValue(activityRef, (snapshot) => {
       setActivity(snapshot.val() as CrowdActivity | null);
     });
 
     return () => unsubscribe();
-  }, [id, liveActivity?.activityId]);
+  }, [id, liveActivity?.activityId, getPath]);
 
   const joinActivity = async () => {
     if (!id || !liveActivity?.activityId || !auth.currentUser) return;
     const uid = auth.currentUser.uid;
 
     try {
-      await set(ref(db, getShowPath(id, `responses/${liveActivity.activityId}/${uid}`)), {
+      await set(ref(db, getPath(id, `responses/${liveActivity.activityId}/${uid}`)), {
         action: 'join',
         joinedAt: Date.now(),
         displayName: auth.currentUser.displayName || 'Anonymous',
@@ -65,7 +76,7 @@ export default function Activity() {
     const uid = auth.currentUser.uid;
 
     try {
-      await set(ref(db, getShowPath(id, `responses/${liveActivity.activityId}/${uid}`)), {
+      await set(ref(db, getPath(id, `responses/${liveActivity.activityId}/${uid}`)), {
         type: 'dance_claim',
         claimedAt: Date.now(),
         displayName: auth.currentUser.displayName || 'Anonymous',
@@ -81,7 +92,7 @@ export default function Activity() {
     const uid = auth.currentUser.uid;
 
     try {
-      await set(ref(db, getShowPath(id, `responses/${liveActivity.activityId}/${uid}`)), {
+      await set(ref(db, getPath(id, `responses/${liveActivity.activityId}/${uid}`)), {
         optionIndex,
         optionText,
         votedAt: Date.now(),
@@ -111,7 +122,7 @@ export default function Activity() {
       <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
         <div className="flex-1 overflow-y-auto p-4 pb-40">
           <Link
-            to={`/shows/${id}`}
+            to={`/shows/${id}${isTestShow ? '?test=true' : ''}`}
             className="inline-flex items-center space-x-2 text-gray-400 hover:text-gray-100 transition-colors mb-4"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -139,7 +150,7 @@ export default function Activity() {
       <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
         <div className="flex-1 overflow-y-auto p-4 pb-40">
           <Link
-            to={`/shows/${id}`}
+            to={`/shows/${id}${isTestShow ? '?test=true' : ''}`}
             className="inline-flex items-center space-x-2 text-gray-400 hover:text-gray-100 transition-colors mb-4"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -164,7 +175,7 @@ export default function Activity() {
       <div className="flex-1 overflow-y-auto p-4 pb-40">
         <div className="max-w-lg mx-auto space-y-4">
           <Link
-            to={`/shows/${id}`}
+            to={`/shows/${id}${isTestShow ? '?test=true' : ''}`}
             className="inline-flex items-center space-x-2 text-gray-400 hover:text-gray-100 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />

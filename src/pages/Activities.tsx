@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { onValue, ref } from 'firebase/database';
 import { ArrowLeft, Mic, Trophy, Vote, Users, Music, HelpCircle, Calendar, Sparkles, ChevronRight } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { CrowdActivity, ActivityType, LiveActivityState, LiveTriviaState } from '../types/firebaseContract';
 import ActionBar from '../components/show/ActionBar';
-import { getShowPath } from '../lib/mode';
+import { getShowPath, getTestShowPath } from '../lib/mode';
 
 // Activity type display config
 const ACTIVITY_CONFIG: Record<ActivityType, { icon: typeof Mic; label: string; color: string }> = {
@@ -27,16 +27,27 @@ type ActivityWithId = CrowdActivity & {
 export default function Activities() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [activities, setActivities] = useState<ActivityWithId[]>([]);
   const [liveActivity, setLiveActivity] = useState<LiveActivityState | null>(null);
   const [liveTrivia, setLiveTrivia] = useState<LiveTriviaState | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Check if this is a test show via query param
+  const isTestShow = searchParams.get('test') === 'true';
+
+  // Helper to get the correct path based on whether it's a test show
+  const getPath = useMemo(() => {
+    return (showId: string, suffix?: string) => {
+      return isTestShow ? getTestShowPath(showId, suffix) : getShowPath(showId, suffix);
+    };
+  }, [isTestShow]);
+
   useEffect(() => {
     if (!id) return;
 
     // Listen to activities
-    const activitiesRef = ref(db, getShowPath(id, 'activities'));
+    const activitiesRef = ref(db, getPath(id, 'activities'));
     const unsubscribeActivities = onValue(activitiesRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
@@ -59,13 +70,13 @@ export default function Activities() {
     });
 
     // Listen to live activity state
-    const liveActivityRef = ref(db, getShowPath(id, 'live/activity'));
+    const liveActivityRef = ref(db, getPath(id, 'live/activity'));
     const unsubscribeLiveActivity = onValue(liveActivityRef, (snapshot) => {
       setLiveActivity(snapshot.val() as LiveActivityState | null);
     });
 
     // Listen to live trivia state
-    const liveTriviaRef = ref(db, getShowPath(id, 'live/trivia'));
+    const liveTriviaRef = ref(db, getPath(id, 'live/trivia'));
     const unsubscribeLiveTrivia = onValue(liveTriviaRef, (snapshot) => {
       setLiveTrivia(snapshot.val() as LiveTriviaState | null);
     });
@@ -75,7 +86,7 @@ export default function Activities() {
       unsubscribeLiveActivity();
       unsubscribeLiveTrivia();
     };
-  }, [id]);
+  }, [id, getPath]);
 
   // Find activities that match current live state
   const liveActivitiesFromCollection = activities.filter((a) =>
@@ -130,19 +141,20 @@ export default function Activities() {
   };
 
   const handleActivityClick = (activity: ActivityWithId, isLive: boolean) => {
+    const testParam = isTestShow ? '?test=true' : '';
     // If it's live trivia, go to trivia page
     if (isLive && activity.type === 'trivia') {
-      navigate(`/shows/${id}/trivia`);
+      navigate(`/shows/${id}/trivia${testParam}`);
       return;
     }
     // If it's live non-trivia activity, go to activity page
     if (isLive && activity.type !== 'trivia') {
-      navigate(`/shows/${id}/activity`);
+      navigate(`/shows/${id}/activity${testParam}`);
       return;
     }
     // For joinable activities (show/set level), go to detail page
     if (isJoinableActivity(activity)) {
-      navigate(`/shows/${id}/activities/${activity.id}`);
+      navigate(`/shows/${id}/activities/${activity.id}${testParam}`);
     }
   };
 
@@ -222,7 +234,7 @@ export default function Activities() {
       <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
         <div className="flex-1 p-4 pb-40">
           <Link
-            to={`/shows/${id}`}
+            to={`/shows/${id}${isTestShow ? '?test=true' : ''}`}
             className="inline-flex items-center space-x-2 text-gray-400 hover:text-gray-100 transition-colors mb-4"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -246,7 +258,7 @@ export default function Activities() {
           {/* Header */}
           <div className="flex items-center justify-between">
             <Link
-              to={`/shows/${id}`}
+              to={`/shows/${id}${isTestShow ? '?test=true' : ''}`}
               className="inline-flex items-center space-x-1 text-gray-400 hover:text-gray-100 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />

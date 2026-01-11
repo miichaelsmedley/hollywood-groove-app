@@ -16,20 +16,41 @@ export const isAdminEmail = (email: string | null | undefined): boolean => {
 };
 
 /**
- * Get the base path for show data in Firebase.
- * Returns 'test/shows' when in test mode, 'shows' otherwise.
+ * Get the base path for PRODUCTION show data in Firebase.
+ * Always returns 'shows' - use getTestShowBasePath() for test shows.
  */
 export const getShowBasePath = (): string => {
-  return IS_TEST_MODE ? 'test/shows' : 'shows';
+  return 'shows';
 };
 
 /**
- * Get the full Firebase path for a specific show.
+ * Get the base path for TEST show data in Firebase.
+ * Always returns 'test/shows'.
+ */
+export const getTestShowBasePath = (): string => {
+  return 'test/shows';
+};
+
+/**
+ * Get the full Firebase path for a specific PRODUCTION show.
  * @param showId The show ID
  * @param suffix Optional path suffix (e.g., 'meta', 'attendees', 'scores')
  */
 export const getShowPath = (showId: string, suffix?: string): string => {
   const basePath = getShowBasePath();
+  if (suffix) {
+    return `${basePath}/${showId}/${suffix}`;
+  }
+  return `${basePath}/${showId}`;
+};
+
+/**
+ * Get the full Firebase path for a specific TEST show.
+ * @param showId The show ID
+ * @param suffix Optional path suffix (e.g., 'meta', 'attendees', 'scores')
+ */
+export const getTestShowPath = (showId: string, suffix?: string): string => {
+  const basePath = getTestShowBasePath();
   if (suffix) {
     return `${basePath}/${showId}/${suffix}`;
   }
