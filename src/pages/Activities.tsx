@@ -5,6 +5,7 @@ import { ArrowLeft, Mic, Trophy, Vote, Users, Music, HelpCircle, Calendar, Spark
 import { db } from '../lib/firebase';
 import { CrowdActivity, ActivityType, LiveActivityState, LiveTriviaState } from '../types/firebaseContract';
 import ActionBar from '../components/show/ActionBar';
+import { getShowPath } from '../lib/mode';
 
 // Activity type display config
 const ACTIVITY_CONFIG: Record<ActivityType, { icon: typeof Mic; label: string; color: string }> = {
@@ -33,10 +34,9 @@ export default function Activities() {
 
   useEffect(() => {
     if (!id) return;
-    const showId = Number(id);
 
     // Listen to activities
-    const activitiesRef = ref(db, `shows/${showId}/activities`);
+    const activitiesRef = ref(db, getShowPath(id, 'activities'));
     const unsubscribeActivities = onValue(activitiesRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
@@ -59,13 +59,13 @@ export default function Activities() {
     });
 
     // Listen to live activity state
-    const liveActivityRef = ref(db, `shows/${showId}/live/activity`);
+    const liveActivityRef = ref(db, getShowPath(id, 'live/activity'));
     const unsubscribeLiveActivity = onValue(liveActivityRef, (snapshot) => {
       setLiveActivity(snapshot.val() as LiveActivityState | null);
     });
 
     // Listen to live trivia state
-    const liveTriviaRef = ref(db, `shows/${showId}/live/trivia`);
+    const liveTriviaRef = ref(db, getShowPath(id, 'live/trivia'));
     const unsubscribeLiveTrivia = onValue(liveTriviaRef, (snapshot) => {
       setLiveTrivia(snapshot.val() as LiveTriviaState | null);
     });

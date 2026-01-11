@@ -5,6 +5,7 @@ import { ArrowLeft, Clock, Trophy, CheckCircle } from 'lucide-react';
 import { db, auth } from '../lib/firebase';
 import { LiveTriviaState, CrowdActivity, UserScore } from '../types/firebaseContract';
 import ActionBar from '../components/show/ActionBar';
+import { getShowPath } from '../lib/mode';
 
 export default function Trivia() {
   const { id } = useParams<{ id: string }>();
@@ -21,11 +22,9 @@ export default function Trivia() {
   useEffect(() => {
     if (!id) return;
 
-    const showId = Number(id);
-
     // Listen to live trivia state
     const unsubscribeLive = onValue(
-      ref(db, `shows/${showId}/live/trivia`),
+      ref(db, getShowPath(id, 'live/trivia')),
       (snapshot) => {
         const state = snapshot.val() as LiveTriviaState | null;
         setLiveTrivia(state);
@@ -41,7 +40,7 @@ export default function Trivia() {
 
         // Load the current activity
         if (state?.activityId) {
-          const activityRef = ref(db, `shows/${showId}/activities/${state.activityId}`);
+          const activityRef = ref(db, getShowPath(id, `activities/${state.activityId}`));
           onValue(activityRef, (activitySnapshot) => {
             setCurrentActivity(activitySnapshot.val() as CrowdActivity | null);
           });
@@ -53,7 +52,7 @@ export default function Trivia() {
     const uid = auth.currentUser?.uid;
     if (uid) {
       const unsubscribeScore = onValue(
-        ref(db, `shows/${showId}/scores/${uid}`),
+        ref(db, getShowPath(id, `scores/${uid}`)),
         (snapshot) => {
           setMyScore(snapshot.val() as UserScore | null);
         }
@@ -112,7 +111,6 @@ export default function Trivia() {
   const submitMultiChoice = async (optionIndex: number) => {
     if (!id || !liveTrivia?.activityId || !auth.currentUser) return;
 
-    const showId = Number(id);
     const uid = auth.currentUser.uid;
     const answeredAt = Date.now();
     const startedAt = typeof liveTrivia.startedAt === 'number' ? liveTrivia.startedAt : answeredAt;
@@ -120,7 +118,7 @@ export default function Trivia() {
 
     try {
       await set(
-        ref(db, `shows/${showId}/responses/${liveTrivia.activityId}/${uid}`),
+        ref(db, getShowPath(id, `responses/${liveTrivia.activityId}/${uid}`)),
         {
           optionIndex,
           answeredAt,
@@ -141,14 +139,13 @@ export default function Trivia() {
     const trimmed = freeformText.trim();
     if (!trimmed) return;
 
-    const showId = Number(id);
     const uid = auth.currentUser.uid;
     const answeredAt = Date.now();
     const startedAt = typeof liveTrivia.startedAt === 'number' ? liveTrivia.startedAt : answeredAt;
     const responseTime = Math.max(0, answeredAt - startedAt);
 
     try {
-      await set(ref(db, `shows/${showId}/responses/${liveTrivia.activityId}/${uid}`), {
+      await set(ref(db, getShowPath(id, `responses/${liveTrivia.activityId}/${uid}`)), {
         text: trimmed,
         answeredAt,
         responseTime,
@@ -164,14 +161,13 @@ export default function Trivia() {
   const submitBoolean = async (value: boolean) => {
     if (!id || !liveTrivia?.activityId || !auth.currentUser) return;
 
-    const showId = Number(id);
     const uid = auth.currentUser.uid;
     const answeredAt = Date.now();
     const startedAt = typeof liveTrivia.startedAt === 'number' ? liveTrivia.startedAt : answeredAt;
     const responseTime = Math.max(0, answeredAt - startedAt);
 
     try {
-      await set(ref(db, `shows/${showId}/responses/${liveTrivia.activityId}/${uid}`), {
+      await set(ref(db, getShowPath(id, `responses/${liveTrivia.activityId}/${uid}`)), {
         booleanValue: value,
         answeredAt,
         responseTime,
@@ -189,14 +185,13 @@ export default function Trivia() {
     if (!id || !liveTrivia?.activityId || !auth.currentUser) return;
     const value = scaleValue ?? scaleMin;
 
-    const showId = Number(id);
     const uid = auth.currentUser.uid;
     const answeredAt = Date.now();
     const startedAt = typeof liveTrivia.startedAt === 'number' ? liveTrivia.startedAt : answeredAt;
     const responseTime = Math.max(0, answeredAt - startedAt);
 
     try {
-      await set(ref(db, `shows/${showId}/responses/${liveTrivia.activityId}/${uid}`), {
+      await set(ref(db, getShowPath(id, `responses/${liveTrivia.activityId}/${uid}`)), {
         scaleValue: value,
         answeredAt,
         responseTime,

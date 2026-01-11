@@ -5,6 +5,7 @@ import { Calendar, MapPin, ArrowLeft, Trophy } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { ShowMeta, LiveTriviaState, LiveActivityState } from '../types/firebaseContract';
 import { useUser } from '../contexts/UserContext';
+import { getShowPath } from '../lib/mode';
 
 export default function ShowDetail() {
   const { id } = useParams<{ id: string }>();
@@ -17,33 +18,26 @@ export default function ShowDetail() {
   useEffect(() => {
     if (!id) return;
 
-    // Listen to Firebase for live show data
-    const showId = Number(id);
-
     const unsubscribeMeta = onValue(
-      ref(db, `shows/${showId}/meta`),
+      ref(db, getShowPath(id, 'meta')),
       (snapshot) => {
         setShowMeta((snapshot.val() as ShowMeta | null) ?? null);
         setLoading(false);
       }
     );
 
-    const liveTriviaPath = `shows/${showId}/live/trivia`;
-    console.log(`🔴 ShowDetail: Subscribing to live/trivia`);
-    console.log('🔴 Using single path mode (no prefix)');
-    console.log(`🔴 Full path: ${liveTriviaPath}`);
+    const liveTriviaPath = getShowPath(id, 'live/trivia');
 
     const unsubscribeLive = onValue(
       ref(db, liveTriviaPath),
       (snapshot) => {
         const data = snapshot.val() as LiveTriviaState | null;
-        console.log(`🔴 ShowDetail live/trivia data for show ${showId}:`, data);
         setLiveTrivia(data ?? null);
       }
     );
 
     const unsubscribeActivity = onValue(
-      ref(db, `shows/${showId}/live/activity`),
+      ref(db, getShowPath(id, 'live/activity')),
       (snapshot) => {
         setLiveActivity((snapshot.val() as LiveActivityState | null) ?? null);
       }

@@ -6,6 +6,7 @@ import { useUser } from '../contexts/UserContext';
 import { MemberProfile, ShowMeta } from '../types/firebaseContract';
 import { Music, Mail, Phone, User, Check, Sparkles, AlertCircle, CheckCircle } from 'lucide-react';
 import { signInWithGoogle } from '../lib/auth';
+import { getShowPath } from '../lib/mode';
 
 const defaultStarBreakdown = {
   shows_attended: 0,
@@ -98,7 +99,7 @@ export default function JoinShow() {
   useEffect(() => {
     if (!id) return;
 
-    const showRef = ref(db, `shows/${id}/meta`);
+    const showRef = ref(db, getShowPath(id, 'meta'));
     const unsubscribe = onValue(showRef, (snapshot) => {
       setShowMeta(snapshot.val() as ShowMeta | null);
       setLoading(false);
@@ -171,7 +172,7 @@ export default function JoinShow() {
       const starsTotal = member.stars?.total ?? 0;
       const { tier, bonus } = resolveTierAndBonus(starsTotal);
 
-      const attendeeRef = ref(db, `shows/${id}/attendees/${uid}`);
+      const attendeeRef = ref(db, getShowPath(id, `attendees/${uid}`));
       const attendeeSnap = await get(attendeeRef);
       if (!attendeeSnap.exists()) {
         await set(attendeeRef, {
@@ -202,7 +203,7 @@ export default function JoinShow() {
         await update(attendeeRef, { display_name: resolvedDisplayName });
       }
 
-      const scoreRef = ref(db, `shows/${id}/scores/${uid}`);
+      const scoreRef = ref(db, getShowPath(id, `scores/${uid}`));
       await runTransaction(scoreRef, (current) => {
         const existing = (current ?? {}) as Record<string, any>;
         const existingBreakdown = (existing.breakdown ?? {}) as Record<string, any>;

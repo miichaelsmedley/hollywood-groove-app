@@ -5,6 +5,7 @@ import { CalendarCheck, ArrowLeft, Users } from 'lucide-react';
 import { auth, db } from '../lib/firebase';
 import { CrowdActivity, LiveActivityState } from '../types/firebaseContract';
 import ActionBar from '../components/show/ActionBar';
+import { getShowPath } from '../lib/mode';
 
 export default function Activity() {
   const { id } = useParams<{ id: string }>();
@@ -15,10 +16,9 @@ export default function Activity() {
 
   useEffect(() => {
     if (!id) return;
-    const showId = Number(id);
 
     const unsubscribe = onValue(
-      ref(db, `shows/${showId}/live/activity`),
+      ref(db, getShowPath(id, 'live/activity')),
       (snapshot) => {
         const state = snapshot.val() as LiveActivityState | null;
         setLiveActivity(state);
@@ -36,8 +36,7 @@ export default function Activity() {
       return;
     }
 
-    const showId = Number(id);
-    const activityRef = ref(db, `shows/${showId}/activities/${liveActivity.activityId}`);
+    const activityRef = ref(db, getShowPath(id, `activities/${liveActivity.activityId}`));
     const unsubscribe = onValue(activityRef, (snapshot) => {
       setActivity(snapshot.val() as CrowdActivity | null);
     });
@@ -47,11 +46,10 @@ export default function Activity() {
 
   const joinActivity = async () => {
     if (!id || !liveActivity?.activityId || !auth.currentUser) return;
-    const showId = Number(id);
     const uid = auth.currentUser.uid;
 
     try {
-      await set(ref(db, `shows/${showId}/responses/${liveActivity.activityId}/${uid}`), {
+      await set(ref(db, getShowPath(id, `responses/${liveActivity.activityId}/${uid}`)), {
         action: 'join',
         joinedAt: Date.now(),
         displayName: auth.currentUser.displayName || 'Anonymous',
@@ -64,11 +62,10 @@ export default function Activity() {
 
   const claimDancePoints = async () => {
     if (!id || !liveActivity?.activityId || !auth.currentUser) return;
-    const showId = Number(id);
     const uid = auth.currentUser.uid;
 
     try {
-      await set(ref(db, `shows/${showId}/responses/${liveActivity.activityId}/${uid}`), {
+      await set(ref(db, getShowPath(id, `responses/${liveActivity.activityId}/${uid}`)), {
         type: 'dance_claim',
         claimedAt: Date.now(),
         displayName: auth.currentUser.displayName || 'Anonymous',
@@ -81,11 +78,10 @@ export default function Activity() {
 
   const voteOption = async (optionIndex: number, optionText: string) => {
     if (!id || !liveActivity?.activityId || !auth.currentUser) return;
-    const showId = Number(id);
     const uid = auth.currentUser.uid;
 
     try {
-      await set(ref(db, `shows/${showId}/responses/${liveActivity.activityId}/${uid}`), {
+      await set(ref(db, getShowPath(id, `responses/${liveActivity.activityId}/${uid}`)), {
         optionIndex,
         optionText,
         votedAt: Date.now(),

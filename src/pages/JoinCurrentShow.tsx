@@ -4,6 +4,7 @@ import { onValue, ref } from 'firebase/database';
 import { db } from '../lib/firebase';
 import { ShowMeta } from '../types/firebaseContract';
 import { AlertCircle, Sparkles } from 'lucide-react';
+import { getShowBasePath } from '../lib/mode';
 
 interface LiveShow {
   showId: string;
@@ -18,7 +19,7 @@ export default function JoinCurrentShow() {
   const [liveShows, setLiveShows] = useState<LiveShow[]>([]);
 
   useEffect(() => {
-    const showsRef = ref(db, 'shows');
+    const showsRef = ref(db, getShowBasePath());
 
     const unsubscribe = onValue(
       showsRef,

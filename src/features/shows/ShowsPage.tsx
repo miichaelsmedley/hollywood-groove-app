@@ -4,6 +4,7 @@ import { db } from '../../lib/firebase';
 import { ShowMeta } from '../../types/firebaseContract';
 import ShowCard from './ShowCard';
 import { Calendar, AlertCircle } from 'lucide-react';
+import { getShowBasePath } from '../../lib/mode';
 
 interface ShowData {
   showId: string;
@@ -20,7 +21,7 @@ export default function ShowsPage({ mode = 'upcoming' }: { mode?: ShowsPageMode 
 
   useEffect(() => {
     // Listen to all shows in Firebase
-    const showsRef = ref(db, 'shows');
+    const showsRef = ref(db, getShowBasePath());
 
     const unsubscribe = onValue(
       showsRef,

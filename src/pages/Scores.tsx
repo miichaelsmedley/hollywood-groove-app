@@ -6,6 +6,7 @@ import { useUser } from '../contexts/UserContext';
 import { UserScore } from '../types/firebaseContract';
 import { Link } from 'react-router-dom';
 import Leaderboard from '../components/leaderboard/Leaderboard';
+import { getShowBasePath, getShowPath } from '../lib/mode';
 
 export default function Scores() {
   const { userProfile } = useUser();
@@ -16,7 +17,7 @@ export default function Scores() {
   const uid = auth.currentUser?.uid ?? null;
 
   useEffect(() => {
-    const showsRef = ref(db, 'shows');
+    const showsRef = ref(db, getShowBasePath());
     const unsubscribe = onValue(
       showsRef,
       (snapshot) => {
@@ -77,7 +78,7 @@ export default function Scores() {
     setIsMyScoreLoading(true);
     setMyScoreError(null);
 
-    const scoreRef = ref(db, `shows/${selectedShowId}/scores/${uid}`);
+    const scoreRef = ref(db, getShowPath(selectedShowId, `scores/${uid}`));
     const unsubscribe = onValue(
       scoreRef,
       (snapshot) => {

@@ -5,6 +5,7 @@ import { CalendarCheck, ArrowLeft, Users, CheckCircle, Clock, Trophy } from 'luc
 import { auth, db } from '../lib/firebase';
 import { CrowdActivity } from '../types/firebaseContract';
 import ActionBar from '../components/show/ActionBar';
+import { getShowPath } from '../lib/mode';
 
 interface UserResponse {
   action?: string;
@@ -27,9 +28,8 @@ export default function ActivityDetail() {
   // Fetch activity details
   useEffect(() => {
     if (!id || !activityId) return;
-    const showId = Number(id);
 
-    const activityRef = ref(db, `shows/${showId}/activities/${activityId}`);
+    const activityRef = ref(db, getShowPath(id, `activities/${activityId}`));
     const unsubscribe = onValue(activityRef, (snapshot) => {
       setActivity(snapshot.val() as CrowdActivity | null);
       setLoading(false);
@@ -41,10 +41,9 @@ export default function ActivityDetail() {
   // Check if user has already responded
   useEffect(() => {
     if (!id || !activityId || !auth.currentUser) return;
-    const showId = Number(id);
     const uid = auth.currentUser.uid;
 
-    const responseRef = ref(db, `shows/${showId}/responses/${activityId}/${uid}`);
+    const responseRef = ref(db, getShowPath(id, `responses/${activityId}/${uid}`));
     const unsubscribe = onValue(responseRef, (snapshot) => {
       const response = snapshot.val() as UserResponse | null;
       if (response) {
@@ -61,12 +60,11 @@ export default function ActivityDetail() {
 
   const joinActivity = async () => {
     if (!id || !activityId || !auth.currentUser || submitting) return;
-    const showId = Number(id);
     const uid = auth.currentUser.uid;
 
     setSubmitting(true);
     try {
-      await set(ref(db, `shows/${showId}/responses/${activityId}/${uid}`), {
+      await set(ref(db, getShowPath(id, `responses/${activityId}/${uid}`)), {
         action: 'join',
         joinedAt: Date.now(),
         displayName: auth.currentUser.displayName || 'Anonymous',
@@ -81,12 +79,11 @@ export default function ActivityDetail() {
 
   const voteOption = async (optionIndex: number, optionText: string) => {
     if (!id || !activityId || !auth.currentUser || hasResponded || submitting) return;
-    const showId = Number(id);
     const uid = auth.currentUser.uid;
 
     setSubmitting(true);
     try {
-      await set(ref(db, `shows/${showId}/responses/${activityId}/${uid}`), {
+      await set(ref(db, getShowPath(id, `responses/${activityId}/${uid}`)), {
         optionIndex,
         optionText,
         votedAt: Date.now(),
