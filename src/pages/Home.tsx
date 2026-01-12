@@ -1,5 +1,5 @@
-import { Link, useSearchParams } from 'react-router-dom';
-import { Music, Sparkles, List, FlaskConical, X, Brain } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Music, Sparkles, List, FlaskConical, Brain } from 'lucide-react';
 import { IS_TEST_MODE } from '../lib/mode';
 import { useEffect, useState } from 'react';
 import { useUser } from '../contexts/UserContext';
@@ -14,19 +14,10 @@ interface ActiveTestShow {
 }
 
 export default function Home() {
-  const [searchParams] = useSearchParams();
-  const [showTestBanner, setShowTestBanner] = useState(false);
   const { canUseTestMode } = useUser();
   const { schedule, remaining, loading: triviaLoading } = useTriviaHome();
   const [activeTestShow, setActiveTestShow] = useState<ActiveTestShow | null>(null);
   const [checkingTestShow, setCheckingTestShow] = useState(true);
-
-  // Check if we just enabled test mode
-  useEffect(() => {
-    if (searchParams.get('testMode') === 'true' || IS_TEST_MODE) {
-      setShowTestBanner(true);
-    }
-  }, [searchParams]);
 
   // Check for active test shows (only if user can use test mode)
   useEffect(() => {
@@ -82,29 +73,8 @@ export default function Home() {
     window.location.href = '/';
   };
 
-  const handleDisableTestMode = () => {
-    localStorage.removeItem('hg_test_mode');
-    window.location.href = '/';
-  };
-
   return (
     <div className="mx-auto max-w-md space-y-6">
-      {/* Test Mode Banner */}
-      {showTestBanner && IS_TEST_MODE && (
-        <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <FlaskConical className="w-5 h-5 text-purple-400" />
-            <span className="text-sm font-medium text-purple-300">Test Mode Active</span>
-          </div>
-          <button
-            onClick={handleDisableTestMode}
-            className="p-1 hover:bg-purple-500/20 rounded transition"
-          >
-            <X className="w-4 h-4 text-purple-400" />
-          </button>
-        </div>
-      )}
-
       <section className="text-center space-y-3">
         <h1 className="text-4xl sm:text-5xl font-bold">
           Welcome to <span className="text-primary font-display">Hollywood Groove</span>
@@ -151,14 +121,14 @@ export default function Home() {
           </div>
         </Link>
 
-        {/* Quick Trivia Button */}
+        {/* Daily Trivia Button */}
         <Link
           to="/play"
           className="block w-full rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 px-5 py-4 text-white font-bold shadow-lg active:scale-[0.99] transition"
         >
           <div className="flex items-center justify-between gap-4">
             <div>
-              <div className="text-lg leading-tight">Quick Trivia</div>
+              <div className="text-lg leading-tight">Daily Trivia</div>
               <div className="text-sm font-semibold opacity-80">
                 {triviaLoading ? (
                   'Loading...'
@@ -183,51 +153,35 @@ export default function Home() {
           </div>
         </Link>
 
-        {/* Tester Mode Entry Point - Shows for assigned testers only when test show is active */}
-        {canUseTestMode && !checkingTestShow && (
-          <>
-            {activeTestShow ? (
-              // Active test show - show join button
-              !IS_TEST_MODE ? (
-                <button
-                  onClick={handleEnableTestMode}
-                  className="block w-full rounded-2xl bg-purple-500/20 border border-purple-500/50 px-5 py-4 font-semibold text-purple-200 hover:border-purple-400/60 hover:bg-purple-500/30 transition text-left"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <div className="text-lg leading-tight">Join Test Show</div>
-                      <div className="text-sm text-purple-300/80">Test show active: {activeTestShow.title}</div>
-                    </div>
-                    <FlaskConical className="h-6 w-6 text-purple-300" />
-                  </div>
-                </button>
-              ) : (
-                <Link
-                  to={`/shows/${activeTestShow.showId}/join?test=true`}
-                  className="block w-full rounded-2xl bg-purple-600 px-5 py-4 text-white font-bold shadow-lg active:scale-[0.99] transition"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <div className="text-lg leading-tight">Join Test Show</div>
-                      <div className="text-sm font-semibold opacity-80">{activeTestShow.title}</div>
-                    </div>
-                    <FlaskConical className="h-6 w-6" />
-                  </div>
-                </Link>
-              )
-            ) : (
-              // No active test show - show disabled/greyed out button
-              <div className="block w-full rounded-2xl bg-cinema-100/50 border border-cinema-200/50 px-5 py-4 font-semibold text-cinema-400 cursor-not-allowed">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="text-lg leading-tight">Join Test Show</div>
-                    <div className="text-sm text-cinema-400/70">No test show currently active</div>
-                  </div>
-                  <FlaskConical className="h-6 w-6 text-cinema-300" />
+        {/* Tester Mode Entry Point - Only shows when test show is active */}
+        {canUseTestMode && !checkingTestShow && activeTestShow && (
+          !IS_TEST_MODE ? (
+            <button
+              onClick={handleEnableTestMode}
+              className="block w-full rounded-2xl bg-purple-500/20 border border-purple-500/50 px-5 py-4 font-semibold text-purple-200 hover:border-purple-400/60 hover:bg-purple-500/30 transition text-left"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-lg leading-tight">Join Test Show</div>
+                  <div className="text-sm text-purple-300/80">{activeTestShow.title}</div>
                 </div>
+                <FlaskConical className="h-6 w-6 text-purple-300" />
               </div>
-            )}
-          </>
+            </button>
+          ) : (
+            <Link
+              to={`/shows/${activeTestShow.showId}/join?test=true`}
+              className="block w-full rounded-2xl bg-purple-600 px-5 py-4 text-white font-bold shadow-lg active:scale-[0.99] transition"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-lg leading-tight">Join Test Show</div>
+                  <div className="text-sm font-semibold opacity-80">{activeTestShow.title}</div>
+                </div>
+                <FlaskConical className="h-6 w-6" />
+              </div>
+            </Link>
+          )
         )}
       </section>
     </div>

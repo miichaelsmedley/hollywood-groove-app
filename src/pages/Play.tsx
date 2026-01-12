@@ -320,7 +320,7 @@ export default function Play() {
           <Link to="/" className="p-2 rounded-lg hover:bg-gray-800 transition">
             <ArrowLeft className="w-5 h-5 text-gray-400" />
           </Link>
-          <h1 className="text-xl font-bold">Quick Trivia</h1>
+          <h1 className="text-xl font-bold">Daily Trivia</h1>
         </header>
         <div className="flex flex-col items-center justify-center py-12">
           <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
@@ -338,7 +338,7 @@ export default function Play() {
           <Link to="/" className="p-2 rounded-lg hover:bg-gray-800 transition">
             <ArrowLeft className="w-5 h-5 text-gray-400" />
           </Link>
-          <h1 className="text-xl font-bold">Quick Trivia</h1>
+          <h1 className="text-xl font-bold">Daily Trivia</h1>
         </header>
 
         <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
@@ -504,7 +504,7 @@ export default function Play() {
           >
             <ArrowLeft className="w-5 h-5 text-gray-400" />
           </Link>
-          <h1 className="text-xl font-bold">Quick Trivia</h1>
+          <h1 className="text-xl font-bold">Daily Trivia</h1>
         </header>
 
         <div className="flex flex-col items-center justify-center py-12">
@@ -526,7 +526,7 @@ export default function Play() {
           >
             <ArrowLeft className="w-5 h-5 text-gray-400" />
           </Link>
-          <h1 className="text-xl font-bold">Quick Trivia</h1>
+          <h1 className="text-xl font-bold">Daily Trivia</h1>
         </header>
 
         <div className="bg-gray-900 rounded-xl p-6 border border-gray-800 text-center">
@@ -578,7 +578,7 @@ export default function Play() {
           >
             <ArrowLeft className="w-5 h-5 text-gray-400" />
           </Link>
-          <h1 className="text-xl font-bold">Quick Trivia</h1>
+          <h1 className="text-xl font-bold">Daily Trivia</h1>
         </header>
 
         <div className="bg-gray-900 rounded-xl p-6 border border-gray-800 text-center">
@@ -610,7 +610,7 @@ export default function Play() {
           >
             <ArrowLeft className="w-5 h-5 text-gray-400" />
           </Link>
-          <h1 className="text-xl font-bold">Quick Trivia</h1>
+          <h1 className="text-xl font-bold">Daily Trivia</h1>
         </header>
 
         <div className="bg-gradient-to-b from-yellow-500/20 to-transparent rounded-xl p-6 border border-yellow-500/50 text-center">
@@ -661,7 +661,7 @@ export default function Play() {
           >
             <ArrowLeft className="w-5 h-5 text-gray-400" />
           </Link>
-          <h1 className="text-xl font-bold">Quick Trivia</h1>
+          <h1 className="text-xl font-bold">Daily Trivia</h1>
         </div>
       </header>
 
