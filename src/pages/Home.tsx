@@ -40,17 +40,31 @@ export default function Home() {
         }
 
         // Find any test show with actively running trivia or activity
-        // Must have explicit active states - not just "not idle"
+        // Must have explicit active states AND recent updates (within last 30 minutes)
+        const MAX_STALE_MS = 30 * 60 * 1000; // 30 minutes
+        const now = Date.now();
+
         for (const [showId, showData] of Object.entries(data) as [string, any][]) {
           const meta = showData?.meta as ShowMeta | undefined;
           const liveTrivia = showData?.live?.trivia;
           const phase = liveTrivia?.phase as string | undefined;
-          // Trivia is active when in question, reveal, or countdown phases
+          const triviaUpdatedAt = liveTrivia?.updatedAt as number | undefined;
+
+          // Check if trivia data is stale (older than 30 minutes)
+          const isTriviaStale = !triviaUpdatedAt || (now - triviaUpdatedAt) > MAX_STALE_MS;
+
+          // Trivia is active when in question, reveal, or countdown phases AND not stale
           const activeTriviaPhases = ['question', 'reveal', 'countdown', 'answering'];
-          const triviaActive = Boolean(phase && activeTriviaPhases.includes(phase));
+          const triviaActive = Boolean(
+            phase &&
+            activeTriviaPhases.includes(phase) &&
+            !isTriviaStale
+          );
 
           const liveActivity = showData?.live?.activity;
-          const activityActive = liveActivity?.status === 'active';
+          const activityUpdatedAt = liveActivity?.updatedAt as number | undefined;
+          const isActivityStale = !activityUpdatedAt || (now - activityUpdatedAt) > MAX_STALE_MS;
+          const activityActive = liveActivity?.status === 'active' && !isActivityStale;
 
           if (meta?.title && (triviaActive || activityActive)) {
             setActiveTestShow({ showId, title: meta.title });
