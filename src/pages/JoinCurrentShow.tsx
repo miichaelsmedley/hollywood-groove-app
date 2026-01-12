@@ -4,74 +4,126 @@ import { onValue, ref } from 'firebase/database';
 import { db } from '../lib/firebase';
 import { ShowMeta } from '../types/firebaseContract';
 import { AlertCircle, Sparkles } from 'lucide-react';
-import { getShowBasePath } from '../lib/mode';
+import { getShowBasePath, getTestShowBasePath } from '../lib/mode';
+import { useUser } from '../contexts/UserContext';
 
 interface LiveShow {
   showId: string;
   meta: ShowMeta;
   startedAt: number;
+  isTestShow: boolean;
 }
 
 export default function JoinCurrentShow() {
   const navigate = useNavigate();
+  const { canUseTestMode } = useUser();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [liveShows, setLiveShows] = useState<LiveShow[]>([]);
+  void setError; // Suppress unused warning - error state used in JSX
+
+  // Helper to extract live shows from snapshot data
+  const extractLiveShows = (data: any, isTestShow: boolean): LiveShow[] => {
+    if (!data) return [];
+
+    const MAX_STALE_MS = 30 * 60 * 1000; // 30 minutes
+    const now = Date.now();
+
+    return Object.entries(data).flatMap(([showId, showData]: [string, any]) => {
+      const meta = showData?.meta as ShowMeta | undefined;
+      const liveTrivia = showData?.live?.trivia;
+      const phase = liveTrivia?.phase as string | undefined;
+
+      // Check timestamps for staleness
+      const triviaUpdatedAt = liveTrivia?.updatedAt as number | undefined;
+      const triviaStartedAt = typeof liveTrivia?.startedAt === 'number' ? liveTrivia.startedAt : 0;
+      const triviaTimestamp = triviaUpdatedAt || triviaStartedAt;
+      const isTriviaStale = !triviaTimestamp || (now - triviaTimestamp) > MAX_STALE_MS;
+
+      const triviaActive = Boolean(phase && phase !== 'idle' && !isTriviaStale);
+
+      const liveActivity = showData?.live?.activity;
+      const activityUpdatedAt = liveActivity?.updatedAt as number | undefined;
+      const activityStartedAt = typeof liveActivity?.startedAt === 'number' ? liveActivity.startedAt : 0;
+      const activityTimestamp = activityUpdatedAt || activityStartedAt;
+      const isActivityStale = !activityTimestamp || (now - activityTimestamp) > MAX_STALE_MS;
+
+      const activityActive = liveActivity?.status === 'active' && !isActivityStale;
+
+      if (!meta || !meta.title) return [];
+      if (!triviaActive && !activityActive) return [];
+
+      const startedAt = Math.max(
+        triviaActive ? triviaStartedAt : 0,
+        activityActive ? activityStartedAt : 0
+      );
+      return [{ showId, meta, startedAt, isTestShow }];
+    });
+  };
 
   useEffect(() => {
-    const showsRef = ref(db, getShowBasePath());
+    const unsubscribes: (() => void)[] = [];
+    let prodShows: LiveShow[] = [];
+    let testShows: LiveShow[] = [];
+    let prodLoaded = false;
+    let testLoaded = !canUseTestMode; // Skip test if user can't use test mode
 
-    const unsubscribe = onValue(
-      showsRef,
+    const updateLiveShows = () => {
+      if (!prodLoaded || !testLoaded) return;
+
+      // Combine and sort by startedAt, prioritizing test shows
+      const allShows = [...testShows, ...prodShows];
+      allShows.sort((a, b) => b.startedAt - a.startedAt);
+      setLiveShows(allShows);
+      setLoading(false);
+    };
+
+    // Listen to production shows
+    const prodRef = ref(db, getShowBasePath());
+    const prodUnsub = onValue(
+      prodRef,
       (snapshot) => {
-        setLoading(false);
-        setError(null);
-
-        const data = snapshot.val();
-        if (!data) {
-          setLiveShows([]);
-          return;
-        }
-
-        const lives: LiveShow[] = Object.entries(data).flatMap(([showId, showData]: [string, any]) => {
-          const meta = showData?.meta as ShowMeta | undefined;
-          const liveTrivia = showData?.live?.trivia;
-          const phase = liveTrivia?.phase as string | undefined;
-          const triviaActive = Boolean(phase && phase !== 'idle');
-          const triviaStartedAt = typeof liveTrivia?.startedAt === 'number' ? liveTrivia.startedAt : 0;
-
-          const liveActivity = showData?.live?.activity;
-          const activityActive = liveActivity?.status === 'active';
-          const activityStartedAt = typeof liveActivity?.startedAt === 'number' ? liveActivity.startedAt : 0;
-
-          if (!meta || !meta.title) return [];
-          if (!triviaActive && !activityActive) return [];
-
-          const startedAt = Math.max(
-            triviaActive ? triviaStartedAt : 0,
-            activityActive ? activityStartedAt : 0
-          );
-          return [{ showId, meta, startedAt }];
-        });
-
-        lives.sort((a, b) => b.startedAt - a.startedAt);
-        setLiveShows(lives);
+        prodShows = extractLiveShows(snapshot.val(), false);
+        prodLoaded = true;
+        updateLiveShows();
       },
       (err) => {
-        setLoading(false);
-        setError(err.message);
+        console.warn('Error loading production shows:', err);
+        prodLoaded = true;
+        updateLiveShows();
       }
     );
+    unsubscribes.push(prodUnsub);
 
-    return () => unsubscribe();
-  }, []);
+    // Listen to test shows (if user has access)
+    if (canUseTestMode) {
+      const testRef = ref(db, getTestShowBasePath());
+      const testUnsub = onValue(
+        testRef,
+        (snapshot) => {
+          testShows = extractLiveShows(snapshot.val(), true);
+          testLoaded = true;
+          updateLiveShows();
+        },
+        (err) => {
+          console.warn('Error loading test shows:', err);
+          testLoaded = true;
+          updateLiveShows();
+        }
+      );
+      unsubscribes.push(testUnsub);
+    }
+
+    return () => unsubscribes.forEach(unsub => unsub());
+  }, [canUseTestMode]);
 
   const primaryLiveShow = useMemo(() => liveShows[0] ?? null, [liveShows]);
 
   useEffect(() => {
     if (loading) return;
     if (!primaryLiveShow) return;
-    navigate(`/shows/${primaryLiveShow.showId}/join`, { replace: true });
+    const testQuery = primaryLiveShow.isTestShow ? '?test=true' : '';
+    navigate(`/shows/${primaryLiveShow.showId}/join${testQuery}`, { replace: true });
   }, [loading, navigate, primaryLiveShow]);
 
   if (loading) {
