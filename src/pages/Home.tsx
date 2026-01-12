@@ -39,12 +39,15 @@ export default function Home() {
           return;
         }
 
-        // Find any test show with active trivia or activity
+        // Find any test show with actively running trivia or activity
+        // Must have explicit active states - not just "not idle"
         for (const [showId, showData] of Object.entries(data) as [string, any][]) {
           const meta = showData?.meta as ShowMeta | undefined;
           const liveTrivia = showData?.live?.trivia;
           const phase = liveTrivia?.phase as string | undefined;
-          const triviaActive = Boolean(phase && phase !== 'idle');
+          // Trivia is active when in question, reveal, or countdown phases
+          const activeTriviaPhases = ['question', 'reveal', 'countdown', 'answering'];
+          const triviaActive = Boolean(phase && activeTriviaPhases.includes(phase));
 
           const liveActivity = showData?.live?.activity;
           const activityActive = liveActivity?.status === 'active';
