@@ -80,7 +80,9 @@
           },
           "scores": {
             ".read": true,
-            ".write": "false"
+            "$odience": {
+              ".write": "auth != null && auth.uid == $odience"
+            }
           },
           "leaderboard": {
             ".read": true,
@@ -225,7 +227,9 @@
         },
         "scores": {
           ".read": true,
-          ".write": "false"
+          "$odience": {
+            ".write": "auth != null && auth.uid == $odience"
+          }
         },
         "leaderboard": {
           ".read": true,

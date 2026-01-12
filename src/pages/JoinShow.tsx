@@ -315,32 +315,56 @@ export default function JoinShow() {
       return;
     }
     let cancelled = false;
+    let hasNavigated = false;
 
     console.log('[JoinShow] Starting join flow for show:', id, 'isTestShow:', isTestShow);
+
+    const targetPath = `/shows/${id}${isTestShow ? '?test=true' : ''}`;
+
+    // Timeout to prevent infinite hang - navigate after 10 seconds regardless
+    const timeoutId = setTimeout(() => {
+      if (!cancelled && !hasNavigated) {
+        console.warn('[JoinShow] Join flow timed out after 10s, navigating anyway');
+        hasNavigated = true;
+        navigate(targetPath);
+      }
+    }, 10000);
+
+    // Helper to add timeout to individual operations
+    const withTimeout = <T,>(promise: Promise<T>, ms: number, name: string): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<T>((_, reject) =>
+          setTimeout(() => reject(new Error(`${name} timed out after ${ms}ms`)), ms)
+        ),
+      ]);
+    };
 
     const runJoinFlow = async () => {
       try {
         console.log('[JoinShow] ensureJoinRecords...');
-        await ensureJoinRecords();
-        if (cancelled) return;
+        await withTimeout(ensureJoinRecords(), 8000, 'ensureJoinRecords');
+        if (cancelled || hasNavigated) return;
 
         console.log('[JoinShow] addShowAttended...');
-        await addShowAttended(id);
-        if (cancelled) return;
+        await withTimeout(addShowAttended(id), 3000, 'addShowAttended');
+        if (cancelled || hasNavigated) return;
 
         console.log('[JoinShow] updateLastSeen...');
-        await updateLastSeen();
-        if (cancelled) return;
+        await withTimeout(updateLastSeen(), 3000, 'updateLastSeen');
+        if (cancelled || hasNavigated) return;
 
-        const targetPath = `/shows/${id}${isTestShow ? '?test=true' : ''}`;
         console.log('[JoinShow] Join complete, navigating to:', targetPath);
+        hasNavigated = true;
+        clearTimeout(timeoutId);
         navigate(targetPath);
       } catch (error) {
         console.error('[JoinShow] Join flow error:', error);
         // Don't leave user stuck on "Joining show..." - navigate anyway
-        const targetPath = `/shows/${id}${isTestShow ? '?test=true' : ''}`;
         console.log('[JoinShow] Error occurred, navigating anyway to:', targetPath);
-        if (!cancelled) {
+        if (!cancelled && !hasNavigated) {
+          hasNavigated = true;
+          clearTimeout(timeoutId);
           navigate(targetPath);
         }
       }
@@ -350,6 +374,7 @@ export default function JoinShow() {
 
     return () => {
       cancelled = true;
+      clearTimeout(timeoutId);
     };
   }, [isRegistered, showMeta, id, navigate, addShowAttended, updateLastSeen, ensureJoinRecords, isTestShow]);
 

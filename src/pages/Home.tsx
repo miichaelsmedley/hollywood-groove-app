@@ -48,10 +48,14 @@ export default function Home() {
           const meta = showData?.meta as ShowMeta | undefined;
           const liveTrivia = showData?.live?.trivia;
           const phase = liveTrivia?.phase as string | undefined;
+
+          // Check timestamps - prefer updatedAt, fall back to startedAt
           const triviaUpdatedAt = liveTrivia?.updatedAt as number | undefined;
+          const triviaStartedAt = liveTrivia?.startedAt as number | undefined;
+          const triviaTimestamp = triviaUpdatedAt || triviaStartedAt;
 
           // Check if trivia data is stale (older than 30 minutes)
-          const isTriviaStale = !triviaUpdatedAt || (now - triviaUpdatedAt) > MAX_STALE_MS;
+          const isTriviaStale = !triviaTimestamp || (now - triviaTimestamp) > MAX_STALE_MS;
 
           // Trivia is active when in question, reveal, or countdown phases AND not stale
           const activeTriviaPhases = ['question', 'reveal', 'countdown', 'answering'];
@@ -63,7 +67,9 @@ export default function Home() {
 
           const liveActivity = showData?.live?.activity;
           const activityUpdatedAt = liveActivity?.updatedAt as number | undefined;
-          const isActivityStale = !activityUpdatedAt || (now - activityUpdatedAt) > MAX_STALE_MS;
+          const activityStartedAt = liveActivity?.startedAt as number | undefined;
+          const activityTimestamp = activityUpdatedAt || activityStartedAt;
+          const isActivityStale = !activityTimestamp || (now - activityTimestamp) > MAX_STALE_MS;
           const activityActive = liveActivity?.status === 'active' && !isActivityStale;
 
           if (meta?.title && (triviaActive || activityActive)) {
