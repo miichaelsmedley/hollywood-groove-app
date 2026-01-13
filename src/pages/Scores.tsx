@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { onValue, ref } from 'firebase/database';
-import { BarChart3, Trophy } from 'lucide-react';
+import { BarChart3, Star, Trophy } from 'lucide-react';
 import { auth, db } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
 import { UserScore } from '../types/firebaseContract';
 import { Link, useSearchParams } from 'react-router-dom';
 import Leaderboard from '../components/leaderboard/Leaderboard';
 import { getShowBasePath, getShowPath, getTestShowBasePath, getTestShowPath } from '../lib/mode';
+import { useMemberProfile } from '../hooks/useMemberProfile';
+import TierBadge from '../components/leaderboard/TierBadge';
 
 export default function Scores() {
   const { userProfile } = useUser();
+  const { profile: memberProfile, isLoading: isMemberLoading } = useMemberProfile();
   const [searchParams] = useSearchParams();
   const isTestShow = searchParams.get('test') === 'true';
   const [liveShowId, setLiveShowId] = useState<string | null>(null);
@@ -104,6 +107,45 @@ export default function Scores() {
     return () => unsubscribe();
   }, [selectedShowId, uid, isTestShow]);
 
+  // Render member stars card (persistent loyalty)
+  const renderMemberStars = () => {
+    if (isMemberLoading) {
+      return (
+        <div className="bg-cinema-50 border border-cinema-200 rounded-2xl p-4 text-center text-cinema-500 text-sm">
+          Loading your stars...
+        </div>
+      );
+    }
+
+    if (!memberProfile) {
+      return null; // No member profile yet
+    }
+
+    const stars = memberProfile.stars?.total ?? 0;
+    const tier = memberProfile.stars?.tier ?? 'extra';
+    const showsAttended = memberProfile.stars?.breakdown?.shows_attended ?? 0;
+
+    return (
+      <div className="bg-gradient-to-r from-amber-500/20 to-primary/20 border border-primary/40 rounded-2xl p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
+              <Star className="w-6 h-6 text-primary fill-primary" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-cinema-800">Your Stars</div>
+              <div className="text-2xl font-bold text-primary">{stars.toLocaleString()}</div>
+            </div>
+          </div>
+          <div className="text-right">
+            <TierBadge tier={tier} />
+            <div className="text-xs text-cinema-500 mt-1">{showsAttended} shows attended</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (!selectedShowId) {
     return (
       <div className="space-y-6">
@@ -114,6 +156,8 @@ export default function Scores() {
           <h1 className="text-2xl font-bold">Scores</h1>
           <p className="text-cinema-500 text-sm">Join a show to start earning points.</p>
         </div>
+
+        {renderMemberStars()}
 
         <Link to={isTestShow ? '/join?test=true' : '/join'} className="block w-full btn-primary text-center">
           Join current show
@@ -133,6 +177,9 @@ export default function Scores() {
         </div>
         <Trophy className="w-6 h-6 text-primary" />
       </div>
+
+      {/* Persistent stars (loyalty) */}
+      {renderMemberStars()}
 
       {myScoreError && (
         <div className="bg-cinema-50 border border-cinema-200 rounded-2xl p-5">
