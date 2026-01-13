@@ -5,10 +5,13 @@ import LeaderboardEntry from './LeaderboardEntry';
 interface LeaderboardProps {
   showId: string | null;
   currentUserId?: string | null;
+  isTestShow?: boolean;
 }
 
-export default function Leaderboard({ showId, currentUserId }: LeaderboardProps) {
-  const { entries, updatedAt, isLoading, error } = useLeaderboard(showId, currentUserId);
+export default function Leaderboard({ showId, currentUserId, isTestShow }: LeaderboardProps) {
+  const { entries, updatedAt, isLoading, error } = useLeaderboard(showId, currentUserId, {
+    isTestShow,
+  });
 
   if (!showId) {
     return (

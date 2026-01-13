@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { onValue, ref } from 'firebase/database';
 import { db } from '../lib/firebase';
 import { LeaderboardEntry, ShowLeaderboard } from '../types/firebaseContract';
-import { getShowPath } from '../lib/mode';
+import { getShowPath, getTestShowPath } from '../lib/mode';
 
 interface LeaderboardState {
   entries: LeaderboardEntry[];
@@ -11,7 +11,17 @@ interface LeaderboardState {
   error: string | null;
 }
 
-export function useLeaderboard(showId: string | null, currentUserId?: string | null) {
+interface UseLeaderboardOptions {
+  isTestShow?: boolean;
+}
+
+export function useLeaderboard(
+  showId: string | null,
+  currentUserId?: string | null,
+  options?: UseLeaderboardOptions
+) {
+  const isTestShow = options?.isTestShow ?? false;
+
   const [state, setState] = useState<LeaderboardState>({
     entries: [],
     updatedAt: undefined,
@@ -27,7 +37,10 @@ export function useLeaderboard(showId: string | null, currentUserId?: string | n
 
     setState((current) => ({ ...current, isLoading: true, error: null }));
 
-    const leaderboardRef = ref(db, getShowPath(showId, 'leaderboard'));
+    const path = isTestShow
+      ? getTestShowPath(showId, 'leaderboard')
+      : getShowPath(showId, 'leaderboard');
+    const leaderboardRef = ref(db, path);
     const unsubscribe = onValue(
       leaderboardRef,
       (snapshot) => {
@@ -53,7 +66,7 @@ export function useLeaderboard(showId: string | null, currentUserId?: string | n
     );
 
     return () => unsubscribe();
-  }, [showId]);
+  }, [showId, isTestShow]);
 
   const currentUserRank = useMemo(() => {
     if (!currentUserId) return null;

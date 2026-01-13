@@ -4,20 +4,29 @@ import { BarChart3, Trophy } from 'lucide-react';
 import { auth, db } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
 import { UserScore } from '../types/firebaseContract';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import Leaderboard from '../components/leaderboard/Leaderboard';
-import { getShowBasePath, getShowPath } from '../lib/mode';
+import { getShowBasePath, getShowPath, getTestShowBasePath, getTestShowPath } from '../lib/mode';
 
 export default function Scores() {
   const { userProfile } = useUser();
+  const [searchParams] = useSearchParams();
+  const isTestShow = searchParams.get('test') === 'true';
   const [liveShowId, setLiveShowId] = useState<string | null>(null);
   const [myScore, setMyScore] = useState<UserScore | null>(null);
   const [myScoreError, setMyScoreError] = useState<string | null>(null);
   const [isMyScoreLoading, setIsMyScoreLoading] = useState(false);
   const uid = auth.currentUser?.uid ?? null;
 
+  // Helper to get the correct path based on test mode
+  const resolvePath = (showId: string, suffix?: string) => {
+    return isTestShow ? getTestShowPath(showId, suffix) : getShowPath(showId, suffix);
+  };
+
   useEffect(() => {
-    const showsRef = ref(db, getShowBasePath());
+    // Check both production and test shows for live activity
+    const basePath = isTestShow ? getTestShowBasePath() : getShowBasePath();
+    const showsRef = ref(db, basePath);
     const unsubscribe = onValue(
       showsRef,
       (snapshot) => {
@@ -59,7 +68,7 @@ export default function Scores() {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [isTestShow]);
 
   const selectedShowId = useMemo(() => {
     if (liveShowId) return liveShowId;
@@ -78,7 +87,7 @@ export default function Scores() {
     setIsMyScoreLoading(true);
     setMyScoreError(null);
 
-    const scoreRef = ref(db, getShowPath(selectedShowId, `scores/${uid}`));
+    const scoreRef = ref(db, resolvePath(selectedShowId, `scores/${uid}`));
     const unsubscribe = onValue(
       scoreRef,
       (snapshot) => {
@@ -93,7 +102,7 @@ export default function Scores() {
     );
 
     return () => unsubscribe();
-  }, [selectedShowId, uid]);
+  }, [selectedShowId, uid, isTestShow]);
 
   if (!selectedShowId) {
     return (
@@ -160,7 +169,7 @@ export default function Scores() {
         </div>
       )}
 
-      <Leaderboard showId={selectedShowId} currentUserId={uid} />
+      <Leaderboard showId={selectedShowId} currentUserId={uid} isTestShow={isTestShow} />
     </div>
   );
 }
