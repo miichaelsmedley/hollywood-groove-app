@@ -1,10 +1,12 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Trophy } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import AllTimeLeaderboard from '../components/leaderboard/AllTimeLeaderboard';
 
 export default function Leaderboard() {
   const uid = auth.currentUser?.uid ?? null;
+  const [searchParams] = useSearchParams();
+  const isTestMode = searchParams.get('test') === 'true';
 
   return (
     <div className="space-y-6">
@@ -20,7 +22,7 @@ export default function Leaderboard() {
 
       <AllTimeLeaderboard currentUserId={uid} />
 
-      <Link to="/scores" className="block w-full btn-primary text-center">
+      <Link to={isTestMode ? '/scores?test=true' : '/scores'} className="block w-full btn-primary text-center">
         View your score
       </Link>
     </div>

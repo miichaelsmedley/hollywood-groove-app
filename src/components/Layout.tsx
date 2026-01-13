@@ -1,7 +1,13 @@
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet, useSearchParams } from 'react-router-dom';
 import { Calendar, Music, Sparkles, BarChart3, Trophy, User } from 'lucide-react';
 
 export default function Layout() {
+  const [searchParams] = useSearchParams();
+  const isTestMode = searchParams.get('test') === 'true';
+
+  // Helper to append test param to navigation paths
+  const withTestParam = (path: string) => (isTestMode ? `${path}?test=true` : path);
+
   return (
     <div className="min-h-screen bg-cinema text-cinema-900">
       {/* Header */}
@@ -16,7 +22,7 @@ export default function Layout() {
 
           <nav className="mt-3 grid grid-cols-3 gap-2">
             <NavLink
-              to="/shows"
+              to={withTestParam('/shows')}
               className={({ isActive }) =>
                 [
                   'flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold border transition',
@@ -31,7 +37,7 @@ export default function Layout() {
             </NavLink>
 
             <NavLink
-              to="/upcoming"
+              to={withTestParam('/upcoming')}
               className={({ isActive }) =>
                 [
                   'flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold border transition',
@@ -46,7 +52,7 @@ export default function Layout() {
             </NavLink>
 
             <NavLink
-              to="/join"
+              to={withTestParam('/join')}
               className={({ isActive }) =>
                 [
                   'flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold border transition',
@@ -73,7 +79,7 @@ export default function Layout() {
         <div className="max-w-3xl mx-auto px-4">
           <div className="grid grid-cols-3 gap-2 py-2">
             <NavLink
-              to="/scores"
+              to={withTestParam('/scores')}
               className={({ isActive }) =>
                 [
                   'flex flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold border transition',
@@ -88,7 +94,7 @@ export default function Layout() {
             </NavLink>
 
             <NavLink
-              to="/leaderboard"
+              to={withTestParam('/leaderboard')}
               className={({ isActive }) =>
                 [
                   'flex flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold border transition',
@@ -103,7 +109,7 @@ export default function Layout() {
             </NavLink>
 
             <NavLink
-              to="/profile"
+              to={withTestParam('/profile')}
               className={({ isActive }) =>
                 [
                   'flex flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold border transition',

@@ -115,7 +115,7 @@ export default function Scores() {
           <p className="text-cinema-500 text-sm">Join a show to start earning points.</p>
         </div>
 
-        <Link to="/join" className="block w-full btn-primary text-center">
+        <Link to={isTestShow ? '/join?test=true' : '/join'} className="block w-full btn-primary text-center">
           Join current show
         </Link>
       </div>
