@@ -79,10 +79,13 @@
       }
     },
 
-    // Member profiles (for leaderboard) - everyone can read, users can write their own
+    // Member profiles (for leaderboard)
+    // - Admins can read ALL members (for marketing/CRM view)
+    // - Individual users can read/write their own profile
     "members": {
+      ".read": "root.child('admins').child(auth.uid).val() === true",
       "$uid": {
-        ".read": "auth != null",
+        ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && (auth.uid == $uid || root.child('admins').child(auth.uid).val() === true)"
       }
     },
