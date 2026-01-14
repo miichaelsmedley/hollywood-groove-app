@@ -79,11 +79,31 @@ export default function JoinShow() {
   useEffect(() => {
     if (isGoogleUser && auth.currentUser) {
       const user = auth.currentUser;
-      if (user.displayName && !displayName) {
-        setDisplayName(user.displayName);
-      }
+      console.log('🔄 Pre-filling form from Google:', {
+        displayName: user.displayName,
+        email: user.email,
+      });
+
+      // Pre-fill email if available
       if (user.email && !email) {
         setEmail(user.email);
+      }
+
+      // Pre-fill nickname: use displayName, or derive from email as fallback
+      if (!displayName) {
+        if (user.displayName) {
+          setDisplayName(user.displayName);
+        } else if (user.email) {
+          // Derive nickname from email (e.g., "Michael Smith" from "michael.smith@gmail.com")
+          const emailName = user.email.split('@')[0];
+          const derivedName = emailName
+            .replace(/[._]/g, ' ')
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+          console.log('📝 Derived nickname from email:', derivedName);
+          setDisplayName(derivedName);
+        }
       }
     }
   }, [isGoogleUser, displayName, email]);
