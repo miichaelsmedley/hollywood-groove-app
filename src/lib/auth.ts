@@ -8,6 +8,7 @@ import {
   signOut as firebaseSignOut,
   signInAnonymously,
   signInWithCredential,
+  User,
 } from 'firebase/auth';
 import { auth } from './firebase';
 
@@ -19,28 +20,112 @@ googleProvider.addScope('profile');
 // Flag to prevent auto-anonymous sign-in during Google auth flow
 let googleAuthInProgress = false;
 
-// Storage key to track pending redirect across page loads
+// Storage keys for tracking auth state across redirects
 const REDIRECT_PENDING_KEY = 'hg_google_auth_redirect_pending';
+const REDIRECT_TIMESTAMP_KEY = 'hg_google_auth_redirect_timestamp';
+
+// Maximum time to wait for redirect result (5 minutes)
+const REDIRECT_MAX_AGE_MS = 5 * 60 * 1000;
+
+export interface RedirectResult {
+  success: boolean;
+  userSignedInWithGoogle: boolean;
+  wasRedirectPending: boolean;
+  error?: Error;
+}
 
 export function isGoogleAuthInProgress(): boolean {
   // Check both in-memory flag and localStorage (for cross-redirect detection)
-  return googleAuthInProgress || localStorage.getItem(REDIRECT_PENDING_KEY) === 'true';
+  if (googleAuthInProgress) return true;
+
+  const pending = localStorage.getItem(REDIRECT_PENDING_KEY) === 'true';
+  if (!pending) return false;
+
+  // Check if the redirect is stale (user may have navigated away)
+  const timestamp = localStorage.getItem(REDIRECT_TIMESTAMP_KEY);
+  if (timestamp) {
+    const age = Date.now() - parseInt(timestamp, 10);
+    if (age > REDIRECT_MAX_AGE_MS) {
+      // Stale redirect, clear it
+      console.log('🧹 Clearing stale redirect state (age:', Math.round(age / 1000), 'seconds)');
+      clearRedirectPending();
+      return false;
+    }
+  }
+
+  return pending;
 }
 
 function setRedirectPending(pending: boolean): void {
   if (pending) {
     localStorage.setItem(REDIRECT_PENDING_KEY, 'true');
+    localStorage.setItem(REDIRECT_TIMESTAMP_KEY, Date.now().toString());
   } else {
-    localStorage.removeItem(REDIRECT_PENDING_KEY);
+    clearRedirectPending();
   }
+}
+
+function clearRedirectPending(): void {
+  localStorage.removeItem(REDIRECT_PENDING_KEY);
+  localStorage.removeItem(REDIRECT_TIMESTAMP_KEY);
+}
+
+/**
+ * Check if a user is signed in with Google provider.
+ */
+function hasGoogleProvider(user: User | null): boolean {
+  if (!user) return false;
+  return user.providerData.some(p => p.providerId === 'google.com');
+}
+
+/**
+ * Wait for auth state to fully stabilize after a redirect.
+ * Mobile browsers can take time to restore auth state from localStorage.
+ */
+async function waitForAuthStateStable(maxWaitMs: number = 2000): Promise<User | null> {
+  const startTime = Date.now();
+  const checkInterval = 100;
+
+  // First wait for Firebase's auth state ready
+  await auth.authStateReady();
+
+  // If we already have a Google user, we're done
+  if (hasGoogleProvider(auth.currentUser)) {
+    console.log('✅ Google user already present after authStateReady');
+    return auth.currentUser;
+  }
+
+  // On mobile, auth state restoration can be slow - poll for it
+  while (Date.now() - startTime < maxWaitMs) {
+    if (hasGoogleProvider(auth.currentUser)) {
+      console.log('✅ Google user detected after', Date.now() - startTime, 'ms');
+      return auth.currentUser;
+    }
+
+    // If we have any non-anonymous user, that's also good
+    if (auth.currentUser && !auth.currentUser.isAnonymous) {
+      console.log('✅ Non-anonymous user detected after', Date.now() - startTime, 'ms');
+      return auth.currentUser;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, checkInterval));
+  }
+
+  console.log('⏱️ Auth state wait timed out after', maxWaitMs, 'ms');
+  return auth.currentUser;
 }
 
 /**
  * Handle redirect result on app load.
  * Call this once when the app initializes.
- * Returns true if a redirect was processed, false otherwise.
+ *
+ * Returns a detailed result object indicating:
+ * - success: whether auth flow completed successfully
+ * - userSignedInWithGoogle: whether user is now signed in with Google
+ * - wasRedirectPending: whether we were expecting a redirect
+ * - error: any error that occurred
  */
-export async function handleRedirectResult(): Promise<boolean> {
+export async function handleRedirectResult(): Promise<RedirectResult> {
   const wasRedirectPending = localStorage.getItem(REDIRECT_PENDING_KEY) === 'true';
 
   console.log('🔍 Checking for redirect result...');
@@ -48,35 +133,40 @@ export async function handleRedirectResult(): Promise<boolean> {
   console.log('Auth domain configured:', auth.app.options.authDomain);
   console.log('Redirect was pending:', wasRedirectPending);
 
-  // Wait for auth to be ready before checking redirect result
-  // This is important because getRedirectResult needs auth to be initialized
-  await auth.authStateReady();
-  console.log('Auth state ready');
+  // CRITICAL: Wait for auth state to fully stabilize
+  // On mobile, this can take longer due to localStorage restoration
+  const waitTime = wasRedirectPending ? 3000 : 1000; // Wait longer if we expect a redirect
+  console.log('⏳ Waiting up to', waitTime, 'ms for auth state to stabilize...');
+  const user = await waitForAuthStateStable(waitTime);
 
-  // IMPORTANT: Check if user is already signed in with Google FIRST
-  // This handles the case where auth state was preserved but getRedirectResult returns null
-  if (auth.currentUser && auth.currentUser.providerData.some(p => p.providerId === 'google.com')) {
-    console.log('✅ User already signed in with Google (auth state preserved):', {
-      uid: auth.currentUser.uid,
-      email: auth.currentUser.email,
-      isAnonymous: auth.currentUser.isAnonymous,
-    });
-    // Clear the pending flag since auth is complete
-    setRedirectPending(false);
-    return true;
-  }
-
-  console.log('Current user before getRedirectResult:', auth.currentUser ? {
-    uid: auth.currentUser.uid,
-    email: auth.currentUser.email,
-    isAnonymous: auth.currentUser.isAnonymous,
+  console.log('Auth state after wait:', user ? {
+    uid: user.uid,
+    email: user.email,
+    isAnonymous: user.isAnonymous,
+    providers: user.providerData.map(p => p.providerId),
   } : 'null');
 
-  try {
-    const result = await getRedirectResult(auth);
+  // IMPORTANT: Check if user is already signed in with Google FIRST
+  // This handles the common case where auth state was preserved but getRedirectResult returns null
+  if (hasGoogleProvider(user)) {
+    console.log('✅ User already signed in with Google (auth state preserved):', {
+      uid: user!.uid,
+      email: user!.email,
+      isAnonymous: user!.isAnonymous,
+    });
+    // Clear the pending flag since auth is complete
+    clearRedirectPending();
+    return {
+      success: true,
+      userSignedInWithGoogle: true,
+      wasRedirectPending,
+    };
+  }
 
-    // Clear the pending flag regardless of result
-    setRedirectPending(false);
+  // Now try getRedirectResult for cases where auth state wasn't preserved
+  try {
+    console.log('📞 Calling getRedirectResult...');
+    const result = await getRedirectResult(auth);
 
     if (result) {
       console.log('✅ Successfully signed in/linked with Google after redirect:', {
@@ -86,74 +176,127 @@ export async function handleRedirectResult(): Promise<boolean> {
         isAnonymous: result.user.isAnonymous,
         providerData: result.user.providerData,
       });
-      return true;
-    } else {
-      // Check if we were expecting a redirect but didn't get a result
-      if (wasRedirectPending) {
-        console.log('⚠️ Redirect was pending but no result returned');
-        console.log('Current user after getRedirectResult:', auth.currentUser ? {
-          uid: auth.currentUser.uid,
-          email: auth.currentUser.email,
-          isAnonymous: auth.currentUser.isAnonymous,
-          providerData: auth.currentUser.providerData,
-        } : 'null');
-
-        // The user might already be signed in - check currentUser
-        if (auth.currentUser && !auth.currentUser.isAnonymous) {
-          console.log('✅ User is already signed in (auth state was preserved)');
-          return true;
-        }
-      }
-      console.log('No redirect result found (normal page load)');
-      return false;
+      clearRedirectPending();
+      return {
+        success: true,
+        userSignedInWithGoogle: true,
+        wasRedirectPending,
+      };
     }
-  } catch (error: any) {
-    // Clear the pending flag on error too
-    setRedirectPending(false);
 
+    // No result from getRedirectResult - check if we were expecting one
+    if (wasRedirectPending) {
+      console.log('⚠️ Redirect was pending but getRedirectResult returned null');
+
+      // Final check: maybe auth state was restored after our initial wait
+      if (hasGoogleProvider(auth.currentUser)) {
+        console.log('✅ Google user found on recheck');
+        clearRedirectPending();
+        return {
+          success: true,
+          userSignedInWithGoogle: true,
+          wasRedirectPending,
+        };
+      }
+
+      // Check if user is signed in but not with Google (edge case)
+      if (auth.currentUser && !auth.currentUser.isAnonymous) {
+        console.log('✅ Non-anonymous user found (auth state was preserved)');
+        clearRedirectPending();
+        return {
+          success: true,
+          userSignedInWithGoogle: hasGoogleProvider(auth.currentUser),
+          wasRedirectPending,
+        };
+      }
+
+      // Redirect was expected but auth failed - clear the pending state
+      // but indicate failure so the app can handle appropriately
+      console.log('❌ Redirect was pending but no user signed in - redirect may have failed');
+      clearRedirectPending();
+      return {
+        success: false,
+        userSignedInWithGoogle: false,
+        wasRedirectPending,
+        error: new Error('Redirect authentication failed - no user signed in after redirect'),
+      };
+    }
+
+    // Normal page load, no redirect expected
+    console.log('No redirect result found (normal page load)');
+    return {
+      success: true, // Not a failure, just nothing to do
+      userSignedInWithGoogle: hasGoogleProvider(auth.currentUser),
+      wasRedirectPending: false,
+    };
+
+  } catch (error: any) {
     console.error('❌ Error handling redirect result:', error);
     console.error('Error code:', error.code);
     console.error('Error message:', error.message);
-    console.error('Error details:', JSON.stringify(error, null, 2));
 
     if (error.code === 'auth/credential-already-in-use') {
       // The Google account is already linked to a different Firebase user.
       // We need to sign in with that existing account instead.
-      // The credential is available in the error object.
       console.warn('Google account already linked to another user. Signing in with existing account...');
 
-      // Get the credential from the error
       const credential = GoogleAuthProvider.credentialFromError(error);
       if (credential) {
         try {
           // Sign out the anonymous user first
           await firebaseSignOut(auth);
           // Sign in with the credential (this will sign in as the existing Google user)
-          const result = await signInWithCredential(auth, credential);
+          const signInResult = await signInWithCredential(auth, credential);
           console.log('✅ Signed in with existing Google account:', {
-            uid: result.user.uid,
-            email: result.user.email,
+            uid: signInResult.user.uid,
+            email: signInResult.user.email,
           });
-          return true;
-        } catch (signInError) {
+          clearRedirectPending();
+          return {
+            success: true,
+            userSignedInWithGoogle: true,
+            wasRedirectPending,
+          };
+        } catch (signInError: any) {
           console.error('Failed to sign in with existing credential:', signInError);
-          // Fall back to regular redirect sign-in
-          await signInWithRedirect(auth, googleProvider);
-          return true;
+          clearRedirectPending();
+          return {
+            success: false,
+            userSignedInWithGoogle: false,
+            wasRedirectPending,
+            error: signInError,
+          };
         }
-      } else {
-        // No credential available, fall back to regular sign-in
-        console.log('No credential in error, falling back to redirect sign-in');
-        await firebaseSignOut(auth);
-        await signInWithRedirect(auth, googleProvider);
-        return true;
       }
-    } else if (error.code === 'auth/popup-closed-by-user') {
-      // User cancelled - ignore
-      return false;
-    } else {
-      throw error;
+
+      // No credential available - this is a failure case
+      clearRedirectPending();
+      return {
+        success: false,
+        userSignedInWithGoogle: false,
+        wasRedirectPending,
+        error,
+      };
     }
+
+    if (error.code === 'auth/popup-closed-by-user') {
+      // User cancelled - not really an error
+      clearRedirectPending();
+      return {
+        success: true,
+        userSignedInWithGoogle: false,
+        wasRedirectPending,
+      };
+    }
+
+    // Clear pending state on any error
+    clearRedirectPending();
+    return {
+      success: false,
+      userSignedInWithGoogle: false,
+      wasRedirectPending,
+      error,
+    };
   }
 }
 

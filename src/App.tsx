@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged, signInAnonymously, onIdTokenChanged } from 'firebase/auth';
 import { auth, authPersistenceReady } from './lib/firebase';
-import { handleRedirectResult, isGoogleAuthInProgress } from './lib/auth';
+import { handleRedirectResult, isGoogleAuthInProgress, RedirectResult } from './lib/auth';
 import { UserProvider } from './contexts/UserContext';
 
 import Layout from './components/Layout';
@@ -27,48 +27,53 @@ import Play from './pages/Play';
 import { IS_TEST_MODE } from './lib/mode';
 
 // TEMPORARY: Mobile debugging console - remove after fixing auth
-if (typeof window !== 'undefined') {
-  const script = document.createElement('script');
-  script.src = 'https://cdn.jsdelivr.net/npm/eruda';
-  document.body.appendChild(script);
-  script.onload = () => {
-    (window as any).eruda?.init();
-    console.log('📱 Mobile console loaded - tap the icon to view logs');
-  };
-}
+// Uncomment if you need to debug on mobile
+// if (typeof window !== 'undefined') {
+//   const script = document.createElement('script');
+//   script.src = 'https://cdn.jsdelivr.net/npm/eruda';
+//   document.body.appendChild(script);
+//   script.onload = () => {
+//     (window as any).eruda?.init();
+//     console.log('📱 Mobile console loaded - tap the icon to view logs');
+//   };
+// }
 
 export default function App() {
   const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Handle auth initialization: redirect result first, then anonymous sign-in
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
     let tokenUnsubscribe: (() => void) | undefined;
     let isMounted = true;
-    let hasProcessedInitialAuth = false;
 
     (async () => {
       // Wait for auth persistence to be configured first
       console.log('⏳ Waiting for auth persistence to be configured...');
       await authPersistenceReady;
 
-      // Then wait for Firebase auth to restore any persisted session
-      console.log('⏳ Waiting for auth state to be ready...');
-      await auth.authStateReady();
-      console.log('✅ Auth state ready, current user:', auth.currentUser ? {
-        uid: auth.currentUser.uid,
-        isAnonymous: auth.currentUser.isAnonymous,
-        email: auth.currentUser.email,
-      } : 'null');
-
-      // First, check for redirect result (Google sign-in completion)
-      // This returns true if a redirect was processed (user is now signed in with Google)
-      let redirectProcessed = false;
+      // Handle redirect result FIRST - this is critical for mobile auth
+      // handleRedirectResult now waits for auth state to stabilize internally
+      let redirectResult: RedirectResult;
       try {
-        redirectProcessed = await handleRedirectResult();
-        console.log('Redirect result processed:', redirectProcessed);
+        console.log('🔐 Processing redirect result...');
+        redirectResult = await handleRedirectResult();
+        console.log('📋 Redirect result:', redirectResult);
+
+        // Show error to user if redirect failed
+        if (!redirectResult.success && redirectResult.error) {
+          console.error('❌ Auth redirect failed:', redirectResult.error);
+          setAuthError('Sign-in failed. Please try again.');
+        }
       } catch (error) {
-        console.error('Error handling redirect:', error);
+        console.error('❌ Error handling redirect:', error);
+        redirectResult = {
+          success: false,
+          userSignedInWithGoogle: false,
+          wasRedirectPending: false,
+          error: error instanceof Error ? error : new Error(String(error)),
+        };
       }
 
       // Only set up auth listener if component is still mounted
@@ -83,8 +88,24 @@ export default function App() {
         }
       });
 
+      // If user is already signed in with Google, we're done - don't set up anonymous fallback
+      if (redirectResult.userSignedInWithGoogle) {
+        console.log('✅ User is signed in with Google, auth initialization complete');
+        setAuthReady(true);
+
+        // Still set up the listener for future state changes, but don't do anonymous sign-in
+        unsubscribe = onAuthStateChanged(auth, (user) => {
+          console.log('🔄 Auth state changed:', user ? {
+            uid: user.uid,
+            isAnonymous: user.isAnonymous,
+            email: user.email,
+          } : 'null');
+        });
+        return;
+      }
+
       // Set up auth state listener for anonymous sign-in fallback
-      // But skip anonymous sign-in if we just processed a redirect or Google auth is in progress
+      // This only runs if user is NOT already signed in with Google
       unsubscribe = onAuthStateChanged(auth, async (user) => {
         console.log('onAuthStateChanged fired:', user ? {
           uid: user.uid,
@@ -93,31 +114,38 @@ export default function App() {
           providerData: user.providerData?.map(p => p.providerId),
         } : 'null');
 
-        // Skip processing if we already handled the initial auth state
-        if (hasProcessedInitialAuth && user) {
-          console.log('Already processed initial auth, skipping');
-          return;
-        }
-
         if (!user) {
-          // If Google auth is in progress, don't force anonymous sign-in
+          // CRITICAL: Don't sign in anonymously if Google auth might be in progress
           if (isGoogleAuthInProgress()) {
-            console.log('No user but Google auth in progress, skipping anonymous sign-in');
+            console.log('⏳ No user but Google auth in progress, waiting...');
             setAuthReady(true);
             return;
           }
 
-          if (!redirectProcessed) {
-            try {
-              console.log('No user, signing in anonymously...');
-              await signInAnonymously(auth);
-            } catch (error) {
-              console.error('Firebase auth error:', error);
+          // Double-check: if we just returned from a redirect, wait a bit more
+          // Auth state restoration can be delayed on some mobile browsers
+          if (redirectResult.wasRedirectPending) {
+            console.log('⏳ Redirect was pending, giving extra time for auth restoration...');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // Recheck after delay
+            if (auth.currentUser) {
+              console.log('✅ User appeared after delay:', auth.currentUser.uid);
+              setAuthReady(true);
+              return;
             }
           }
+
+          // No user and no redirect in progress - sign in anonymously
+          try {
+            console.log('👤 No user, signing in anonymously...');
+            await signInAnonymously(auth);
+          } catch (error) {
+            console.error('Firebase auth error:', error);
+            setAuthError('Authentication failed. Please refresh the page.');
+          }
         } else {
-          hasProcessedInitialAuth = true;
-          console.log('User signed in:', {
+          console.log('✅ User signed in:', {
             uid: user.uid,
             isAnonymous: user.isAnonymous,
             email: user.email,
@@ -144,10 +172,16 @@ export default function App() {
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-cinema-400">Loading...</p>
+          {authError && (
+            <p className="text-red-400 mt-4 text-sm">{authError}</p>
+          )}
         </div>
       </div>
     );
   }
+
+  // If there's an auth error but we're ready, show it briefly then continue
+  // The error will clear when user successfully authenticates
 
   return (
     <BrowserRouter>

@@ -12,11 +12,14 @@ interface UserContextType {
   isGoogleUser: boolean;
   googlePhotoURL: string | null;
   canUseTestMode: boolean;
+  authError: string | null;
+  isSigningIn: boolean;
   registerUser: (data: RegisterUserData) => Promise<void>;
   updateLastSeen: () => Promise<void>;
   addShowAttended: (showId: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  clearAuthError: () => void;
 }
 
 export interface RegisterUserData {
@@ -35,6 +38,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [isGoogleUser, setIsGoogleUser] = useState(false);
   const [googlePhotoURL, setGooglePhotoURL] = useState<string | null>(null);
   const [canUseTestMode, setCanUseTestMode] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isSigningIn, setIsSigningIn] = useState(false);
 
   useEffect(() => {
     console.log('🔍 UserContext: Setting up auth listener');
@@ -262,23 +267,52 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   const handleSignInWithGoogle = async () => {
-    const success = await signInWithGoogle();
+    // Clear any previous error
+    setAuthError(null);
+    setIsSigningIn(true);
 
-    if (success) {
-      // Sign-in/link was successful (popup completed)
-      // Manually update state since onAuthStateChanged may not fire for linking
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        await currentUser.reload();
-        setIsGoogleUser(isSignedInWithGoogle());
-        setGooglePhotoURL(getGooglePhotoURL());
-        console.log('✅ Google auth state updated after successful link:', {
-          isGoogleUser: isSignedInWithGoogle(),
-          providerData: auth.currentUser?.providerData,
-        });
+    try {
+      const success = await signInWithGoogle();
+
+      if (success) {
+        // Sign-in/link was successful (popup completed)
+        // Manually update state since onAuthStateChanged may not fire for linking
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          await currentUser.reload();
+          setIsGoogleUser(isSignedInWithGoogle());
+          setGooglePhotoURL(getGooglePhotoURL());
+          console.log('✅ Google auth state updated after successful link:', {
+            isGoogleUser: isSignedInWithGoogle(),
+            providerData: auth.currentUser?.providerData,
+          });
+        }
       }
+      // If success is false, a redirect was initiated - state will update on return
+    } catch (error: any) {
+      console.error('❌ Google sign-in error:', error);
+
+      // Provide user-friendly error messages
+      if (error.message === 'Sign-in cancelled') {
+        // User cancelled, not really an error - don't show message
+        console.log('User cancelled sign-in');
+      } else if (error.code === 'auth/network-request-failed') {
+        setAuthError('Network error. Please check your connection and try again.');
+      } else if (error.code === 'auth/too-many-requests') {
+        setAuthError('Too many attempts. Please wait a moment and try again.');
+      } else if (error.code === 'auth/popup-blocked') {
+        // This shouldn't happen as we fall back to redirect, but just in case
+        setAuthError('Popup was blocked. Please allow popups or try again.');
+      } else {
+        setAuthError('Sign-in failed. Please try again.');
+      }
+    } finally {
+      setIsSigningIn(false);
     }
-    // If success is false, a redirect was initiated - state will update on return
+  };
+
+  const clearAuthError = () => {
+    setAuthError(null);
   };
 
   const handleSignOut = async () => {
@@ -297,11 +331,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
         isGoogleUser,
         googlePhotoURL,
         canUseTestMode,
+        authError,
+        isSigningIn,
         registerUser,
         updateLastSeen,
         addShowAttended,
         signInWithGoogle: handleSignInWithGoogle,
         signOut: handleSignOut,
+        clearAuthError,
       }}
     >
       {children}
