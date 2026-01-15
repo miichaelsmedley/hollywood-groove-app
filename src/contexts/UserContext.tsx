@@ -203,7 +203,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
     };
 
     // Save to Firebase (/members/ path per contract)
-    await set(ref(db, `members/${user.uid}`), firebaseProfile);
+    console.log('📝 Writing member profile to Firebase:', `members/${user.uid}`);
+    console.log('📝 Profile data:', JSON.stringify(firebaseProfile, null, 2));
+    try {
+      await set(ref(db, `members/${user.uid}`), firebaseProfile);
+      console.log('✅ Member profile saved to Firebase successfully');
+    } catch (firebaseError) {
+      console.error('❌ Firebase write failed:', firebaseError);
+      throw firebaseError; // Re-throw so the UI shows error
+    }
 
     // Build local profile in UserProfile format (camelCase) for PWA state
     const localProfile: UserProfile = {

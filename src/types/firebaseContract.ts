@@ -188,6 +188,11 @@ export interface MemberProfile {
   };
   email_opt_in?: boolean;
   sms_opt_in?: boolean;
+
+  // Role-based permissions
+  roles?: string[];
+  role_assigned_by?: string;
+  role_assigned_at?: number;
 }
 
 // 6. User Profile (User writes, app reads)

@@ -27,9 +27,18 @@
 
       "members": {
         ".read": "root.child('test/admins').child(auth.uid).exists()",
-        "$odience": {
-          ".read": "auth != null && (auth.uid == $odience || root.child('test/admins').child(auth.uid).exists())",
-          ".write": "auth != null && (auth.uid == $odience || root.child('test/admins').child(auth.uid).exists())"
+        "$uid": {
+          ".read": "auth != null && (auth.uid == $uid || root.child('test/admins').child(auth.uid).exists())",
+          ".write": "auth != null && (auth.uid == $uid || root.child('test/admins').child(auth.uid).exists())",
+          "roles": {
+            ".validate": "root.child('test/admins').child(auth.uid).exists() || newData.val() == data.val()"
+          },
+          "role_assigned_by": {
+            ".validate": "root.child('test/admins').child(auth.uid).exists() || newData.val() == data.val()"
+          },
+          "role_assigned_at": {
+            ".validate": "root.child('test/admins').child(auth.uid).exists() || newData.val() == data.val()"
+          }
         }
       },
 
@@ -175,9 +184,18 @@
 
     "members": {
       ".read": "root.child('admins').child(auth.uid).exists()",
-      "$odience": {
-        ".read": "auth != null && (auth.uid == $odience || root.child('admins').child(auth.uid).exists())",
-        ".write": "auth != null && (auth.uid == $odience || root.child('admins').child(auth.uid).exists())"
+      "$uid": {
+        ".read": "auth != null && (auth.uid == $uid || root.child('admins').child(auth.uid).exists())",
+        ".write": "auth != null && (auth.uid == $uid || root.child('admins').child(auth.uid).exists())",
+        "roles": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || newData.val() == data.val()"
+        },
+        "role_assigned_by": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || newData.val() == data.val()"
+        },
+        "role_assigned_at": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || newData.val() == data.val()"
+        }
       }
     },
 
