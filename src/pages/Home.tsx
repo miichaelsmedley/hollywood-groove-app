@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
-import { Music, Sparkles, List, FlaskConical, Brain } from 'lucide-react';
+import { Music, Sparkles, List, FlaskConical, Brain, ClipboardCheck } from 'lucide-react';
 import { IS_TEST_MODE } from '../lib/mode';
 import { useEffect, useState } from 'react';
 import { useUser } from '../contexts/UserContext';
+import { useUserRole } from '../hooks/useUserRole';
 import { useTriviaHome } from '../lib/triviaLibraryService';
 import { onValue, ref } from 'firebase/database';
 import { db } from '../lib/firebase';
@@ -15,6 +16,7 @@ interface ActiveTestShow {
 
 export default function Home() {
   const { canUseTestMode } = useUser();
+  const { canScoreActivities } = useUserRole();
   const { schedule, remaining, loading: triviaLoading } = useTriviaHome();
   const [activeTestShow, setActiveTestShow] = useState<ActiveTestShow | null>(null);
   const [checkingTestShow, setCheckingTestShow] = useState(true);
@@ -107,7 +109,7 @@ export default function Home() {
       <section className="space-y-3">
         <Link
           to="/join"
-          className="block w-full rounded-2xl bg-primary px-5 py-4 text-cinema font-bold shadow-glow-lg active:scale-[0.99] transition"
+          className="block w-full rounded-2xl bg-primary px-5 py-3 text-cinema font-bold shadow-glow-lg active:scale-[0.99] transition"
         >
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -120,7 +122,7 @@ export default function Home() {
 
         <Link
           to="/shows"
-          className="block w-full rounded-2xl bg-cinema-50 border border-cinema-200 px-5 py-4 font-semibold text-cinema-900 hover:border-primary/60 transition"
+          className="block w-full rounded-2xl bg-cinema-50 border border-cinema-200 px-5 py-3 font-semibold text-cinema-900 hover:border-primary/60 transition"
         >
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -133,7 +135,7 @@ export default function Home() {
 
         <Link
           to="/activities"
-          className="block w-full rounded-2xl bg-cinema-50 border border-cinema-200 px-5 py-4 font-semibold text-cinema-900 hover:border-primary/60 transition"
+          className="block w-full rounded-2xl bg-cinema-50 border border-cinema-200 px-5 py-3 font-semibold text-cinema-900 hover:border-primary/60 transition"
         >
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -147,7 +149,7 @@ export default function Home() {
         {/* Daily Trivia Button */}
         <Link
           to="/play"
-          className="block w-full rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 px-5 py-4 text-white font-bold shadow-lg active:scale-[0.99] transition"
+          className="block w-full rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 px-5 py-3 text-white font-bold shadow-lg active:scale-[0.99] transition"
         >
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -181,7 +183,7 @@ export default function Home() {
           !IS_TEST_MODE ? (
             <button
               onClick={handleEnableTestMode}
-              className="block w-full rounded-2xl bg-purple-500/20 border border-purple-500/50 px-5 py-4 font-semibold text-purple-200 hover:border-purple-400/60 hover:bg-purple-500/30 transition text-left"
+              className="block w-full rounded-2xl bg-purple-500/20 border border-purple-500/50 px-5 py-3 font-semibold text-purple-200 hover:border-purple-400/60 hover:bg-purple-500/30 transition text-left"
             >
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -194,7 +196,7 @@ export default function Home() {
           ) : (
             <Link
               to={`/shows/${activeTestShow.showId}/join?test=true`}
-              className="block w-full rounded-2xl bg-purple-600 px-5 py-4 text-white font-bold shadow-lg active:scale-[0.99] transition"
+              className="block w-full rounded-2xl bg-purple-600 px-5 py-3 text-white font-bold shadow-lg active:scale-[0.99] transition"
             >
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -205,6 +207,22 @@ export default function Home() {
               </div>
             </Link>
           )
+        )}
+
+        {/* Scorer Mode Entry Point - Only shows for scorers/admins */}
+        {canScoreActivities && (
+          <Link
+            to="/score"
+            className="block w-full rounded-2xl bg-emerald-500/20 border border-emerald-500/50 px-5 py-3 font-semibold text-emerald-200 hover:border-emerald-400/60 hover:bg-emerald-500/30 transition"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-lg leading-tight">Score Activities</div>
+                <div className="text-sm text-emerald-300/80">Judge participant submissions</div>
+              </div>
+              <ClipboardCheck className="h-6 w-6 text-emerald-300" />
+            </div>
+          </Link>
         )}
       </section>
     </div>
