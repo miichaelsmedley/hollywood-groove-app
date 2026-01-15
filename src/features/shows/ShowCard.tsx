@@ -102,10 +102,16 @@ export default function ShowCard({
         </div>
 
         {ticketUrl && isUpcoming && (
-          <div className="inline-flex items-center space-x-1 text-primary text-sm font-medium">
+          <a
+            href={ticketUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center space-x-1 text-primary text-sm font-medium hover:text-primary/80 transition"
+          >
             <ExternalLink className="w-4 h-4" />
-            <span>Get Tickets</span>
-          </div>
+            <span>Buy Tickets</span>
+          </a>
         )}
       </div>
     </Link>

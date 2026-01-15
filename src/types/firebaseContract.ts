@@ -7,6 +7,7 @@ export interface ShowMeta {
   schemaVersion: number;
   publishedAt: number; // Timestamp
   isTestShow?: boolean; // If true, only visible to testers
+  ticketUrl?: string; // External URL to purchase tickets
 }
 
 // 2. Crowd Activity (Public read)

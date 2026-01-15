@@ -148,10 +148,7 @@ export default function ShowsPage({ mode = 'upcoming' }: { mode?: ShowsPageMode 
               startDate={show.meta.startDate}
               venueName={show.meta.venueName}
               isLive={show.isLive}
-              // These fields might not be in ShowMeta yet - extend the type if needed
-              // venueAddress=""
-              // ticketUrl=""
-              // capacity={0}
+              ticketUrl={show.meta.ticketUrl}
             />
           ))}
         </div>

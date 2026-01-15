@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useSearchParams } from 'react-router-dom';
-import { Calendar, Music, Sparkles, BarChart3, Trophy, User } from 'lucide-react';
+import { Ticket, Music, Sparkles, BarChart3, Trophy, User } from 'lucide-react';
 
 export default function Layout() {
   const [searchParams] = useSearchParams();
@@ -47,8 +47,8 @@ export default function Layout() {
                 ].join(' ')
               }
             >
-              <Calendar className="w-4 h-4" />
-              <span>Upcoming</span>
+              <Ticket className="w-4 h-4" />
+              <span>Tickets</span>
             </NavLink>
 
             <NavLink
