@@ -17,7 +17,7 @@ interface ActiveTestShow {
 export default function Home() {
   const { canUseTestMode } = useUser();
   const { canScoreActivities } = useUserRole();
-  const { schedule, remaining, loading: triviaLoading } = useTriviaHome();
+  const { schedule, remaining, availableQuestions, loading: triviaLoading } = useTriviaHome();
   const [activeTestShow, setActiveTestShow] = useState<ActiveTestShow | null>(null);
   const [checkingTestShow, setCheckingTestShow] = useState(true);
 
@@ -149,7 +149,11 @@ export default function Home() {
         {/* Daily Trivia Button */}
         <Link
           to="/play"
-          className="block w-full rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 px-5 py-3 text-white font-bold shadow-lg active:scale-[0.99] transition"
+          className={`block w-full rounded-2xl px-5 py-3 text-white font-bold shadow-lg active:scale-[0.99] transition ${
+            !triviaLoading && availableQuestions === 0
+              ? 'bg-gradient-to-r from-gray-600 to-gray-500'
+              : 'bg-gradient-to-r from-purple-600 to-pink-600'
+          }`}
         >
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -157,20 +161,27 @@ export default function Home() {
               <div className="text-sm font-semibold opacity-80">
                 {triviaLoading ? (
                   'Loading...'
+                ) : availableQuestions === 0 ? (
+                  'No trivia scheduled today'
                 ) : schedule ? (
                   `Today: ${schedule.theme_name}`
                 ) : (
                   'Test your knowledge'
                 )}
               </div>
-              {!triviaLoading && remaining !== null && remaining > 0 && (
+              {!triviaLoading && availableQuestions > 0 && remaining !== null && remaining > 0 && (
                 <div className="text-xs opacity-70 mt-1">
                   {remaining} question{remaining !== 1 ? 's' : ''} left today
                 </div>
               )}
-              {!triviaLoading && remaining === 0 && (
+              {!triviaLoading && availableQuestions > 0 && remaining === 0 && (
                 <div className="text-xs opacity-70 mt-1">
                   Come back tomorrow for more!
+                </div>
+              )}
+              {!triviaLoading && availableQuestions === 0 && (
+                <div className="text-xs opacity-70 mt-1">
+                  Check back later for new questions
                 </div>
               )}
             </div>

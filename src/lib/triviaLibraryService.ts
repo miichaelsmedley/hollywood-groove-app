@@ -112,11 +112,13 @@ export async function getCategories(): Promise<Record<string, TriviaLibraryCateg
 // ============================================
 
 /**
- * Get all active questions, optionally filtered by category
+ * Get all active questions, optionally filtered by category.
+ * If subcategory is specified but no matches found, falls back to category-only.
  */
 export async function getActiveQuestions(
   categoryId?: string,
-  subcategory?: string
+  subcategory?: string,
+  options?: { strictSubcategory?: boolean }
 ): Promise<Record<string, TriviaLibraryQuestion>> {
   const snapshot = await get(ref(db, 'trivia_library/questions'));
 
@@ -130,6 +132,7 @@ export async function getActiveQuestions(
 
   // Filter to active questions matching criteria
   const filtered: Record<string, TriviaLibraryQuestion> = {};
+  const categoryOnly: Record<string, TriviaLibraryQuestion> = {};
   let skippedInactive = 0;
   let skippedCategory = 0;
   let skippedSubcategory = 0;
@@ -143,6 +146,9 @@ export async function getActiveQuestions(
       skippedCategory++;
       continue;
     }
+    // Track category-only matches for fallback
+    categoryOnly[id] = question;
+
     if (subcategory && question.subcategory !== subcategory) {
       skippedSubcategory++;
       continue;
@@ -157,11 +163,29 @@ export async function getActiveQuestions(
     skippedInactive,
     skippedCategory,
     skippedSubcategory,
-    matched: Object.keys(filtered).length,
+    matchedWithSubcategory: Object.keys(filtered).length,
+    matchedCategoryOnly: Object.keys(categoryOnly).length,
     sampleCategoryIds: Object.values(allQuestions).slice(0, 3).map(q => q.category_id),
   });
 
+  // Fallback: if subcategory filtering returned no results but category did, use category-only
+  if (Object.keys(filtered).length === 0 && Object.keys(categoryOnly).length > 0 && !options?.strictSubcategory) {
+    console.log('🎯 Subcategory filter returned 0 results, falling back to category-only:', Object.keys(categoryOnly).length);
+    return categoryOnly;
+  }
+
   return filtered;
+}
+
+/**
+ * Count available questions for a category/subcategory (for Home page check)
+ */
+export async function countAvailableQuestions(
+  categoryId?: string,
+  subcategory?: string
+): Promise<number> {
+  const questions = await getActiveQuestions(categoryId, subcategory);
+  return Object.keys(questions).length;
 }
 
 /**
@@ -268,15 +292,18 @@ export async function getRandomActivity(
 interface TriviaHomeData {
   schedule: TriviaLibrarySchedule | null;
   remaining: number | null;
+  availableQuestions: number;
   loading: boolean;
 }
 
 /**
  * Hook for Home page - fetches schedule and remaining questions
+ * Now also checks if questions actually exist for today's category
  */
 export function useTriviaHome(): TriviaHomeData {
   const [schedule, setSchedule] = useState<TriviaLibrarySchedule | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
+  const [availableQuestions, setAvailableQuestions] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -287,6 +314,22 @@ export function useTriviaHome(): TriviaHomeData {
         // Fetch schedule
         const scheduleData = await getTodaySchedule();
         if (isMounted) setSchedule(scheduleData);
+
+        // Check if questions actually exist for today's category
+        const categoryId = scheduleData?.category_id;
+        const subcategory = scheduleData?.subcategory;
+        const questionCount = await countAvailableQuestions(categoryId, subcategory);
+        if (isMounted) setAvailableQuestions(questionCount);
+
+        // If no questions available for this category, don't show remaining
+        if (questionCount === 0) {
+          console.log('🎯 Home: No questions available for category:', { categoryId, subcategory });
+          if (isMounted) {
+            setRemaining(0);
+            setLoading(false);
+          }
+          return;
+        }
 
         // Fetch settings and usage to calculate remaining
         const settings = await getSettings();
@@ -303,18 +346,20 @@ export function useTriviaHome(): TriviaHomeData {
             // Check if it's a new day
             if (usage.last_activity_date === today) {
               const used = (usage.questions_today || 0) + (usage.activities_today || 0);
-              if (isMounted) setRemaining(Math.max(0, settings.default_user_limit - used));
+              // Remaining is minimum of: (user limit - used) and available questions
+              const userRemaining = Math.max(0, settings.default_user_limit - used);
+              if (isMounted) setRemaining(Math.min(userRemaining, questionCount));
             } else {
-              // New day, full quota available
-              if (isMounted) setRemaining(settings.default_user_limit);
+              // New day, full quota available (capped by available questions)
+              if (isMounted) setRemaining(Math.min(settings.default_user_limit, questionCount));
             }
           } else {
-            // No usage record yet
-            if (isMounted) setRemaining(settings.default_user_limit);
+            // No usage record yet (capped by available questions)
+            if (isMounted) setRemaining(Math.min(settings.default_user_limit, questionCount));
           }
         } else {
-          // No user, show default limit
-          if (isMounted) setRemaining(settings.default_user_limit);
+          // No user, show default limit (capped by available questions)
+          if (isMounted) setRemaining(Math.min(settings.default_user_limit, questionCount));
         }
       } catch (error) {
         console.error('Error fetching trivia home data:', error);
@@ -330,7 +375,7 @@ export function useTriviaHome(): TriviaHomeData {
     };
   }, []);
 
-  return { schedule, remaining, loading };
+  return { schedule, remaining, availableQuestions, loading };
 }
 
 interface TriviaPlayData {
@@ -456,4 +501,150 @@ export function useTriviaPlay(): TriviaPlayData {
     error,
     fetchNextQuestion,
   };
+}
+
+// ============================================
+// Debug / Verification Helpers
+// ============================================
+
+export interface TriviaLibraryDiagnostics {
+  schedule: {
+    exists: boolean;
+    date: string;
+    categoryId: string | null;
+    subcategory: string | null;
+    themeName: string | null;
+  };
+  questions: {
+    totalCount: number;
+    activeCount: number;
+    categoryBreakdown: Record<string, number>;
+    subcategoryBreakdown: Record<string, number>;
+    matchingScheduleCategory: number;
+    matchingScheduleSubcategory: number;
+  };
+  categories: {
+    count: number;
+    ids: string[];
+  };
+  mismatchWarnings: string[];
+}
+
+/**
+ * Diagnose trivia library data to identify category/question mismatches.
+ * Call this from browser console: await window.diagnoseTriviaLibrary()
+ */
+export async function diagnoseTriviaLibrary(): Promise<TriviaLibraryDiagnostics> {
+  const today = getMelbourneDateString();
+  const warnings: string[] = [];
+
+  // Get schedule
+  const scheduleData = await getTodaySchedule();
+
+  // Get all questions
+  const questionsSnapshot = await get(ref(db, 'trivia_library/questions'));
+  const allQuestions = questionsSnapshot.exists()
+    ? (questionsSnapshot.val() as Record<string, TriviaLibraryQuestion>)
+    : {};
+
+  // Get categories
+  const categoriesData = await getCategories();
+
+  // Analyze questions
+  const categoryBreakdown: Record<string, number> = {};
+  const subcategoryBreakdown: Record<string, number> = {};
+  let activeCount = 0;
+  let matchingCategory = 0;
+  let matchingSubcategory = 0;
+
+  for (const question of Object.values(allQuestions)) {
+    if (question.active) {
+      activeCount++;
+
+      // Category breakdown
+      const catKey = question.category_id || '(none)';
+      categoryBreakdown[catKey] = (categoryBreakdown[catKey] || 0) + 1;
+
+      // Subcategory breakdown
+      const subKey = question.subcategory || '(none)';
+      subcategoryBreakdown[subKey] = (subcategoryBreakdown[subKey] || 0) + 1;
+
+      // Check if matches schedule
+      if (scheduleData?.category_id && question.category_id === scheduleData.category_id) {
+        matchingCategory++;
+        if (!scheduleData.subcategory || question.subcategory === scheduleData.subcategory) {
+          matchingSubcategory++;
+        }
+      }
+    }
+  }
+
+  // Generate warnings
+  if (!scheduleData) {
+    warnings.push(`No schedule found for today (${today})`);
+  } else {
+    if (scheduleData.category_id && !categoryBreakdown[scheduleData.category_id]) {
+      warnings.push(
+        `Schedule category_id "${scheduleData.category_id}" has NO matching questions! ` +
+        `Available categories: ${Object.keys(categoryBreakdown).join(', ')}`
+      );
+    }
+    if (scheduleData.subcategory && matchingCategory > 0 && matchingSubcategory === 0) {
+      warnings.push(
+        `Schedule subcategory "${scheduleData.subcategory}" has NO matching questions within category "${scheduleData.category_id}". ` +
+        `Will fall back to ${matchingCategory} category-only questions.`
+      );
+    }
+  }
+
+  if (Object.keys(allQuestions).length === 0) {
+    warnings.push('No questions found in trivia_library/questions - data may not be synced to Firebase');
+  }
+
+  if (activeCount === 0 && Object.keys(allQuestions).length > 0) {
+    warnings.push('Questions exist but none are active (active: false)');
+  }
+
+  const result: TriviaLibraryDiagnostics = {
+    schedule: {
+      exists: !!scheduleData,
+      date: today,
+      categoryId: scheduleData?.category_id || null,
+      subcategory: scheduleData?.subcategory || null,
+      themeName: scheduleData?.theme_name || null,
+    },
+    questions: {
+      totalCount: Object.keys(allQuestions).length,
+      activeCount,
+      categoryBreakdown,
+      subcategoryBreakdown,
+      matchingScheduleCategory: matchingCategory,
+      matchingScheduleSubcategory: matchingSubcategory,
+    },
+    categories: {
+      count: Object.keys(categoriesData).length,
+      ids: Object.keys(categoriesData),
+    },
+    mismatchWarnings: warnings,
+  };
+
+  // Log to console with formatting
+  console.log('🔍 TRIVIA LIBRARY DIAGNOSTICS');
+  console.log('================================');
+  console.log('📅 Schedule:', result.schedule);
+  console.log('❓ Questions:', result.questions);
+  console.log('📁 Categories:', result.categories);
+  if (warnings.length > 0) {
+    console.warn('⚠️ WARNINGS:');
+    warnings.forEach((w) => console.warn('  -', w));
+  } else {
+    console.log('✅ No issues detected');
+  }
+
+  return result;
+}
+
+// Expose to window for easy console access
+if (typeof window !== 'undefined') {
+  (window as any).diagnoseTriviaLibrary = diagnoseTriviaLibrary;
 }
