@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { updateProfile } from 'firebase/auth';
-import { ref, set, get, update } from 'firebase/database';
+import { ref, set, get, update, query, orderByChild, equalTo } from 'firebase/database';
 import { auth, db } from '../lib/firebase';
-import { UserProfile } from '../types/firebaseContract';
+import { UserProfile, SocialLinks } from '../types/firebaseContract';
 import { signInWithGoogle, signOut as authSignOut, isSignedInWithGoogle, getGooglePhotoURL } from '../lib/auth';
 
 interface UserContextType {
@@ -15,6 +15,9 @@ interface UserContextType {
   authError: string | null;
   isSigningIn: boolean;
   registerUser: (data: RegisterUserData) => Promise<void>;
+  updateUserProfile: (data: UpdateProfileData) => Promise<{ success: boolean; error?: string }>;
+  checkDisplayNameAvailable: (displayName: string) => Promise<boolean>;
+  getSuggestedDisplayNames: (baseName: string) => Promise<string[]>;
   updateLastSeen: () => Promise<void>;
   addShowAttended: (showId: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
@@ -28,6 +31,18 @@ export interface RegisterUserData {
   phone?: string;
   marketingEmails: boolean;
   marketingSMS: boolean;
+}
+
+export interface UpdateProfileData {
+  displayName?: string;
+  phone?: string;
+  suburb?: string;
+  socials?: SocialLinks;
+  preferences?: {
+    marketingEmails?: boolean;
+    marketingSMS?: boolean;
+    notifications?: boolean;
+  };
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -274,6 +289,163 @@ export function UserProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('userProfile', JSON.stringify(updated));
   };
 
+  /**
+   * Check if a display name is available (not taken by another user)
+   */
+  const checkDisplayNameAvailable = async (displayName: string): Promise<boolean> => {
+    const user = auth.currentUser;
+    if (!user) return false;
+
+    const normalizedName = displayName.trim().toLowerCase();
+    if (!normalizedName) return false;
+
+    try {
+      // Get all members and check for duplicate display names
+      const membersRef = ref(db, 'members');
+      const snapshot = await get(membersRef);
+
+      if (!snapshot.exists()) return true;
+
+      const members = snapshot.val() as Record<string, any>;
+
+      for (const [uid, member] of Object.entries(members)) {
+        // Skip current user
+        if (uid === user.uid) continue;
+
+        const memberName = (member.display_name || member.displayName || '').trim().toLowerCase();
+        if (memberName === normalizedName) {
+          return false; // Name is taken
+        }
+      }
+
+      return true; // Name is available
+    } catch (error) {
+      console.error('Error checking display name availability:', error);
+      return false; // Assume taken on error to be safe
+    }
+  };
+
+  /**
+   * Generate suggested display name variations when the desired name is taken
+   */
+  const getSuggestedDisplayNames = async (baseName: string): Promise<string[]> => {
+    const suggestions: string[] = [];
+    const cleanName = baseName.trim();
+
+    // Generate variations
+    const variations = [
+      `${cleanName}1`,
+      `${cleanName}2`,
+      `${cleanName}_`,
+      `${cleanName}${Math.floor(Math.random() * 100)}`,
+      `The${cleanName}`,
+      `${cleanName}Fan`,
+      `${cleanName}Star`,
+    ];
+
+    // Check which ones are available
+    for (const variation of variations) {
+      if (suggestions.length >= 3) break; // Return max 3 suggestions
+
+      const isAvailable = await checkDisplayNameAvailable(variation);
+      if (isAvailable) {
+        suggestions.push(variation);
+      }
+    }
+
+    return suggestions;
+  };
+
+  /**
+   * Update user profile with partial data
+   */
+  const updateUserProfile = async (data: UpdateProfileData): Promise<{ success: boolean; error?: string }> => {
+    const user = auth.currentUser;
+    if (!user || !userProfile) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    try {
+      // If updating display name, check availability first
+      if (data.displayName && data.displayName !== userProfile.displayName) {
+        const isAvailable = await checkDisplayNameAvailable(data.displayName);
+        if (!isAvailable) {
+          return { success: false, error: 'This nickname is already taken' };
+        }
+      }
+
+      // Build Firebase update (snake_case for Firebase)
+      const firebaseUpdates: Record<string, any> = {
+        lastSeenAt: Date.now(),
+      };
+
+      // Map camelCase to snake_case for Firebase
+      if (data.displayName !== undefined) {
+        firebaseUpdates.display_name = data.displayName;
+      }
+      if (data.phone !== undefined) {
+        firebaseUpdates.phone = data.phone || null;
+      }
+      if (data.suburb !== undefined) {
+        firebaseUpdates.suburb = data.suburb || null;
+      }
+      if (data.socials !== undefined) {
+        firebaseUpdates.socials = data.socials;
+      }
+      if (data.preferences !== undefined) {
+        if (data.preferences.marketingEmails !== undefined) {
+          firebaseUpdates.email_opt_in = data.preferences.marketingEmails;
+        }
+        if (data.preferences.marketingSMS !== undefined) {
+          firebaseUpdates.sms_opt_in = data.preferences.marketingSMS;
+        }
+      }
+
+      // Update Firebase
+      await update(ref(db, `members/${user.uid}`), firebaseUpdates);
+
+      // Update auth profile if display name changed
+      if (data.displayName && data.displayName !== user.displayName) {
+        await updateProfile(user, { displayName: data.displayName });
+      }
+
+      // Build local profile update
+      const localUpdates: Partial<UserProfile> = {
+        lastSeenAt: Date.now(),
+      };
+
+      if (data.displayName !== undefined) {
+        localUpdates.displayName = data.displayName;
+      }
+      if (data.phone !== undefined) {
+        localUpdates.phone = data.phone || undefined;
+      }
+      if (data.suburb !== undefined) {
+        localUpdates.suburb = data.suburb || undefined;
+      }
+      if (data.socials !== undefined) {
+        localUpdates.socials = data.socials;
+      }
+      if (data.preferences !== undefined) {
+        localUpdates.preferences = {
+          ...userProfile.preferences,
+          ...data.preferences,
+        };
+      }
+
+      // Update local state
+      const updatedProfile = { ...userProfile, ...localUpdates };
+      setUserProfile(updatedProfile);
+      localStorage.setItem('userProfile', JSON.stringify(updatedProfile));
+
+      console.log('✅ Profile updated successfully:', localUpdates);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Failed to update profile:', error);
+      return { success: false, error: 'Failed to save changes. Please try again.' };
+    }
+  };
+
   const handleSignInWithGoogle = async () => {
     // Clear any previous error
     setAuthError(null);
@@ -342,6 +514,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
         authError,
         isSigningIn,
         registerUser,
+        updateUserProfile,
+        checkDisplayNameAvailable,
+        getSuggestedDisplayNames,
         updateLastSeen,
         addShowAttended,
         signInWithGoogle: handleSignInWithGoogle,

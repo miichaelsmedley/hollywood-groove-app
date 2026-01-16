@@ -162,6 +162,13 @@ export interface AllTimeLeaderboard {
   top?: AllTimeLeaderboardEntry[];
 }
 
+// Social links structure
+export interface SocialLinks {
+  instagram?: string;  // Instagram username (without @)
+  tiktok?: string;     // TikTok username (without @)
+  facebook?: string;   // Facebook profile URL or username
+}
+
 export interface MemberProfile {
   display_name: string;
   email_hash?: string | null;
@@ -190,6 +197,10 @@ export interface MemberProfile {
   email_opt_in?: boolean;
   sms_opt_in?: boolean;
 
+  // Extended profile fields (progressive profiling)
+  suburb?: string;           // Area/suburb location
+  socials?: SocialLinks;     // Social media links
+
   // Role-based permissions
   roles?: string[];
   role_assigned_by?: string;
@@ -211,6 +222,9 @@ export interface UserProfile {
     marketingSMS: boolean;
     notifications: boolean;
   };
+  // Extended profile fields (progressive profiling)
+  suburb?: string;           // Area/suburb location
+  socials?: SocialLinks;     // Social media links
 }
 
 // ============================================
