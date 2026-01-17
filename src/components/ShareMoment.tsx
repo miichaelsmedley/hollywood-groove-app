@@ -60,10 +60,12 @@ function ShareMomentContent({
   const [error, setError] = useState<string | null>(null);
   const [starsEarned, setStarsEarned] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const lastPinchDistance = useRef<number | null>(null);
 
   const today = new Date().toLocaleDateString('en-AU', {
     day: 'numeric',
@@ -71,15 +73,36 @@ function ShareMomentContent({
     year: 'numeric',
   });
 
-  // Get reasonable camera dimensions - don't request too high to avoid zoom
-  const getCameraConstraints = () => {
-    // Request moderate resolution - let the camera choose its native aspect ratio
-    // High resolutions (1080x1920) cause iPhone to digitally zoom
-    return {
-      width: { ideal: 720 },
-      height: { ideal: 1280 },
-    };
-  };
+  // Pinch-to-zoom handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const distance = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      lastPinchDistance.current = distance;
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2 && lastPinchDistance.current !== null) {
+      const distance = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const delta = distance / lastPinchDistance.current;
+      lastPinchDistance.current = distance;
+
+      setZoomLevel(prev => {
+        const newZoom = prev * delta;
+        return Math.min(Math.max(newZoom, 1), 5); // Clamp between 1x and 5x
+      });
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    lastPinchDistance.current = null;
+  }, []);
 
   // Stop camera
   const stopCamera = useCallback(() => {
@@ -102,14 +125,10 @@ function ShareMomentContent({
         streamRef.current.getTracks().forEach(track => track.stop());
       }
 
-      const dims = getCameraConstraints();
-
-      // Mobile-optimized constraints - avoid zoom by not requesting high resolution
+      // Minimal constraints - let camera use native resolution to avoid digital zoom
       const constraints: MediaStreamConstraints = {
         video: {
           facingMode: facingMode,
-          width: dims.width,
-          height: dims.height,
         },
         audio: false,
       };
@@ -171,13 +190,11 @@ function ShareMomentContent({
 
     try {
       setMode('loading');
-      const dims = getCameraConstraints();
+      setZoomLevel(1); // Reset zoom when switching cameras
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: newMode,
-          width: dims.width,
-          height: dims.height,
         },
         audio: false,
       });
@@ -196,7 +213,7 @@ function ShareMomentContent({
   }, [facingMode]);
 
   // Capture photo with overlay
-  // Simulates objectFit: 'cover' to capture exactly what user sees in preview
+  // Simulates objectFit: 'cover' + zoom to capture exactly what user sees in preview
   const capturePhoto = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return;
 
@@ -238,13 +255,23 @@ function ShareMomentContent({
       sourceY = (videoHeight - sourceHeight) / 2;
     }
 
+    // Apply zoom by shrinking the source rectangle (zoom into center)
+    if (zoomLevel > 1) {
+      const zoomedWidth = sourceWidth / zoomLevel;
+      const zoomedHeight = sourceHeight / zoomLevel;
+      sourceX = sourceX + (sourceWidth - zoomedWidth) / 2;
+      sourceY = sourceY + (sourceHeight - zoomedHeight) / 2;
+      sourceWidth = zoomedWidth;
+      sourceHeight = zoomedHeight;
+    }
+
     // Mirror for front camera to match the preview
     if (facingMode === 'user') {
       ctx.translate(targetWidth, 0);
       ctx.scale(-1, 1);
     }
 
-    // Draw the cropped portion of video to fill canvas (simulates cover)
+    // Draw the cropped portion of video to fill canvas (simulates cover + zoom)
     ctx.drawImage(
       video,
       sourceX, sourceY, sourceWidth, sourceHeight,  // Source rectangle (crop)
@@ -291,11 +318,12 @@ function ShareMomentContent({
     setCapturedImage(imageData);
     setMode('preview');
     stopCamera();
-  }, [facingMode, showName, venueName, today, stopCamera]);
+  }, [facingMode, showName, venueName, today, stopCamera, zoomLevel]);
 
   // Retake photo
   const retake = useCallback(() => {
     setCapturedImage(null);
+    setZoomLevel(1); // Reset zoom
     startCamera();
   }, [startCamera]);
 
@@ -455,23 +483,39 @@ function ShareMomentContent({
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
       {/* Video element - always mounted for smooth transitions */}
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
+      <div
         style={{
           position: 'absolute',
           top: 0,
           left: 0,
           width: '100%',
           height: '100%',
-          objectFit: 'cover',
-          transform: facingMode === 'user' ? 'scaleX(-1)' : 'none',
+          overflow: 'hidden',
           opacity: mode === 'camera' ? 1 : 0,
           transition: 'opacity 0.2s',
         }}
-      />
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            minWidth: '100%',
+            minHeight: '100%',
+            width: 'auto',
+            height: 'auto',
+            objectFit: 'cover',
+            transform: `translate(-50%, -50%) ${facingMode === 'user' ? 'scaleX(-1)' : ''} scale(${zoomLevel})`,
+          }}
+        />
+      </div>
 
       {/* Close button */}
       <button
@@ -649,7 +693,7 @@ function ShareMomentContent({
             <div style={{ width: '56px', height: '56px' }} />
           </div>
 
-          {/* Hint text */}
+          {/* Hint text and zoom indicator */}
           <div style={{
             position: 'absolute',
             top: '80px',
@@ -666,7 +710,9 @@ function ShareMomentContent({
               color: 'rgba(255,255,255,0.8)',
               fontSize: '14px',
             }}>
-              Tap the button to capture!
+              {zoomLevel > 1
+                ? `${zoomLevel.toFixed(1)}x zoom · Pinch to adjust`
+                : 'Pinch to zoom · Tap to capture'}
             </p>
           </div>
         </>
