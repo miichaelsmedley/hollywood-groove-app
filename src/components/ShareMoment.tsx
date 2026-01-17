@@ -6,9 +6,10 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Camera, X, Share2, RotateCcw, Sparkles, Instagram, Download,
-  CheckCircle, Star
+  CheckCircle, Star, Loader2
 } from 'lucide-react';
 
 interface ShareMomentProps {
@@ -27,9 +28,9 @@ function TikTokIcon({ className }: { className?: string }) {
   );
 }
 
-type CameraMode = 'setup' | 'camera' | 'preview' | 'shared';
+type CameraMode = 'setup' | 'loading' | 'camera' | 'preview' | 'shared';
 
-export default function ShareMoment({
+function ShareMomentContent({
   showName = 'Hollywood Groove',
   venueName,
   onClose,
@@ -40,6 +41,7 @@ export default function ShareMoment({
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [error, setError] = useState<string | null>(null);
   const [starsEarned, setStarsEarned] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -51,45 +53,72 @@ export default function ShareMoment({
     year: 'numeric',
   });
 
-  // Start camera
-  const startCamera = useCallback(async () => {
-    try {
-      setError(null);
-
-      // Stop any existing stream
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode,
-          width: { ideal: 1080 },
-          height: { ideal: 1920 },
-        },
-        audio: false,
-      });
-
-      streamRef.current = stream;
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        setMode('camera');
-      }
-    } catch (err) {
-      console.error('Camera error:', err);
-      setError('Could not access camera. Please allow camera permissions.');
-    }
-  }, [facingMode]);
-
   // Stop camera
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
+    setCameraReady(false);
   }, []);
+
+  // Start camera
+  const startCamera = useCallback(async () => {
+    try {
+      setError(null);
+      setMode('loading');
+      setCameraReady(false);
+
+      // Stop any existing stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+
+      const constraints: MediaStreamConstraints = {
+        video: {
+          facingMode: { ideal: facingMode },
+          width: { ideal: 1080 },
+          height: { ideal: 1920 },
+        },
+        audio: false,
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+
+        // Wait for video to be ready
+        await new Promise<void>((resolve, reject) => {
+          const video = videoRef.current!;
+
+          const onLoadedMetadata = () => {
+            video.removeEventListener('loadedmetadata', onLoadedMetadata);
+            video.removeEventListener('error', onError);
+            resolve();
+          };
+
+          const onError = () => {
+            video.removeEventListener('loadedmetadata', onLoadedMetadata);
+            video.removeEventListener('error', onError);
+            reject(new Error('Video failed to load'));
+          };
+
+          video.addEventListener('loadedmetadata', onLoadedMetadata);
+          video.addEventListener('error', onError);
+        });
+
+        await videoRef.current.play();
+        setCameraReady(true);
+        setMode('camera');
+      }
+    } catch (err) {
+      console.error('Camera error:', err);
+      setError('Could not access camera. Please allow camera permissions and try again.');
+      setMode('setup');
+    }
+  }, [facingMode]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -97,14 +126,36 @@ export default function ShareMoment({
   }, [stopCamera]);
 
   // Flip camera
-  const flipCamera = useCallback(() => {
-    setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
-  }, []);
+  const flipCamera = useCallback(async () => {
+    const newMode = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(newMode);
 
-  // Re-start camera when facing mode changes
-  useEffect(() => {
-    if (mode === 'camera') {
-      startCamera();
+    // Restart camera with new facing mode
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+
+    try {
+      setMode('loading');
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: newMode },
+          width: { ideal: 1080 },
+          height: { ideal: 1920 },
+        },
+        audio: false,
+      });
+
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        setCameraReady(true);
+        setMode('camera');
+      }
+    } catch (err) {
+      console.error('Flip camera error:', err);
+      setError('Could not switch camera');
     }
   }, [facingMode]);
 
@@ -229,42 +280,81 @@ export default function ShareMoment({
     link.click();
   }, [capturedImage]);
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black">
-      {/* Hidden canvas for image processing */}
-      <canvas ref={canvasRef} className="hidden" />
+  // Handle close
+  const handleClose = useCallback(() => {
+    stopCamera();
+    onClose();
+  }, [stopCamera, onClose]);
 
-      {/* Close button */}
-      <button
-        onClick={() => {
-          stopCamera();
-          onClose();
+  return (
+    <div
+      className="fixed inset-0 bg-black"
+      style={{
+        zIndex: 99999,
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        WebkitOverflowScrolling: 'touch',
+      }}
+    >
+      {/* Hidden canvas for image processing */}
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+      {/* Video element - always mounted but hidden when not in camera mode */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        webkit-playsinline="true"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          transform: facingMode === 'user' ? 'scaleX(-1)' : 'none',
+          display: mode === 'camera' || mode === 'loading' ? 'block' : 'none',
         }}
-        className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition"
+      />
+
+      {/* Close button - always visible */}
+      <button
+        onClick={handleClose}
+        className="absolute top-4 right-4 p-3 rounded-full bg-black/60 text-white hover:bg-black/80 transition"
+        style={{ zIndex: 100001 }}
       >
         <X className="w-6 h-6" />
       </button>
 
       {/* Setup mode - instructions */}
       {mode === 'setup' && (
-        <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-black">
           <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center mb-6">
             <Camera className="w-10 h-10 text-primary" />
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">Share Your Moment</h2>
-          <p className="text-cinema-500 mb-8 max-w-xs">
-            Capture a photo with our branded overlay and share it to earn stars!
+          <p className="text-gray-400 mb-2 max-w-xs">
+            Take a selfie with our branded frame!
+          </p>
+          <p className="text-gray-500 mb-8 max-w-xs text-sm">
+            The Hollywood Groove branding will appear at the bottom of your photo.
           </p>
 
           <button
             onClick={startCamera}
-            className="px-8 py-4 bg-primary text-white rounded-2xl font-bold text-lg hover:bg-primary/90 transition flex items-center gap-3"
+            className="px-8 py-4 bg-primary text-black rounded-2xl font-bold text-lg hover:bg-primary/90 transition flex items-center gap-3"
           >
             <Camera className="w-5 h-5" />
-            Open Camera
+            Take Photo
           </button>
 
-          <div className="mt-8 flex items-center gap-2 text-cinema-500 text-sm">
+          <div className="mt-8 flex items-center gap-2 text-gray-400 text-sm">
             <Sparkles className="w-4 h-4 text-primary" />
             <span>Earn <strong className="text-primary">0.5 stars</strong> for sharing!</span>
           </div>
@@ -275,20 +365,22 @@ export default function ShareMoment({
         </div>
       )}
 
-      {/* Camera mode */}
-      {mode === 'camera' && (
-        <div className="relative h-full">
-          {/* Video feed */}
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className={`h-full w-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
-          />
+      {/* Loading mode */}
+      {mode === 'loading' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black">
+          <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
+          <p className="text-white">Opening camera...</p>
+        </div>
+      )}
 
-          {/* Live overlay preview */}
-          <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent pointer-events-none">
+      {/* Camera mode overlays */}
+      {mode === 'camera' && cameraReady && (
+        <>
+          {/* Live overlay preview - shows what branding will look like */}
+          <div
+            className="absolute bottom-32 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent pointer-events-none"
+            style={{ zIndex: 100000 }}
+          >
             <div className="text-primary font-bold text-xl">Hollywood Groove</div>
             <div className="text-white text-sm">
               {venueName ? `${showName} @ ${venueName}` : showName}
@@ -300,11 +392,14 @@ export default function ShareMoment({
           </div>
 
           {/* Camera controls */}
-          <div className="absolute bottom-8 left-0 right-0 flex items-center justify-center gap-8">
+          <div
+            className="absolute bottom-6 left-0 right-0 flex items-center justify-center gap-8 pb-safe"
+            style={{ zIndex: 100000 }}
+          >
             {/* Flip camera */}
             <button
               onClick={flipCamera}
-              className="p-4 rounded-full bg-white/20 text-white hover:bg-white/30 transition"
+              className="p-4 rounded-full bg-white/20 text-white hover:bg-white/30 transition backdrop-blur-sm"
             >
               <RotateCcw className="w-6 h-6" />
             </button>
@@ -312,22 +407,32 @@ export default function ShareMoment({
             {/* Capture button */}
             <button
               onClick={capturePhoto}
-              className="w-20 h-20 rounded-full bg-white border-4 border-primary flex items-center justify-center hover:scale-105 transition-transform"
+              className="w-20 h-20 rounded-full bg-white border-4 border-primary flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-lg"
             >
               <div className="w-16 h-16 rounded-full bg-primary" />
             </button>
 
             {/* Placeholder for symmetry */}
-            <div className="w-14" />
+            <div className="w-14 h-14" />
           </div>
-        </div>
+
+          {/* Hint text */}
+          <div
+            className="absolute top-20 left-0 right-0 text-center"
+            style={{ zIndex: 100000 }}
+          >
+            <p className="text-white/80 text-sm bg-black/40 inline-block px-4 py-2 rounded-full backdrop-blur-sm">
+              Tap the button to capture!
+            </p>
+          </div>
+        </>
       )}
 
       {/* Preview mode */}
       {mode === 'preview' && capturedImage && (
-        <div className="relative h-full flex flex-col">
+        <div className="absolute inset-0 flex flex-col bg-black">
           {/* Preview image */}
-          <div className="flex-1 flex items-center justify-center bg-black">
+          <div className="flex-1 flex items-center justify-center overflow-hidden">
             <img
               src={capturedImage}
               alt="Captured moment"
@@ -336,8 +441,8 @@ export default function ShareMoment({
           </div>
 
           {/* Actions */}
-          <div className="p-6 bg-cinema-50 space-y-4">
-            <div className="flex items-center justify-center gap-2 text-cinema-500 text-sm">
+          <div className="p-6 bg-gray-900 space-y-4 pb-safe">
+            <div className="flex items-center justify-center gap-2 text-gray-400 text-sm">
               <Sparkles className="w-4 h-4 text-primary" />
               <span>Share to earn <strong className="text-primary">0.5 stars</strong>!</span>
             </div>
@@ -346,7 +451,7 @@ export default function ShareMoment({
             <div className="flex gap-3">
               <button
                 onClick={shareImage}
-                className="flex-1 py-4 bg-primary text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-primary/90 transition"
+                className="flex-1 py-4 bg-primary text-black rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-primary/90 transition"
               >
                 <Share2 className="w-5 h-5" />
                 Share
@@ -354,7 +459,7 @@ export default function ShareMoment({
 
               <button
                 onClick={downloadImage}
-                className="px-4 py-4 bg-cinema-100 text-cinema-800 rounded-xl font-bold hover:bg-cinema-200 transition"
+                className="px-4 py-4 bg-gray-800 text-white rounded-xl font-bold hover:bg-gray-700 transition"
               >
                 <Download className="w-5 h-5" />
               </button>
@@ -362,7 +467,7 @@ export default function ShareMoment({
 
             {/* Quick share to specific platforms */}
             <div className="flex items-center justify-center gap-4">
-              <span className="text-xs text-cinema-500">Share to:</span>
+              <span className="text-xs text-gray-500">Share to:</span>
               <button
                 onClick={shareImage}
                 className="p-2 rounded-lg bg-pink-500/20 text-pink-500 hover:bg-pink-500/30 transition"
@@ -372,7 +477,7 @@ export default function ShareMoment({
               </button>
               <button
                 onClick={shareImage}
-                className="p-2 rounded-lg bg-cinema-200 text-cinema-800 hover:bg-cinema-300 transition"
+                className="p-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition"
                 title="TikTok"
               >
                 <TikTokIcon className="w-5 h-5" />
@@ -382,7 +487,7 @@ export default function ShareMoment({
             {/* Retake button */}
             <button
               onClick={retake}
-              className="w-full py-3 text-cinema-500 font-medium hover:text-cinema-700 transition"
+              className="w-full py-3 text-gray-400 font-medium hover:text-white transition"
             >
               Retake Photo
             </button>
@@ -396,20 +501,20 @@ export default function ShareMoment({
 
       {/* Shared confirmation */}
       {mode === 'shared' && (
-        <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-black">
           <div className="relative mb-6">
-            <div className="w-24 h-24 rounded-full bg-accent-green/20 flex items-center justify-center animate-pulse">
-              <CheckCircle className="w-12 h-12 text-accent-green" />
+            <div className="w-24 h-24 rounded-full bg-green-500/20 flex items-center justify-center">
+              <CheckCircle className="w-12 h-12 text-green-500" />
             </div>
             {starsEarned && (
               <div className="absolute -top-2 -right-2 w-10 h-10 rounded-full bg-primary flex items-center justify-center animate-bounce">
-                <Star className="w-5 h-5 text-white fill-white" />
+                <Star className="w-5 h-5 text-black fill-black" />
               </div>
             )}
           </div>
 
           <h2 className="text-2xl font-bold text-white mb-2">Thanks for Sharing!</h2>
-          <p className="text-cinema-500 mb-4">
+          <p className="text-gray-400 mb-4">
             Your Hollywood Groove moment is on its way!
           </p>
 
@@ -420,13 +525,35 @@ export default function ShareMoment({
           )}
 
           <button
-            onClick={onClose}
-            className="px-8 py-4 bg-cinema-100 text-cinema-800 rounded-2xl font-bold hover:bg-cinema-200 transition"
+            onClick={handleClose}
+            className="px-8 py-4 bg-gray-800 text-white rounded-2xl font-bold hover:bg-gray-700 transition"
           >
             Done
           </button>
         </div>
       )}
     </div>
+  );
+}
+
+// Wrapper that uses portal to ensure proper rendering
+export default function ShareMoment(props: ShareMomentProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    // Prevent body scroll when modal is open
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+
+  if (!mounted) return null;
+
+  // Use portal to render at document root level
+  return createPortal(
+    <ShareMomentContent {...props} />,
+    document.body
   );
 }
