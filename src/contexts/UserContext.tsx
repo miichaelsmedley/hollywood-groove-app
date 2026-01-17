@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { updateProfile } from 'firebase/auth';
-import { ref, set, get, update, query, orderByChild, equalTo } from 'firebase/database';
+import { ref, set, get, update } from 'firebase/database';
 import { auth, db } from '../lib/firebase';
 import { UserProfile, SocialLinks } from '../types/firebaseContract';
 import { signInWithGoogle, signOut as authSignOut, isSignedInWithGoogle, getGooglePhotoURL } from '../lib/auth';

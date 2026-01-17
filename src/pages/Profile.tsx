@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import {
-  Mail, Phone, User, CheckCircle, AlertCircle, Settings, LogOut,
+  Mail, Phone, User, CheckCircle, AlertCircle, LogOut,
   Edit3, Save, X, MapPin, Instagram, Plus, Loader2
 } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
