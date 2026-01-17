@@ -436,3 +436,136 @@ function getTierFromStars(totalStars: number): string {
   if (totalStars >= 1) return 'supporting_role';
   return 'extra';
 }
+
+// ============================================
+// Social Sharing
+// ============================================
+
+export interface SocialShareResult {
+  success: boolean;
+  starsAwarded: number;
+  dailySharesUsed: number;
+  maxDailyShares: number;
+  error?: string;
+}
+
+/**
+ * Record a social share and award stars
+ * Limited to 2 shares per day to prevent gaming
+ */
+export async function recordSocialShare(
+  userId: string,
+  shareType: 'photo' | 'achievement' | 'trivia_win' | 'show_moment'
+): Promise<SocialShareResult> {
+  const today = getMelbourneDateString();
+  const STARS_PER_SHARE = 0.5;
+  const MAX_DAILY_SHARES = 2;
+
+  const shareTrackingRef = ref(db, `social_shares/${userId}`);
+  const memberRef = ref(db, `members/${userId}`);
+
+  try {
+    // Check daily limit
+    const trackingSnapshot = await get(shareTrackingRef);
+    const tracking = trackingSnapshot.val() || { last_date: '', shares_today: 0, total_shares: 0 };
+
+    // Reset if new day
+    if (tracking.last_date !== today) {
+      tracking.shares_today = 0;
+      tracking.last_date = today;
+    }
+
+    // Check if already at limit
+    if (tracking.shares_today >= MAX_DAILY_SHARES) {
+      return {
+        success: false,
+        starsAwarded: 0,
+        dailySharesUsed: tracking.shares_today,
+        maxDailyShares: MAX_DAILY_SHARES,
+        error: 'Daily share limit reached. Share again tomorrow!',
+      };
+    }
+
+    // Award stars
+    const starsToAward = STARS_PER_SHARE;
+
+    // Update tracking
+    tracking.shares_today += 1;
+    tracking.total_shares = (tracking.total_shares || 0) + 1;
+    tracking.last_share_type = shareType;
+    tracking.last_share_at = Date.now();
+
+    await set(shareTrackingRef, tracking);
+
+    // Update member stars
+    await runTransaction(memberRef, (currentData) => {
+      if (!currentData) return currentData;
+
+      const stars = currentData.stars || {
+        total: 0,
+        tier: 'extra',
+        starting_bonus: 0,
+        breakdown: {
+          shows_attended: 0,
+          trivia_participated: 0,
+          dancing_engaged: 0,
+          stage_participation: 0,
+          between_show_trivia: 0,
+          referrals: 0,
+          early_tickets: 0,
+          social_shares: 0,
+          feedback_given: 0,
+        },
+      };
+
+      stars.breakdown.social_shares = (stars.breakdown.social_shares || 0) + starsToAward;
+      stars.total = (stars.total || 0) + starsToAward;
+      stars.tier = getTierFromStars(stars.total);
+
+      currentData.stars = stars;
+      return currentData;
+    });
+
+    return {
+      success: true,
+      starsAwarded: starsToAward,
+      dailySharesUsed: tracking.shares_today,
+      maxDailyShares: MAX_DAILY_SHARES,
+    };
+  } catch (error) {
+    console.error('Error recording social share:', error);
+    return {
+      success: false,
+      starsAwarded: 0,
+      dailySharesUsed: 0,
+      maxDailyShares: MAX_DAILY_SHARES,
+      error: 'Failed to record share',
+    };
+  }
+}
+
+/**
+ * Get user's social share stats
+ */
+export async function getSocialShareStats(userId: string): Promise<{
+  sharesToday: number;
+  maxDaily: number;
+  totalShares: number;
+  canShareMore: boolean;
+}> {
+  const today = getMelbourneDateString();
+  const MAX_DAILY_SHARES = 2;
+
+  const snapshot = await get(ref(db, `social_shares/${userId}`));
+  const tracking = snapshot.val() || { last_date: '', shares_today: 0, total_shares: 0 };
+
+  // Reset count if new day
+  const sharesToday = tracking.last_date === today ? tracking.shares_today : 0;
+
+  return {
+    sharesToday,
+    maxDaily: MAX_DAILY_SHARES,
+    totalShares: tracking.total_shares || 0,
+    canShareMore: sharesToday < MAX_DAILY_SHARES,
+  };
+}

@@ -167,6 +167,10 @@ export interface SocialLinks {
   instagram?: string;  // Instagram username (without @)
   tiktok?: string;     // TikTok username (without @)
   facebook?: string;   // Facebook profile URL or username
+  twitter?: string;    // X/Twitter username (without @)
+  threads?: string;    // Threads username (without @)
+  youtube?: string;    // YouTube channel URL or handle
+  spotify?: string;    // Spotify profile URL
 }
 
 export interface MemberProfile {

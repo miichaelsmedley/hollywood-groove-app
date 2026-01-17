@@ -8,6 +8,7 @@ import { useTriviaHome } from '../lib/triviaLibraryService';
 import { onValue, ref } from 'firebase/database';
 import { db } from '../lib/firebase';
 import { ShowMeta } from '../types/firebaseContract';
+import ShareButton from '../components/ShareButton';
 
 interface ActiveTestShow {
   showId: string;
@@ -188,6 +189,13 @@ export default function Home() {
             <Brain className="h-6 w-6" />
           </div>
         </Link>
+
+        {/* Share a Moment - Photo sharing for stars */}
+        <ShareButton
+          variant="inline"
+          showName="Hollywood Groove"
+          shareType="show_moment"
+        />
 
         {/* Tester Mode Entry Point - Only shows when test show is active */}
         {canUseTestMode && !checkingTestShow && activeTestShow && (

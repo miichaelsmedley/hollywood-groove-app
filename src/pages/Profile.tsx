@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import {
   Mail, Phone, User, CheckCircle, AlertCircle, LogOut,
-  Edit3, Save, X, MapPin, Instagram, Plus, Loader2
+  Edit3, Save, X, MapPin, Instagram, Loader2, Facebook, Youtube
 } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 import { IS_TEST_MODE, isAdminEmail } from '../lib/mode';
@@ -16,6 +16,124 @@ function TikTokIcon({ className }: { className?: string }) {
       <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
     </svg>
   );
+}
+
+// X (Twitter) icon
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+    </svg>
+  );
+}
+
+// Threads icon
+function ThreadsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.59 12c.025 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.75-.192 1.352-.622 2.446-1.284 3.272-.886 1.102-2.14 1.704-3.73 1.79-1.202.065-2.361-.218-3.259-.801-1.063-.689-1.685-1.74-1.752-2.96-.065-1.182.408-2.256 1.332-3.023.85-.704 2.043-1.135 3.553-1.282.898-.088 1.814-.078 2.734.032l.007-.017c-.006-.904-.157-1.614-.449-2.11-.353-.6-.947-.898-1.767-.898h-.034c-.659.007-1.195.183-1.596.523-.39.333-.66.802-.807 1.395l-1.992-.466c.217-.872.654-1.622 1.302-2.228.82-.766 1.865-1.155 3.107-1.155h.043c1.467.016 2.588.542 3.335 1.562.67.917.996 2.142 1.002 3.75.35.157.687.33 1.01.523 1.137.682 1.98 1.574 2.507 2.653.728 1.49.842 3.883-.849 5.54-1.793 1.756-4.016 2.548-7.205 2.572zm-1.248-6.63c-.72.038-1.263.222-1.617.547-.326.299-.48.653-.459 1.052.044.788.717 1.496 2.05 1.496.048 0 .097-.001.146-.003 1.433-.077 2.303-1.072 2.586-2.955-.879-.152-1.792-.197-2.706-.137z"/>
+    </svg>
+  );
+}
+
+// Spotify icon
+function SpotifyIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+    </svg>
+  );
+}
+
+// Social platform configuration with deep links
+const SOCIAL_PLATFORMS = [
+  {
+    key: 'instagram',
+    label: 'Instagram',
+    Icon: Instagram,
+    color: 'text-pink-500',
+    bgColor: 'bg-pink-500/20',
+    placeholder: 'username',
+    deepLink: (u: string) => `instagram://user?username=${u}`,
+    webUrl: (u: string) => `https://instagram.com/${u}`,
+  },
+  {
+    key: 'tiktok',
+    label: 'TikTok',
+    Icon: TikTokIcon,
+    color: 'text-cinema-800',
+    bgColor: 'bg-cinema-300',
+    placeholder: 'username',
+    deepLink: (u: string) => `tiktok://user?username=${u}`,
+    webUrl: (u: string) => `https://tiktok.com/@${u}`,
+  },
+  {
+    key: 'facebook',
+    label: 'Facebook',
+    Icon: Facebook,
+    color: 'text-blue-500',
+    bgColor: 'bg-blue-500/20',
+    placeholder: 'username',
+    deepLink: (u: string) => `fb://profile/${u}`,
+    webUrl: (u: string) => `https://facebook.com/${u}`,
+  },
+  {
+    key: 'twitter',
+    label: 'X',
+    Icon: XIcon,
+    color: 'text-cinema-800',
+    bgColor: 'bg-cinema-300',
+    placeholder: 'username',
+    deepLink: (u: string) => `twitter://user?screen_name=${u}`,
+    webUrl: (u: string) => `https://x.com/${u}`,
+  },
+  {
+    key: 'threads',
+    label: 'Threads',
+    Icon: ThreadsIcon,
+    color: 'text-cinema-800',
+    bgColor: 'bg-cinema-300',
+    placeholder: 'username',
+    deepLink: (u: string) => `barcelona://user?username=${u}`, // Threads app scheme
+    webUrl: (u: string) => `https://threads.net/@${u}`,
+  },
+  {
+    key: 'youtube',
+    label: 'YouTube',
+    Icon: Youtube,
+    color: 'text-red-500',
+    bgColor: 'bg-red-500/20',
+    placeholder: '@handle or URL',
+    deepLink: (u: string) => `youtube://www.youtube.com/@${u}`,
+    webUrl: (u: string) => u.startsWith('http') ? u : `https://youtube.com/@${u}`,
+  },
+  {
+    key: 'spotify',
+    label: 'Spotify',
+    Icon: SpotifyIcon,
+    color: 'text-green-500',
+    bgColor: 'bg-green-500/20',
+    placeholder: 'profile URL',
+    deepLink: (u: string) => u.startsWith('http') ? u.replace('https://open.spotify.com', 'spotify://') : `spotify://user/${u}`,
+    webUrl: (u: string) => u.startsWith('http') ? u : `https://open.spotify.com/user/${u}`,
+  },
+] as const;
+
+// Helper to open social profile with deep link fallback
+function openSocialProfile(platform: typeof SOCIAL_PLATFORMS[number], username: string) {
+  const deepLink = platform.deepLink(username);
+  const webUrl = platform.webUrl(username);
+
+  // Try deep link first, fall back to web URL
+  const start = Date.now();
+  window.location.href = deepLink;
+
+  // If we're still here after 1.5s, the app didn't open - use web URL
+  setTimeout(() => {
+    if (Date.now() - start < 2000) {
+      window.open(webUrl, '_blank');
+    }
+  }, 1500);
 }
 
 export default function Profile() {
@@ -315,7 +433,7 @@ export default function Profile() {
                 value={editDisplayName}
                 onChange={(e) => setEditDisplayName(e.target.value)}
                 maxLength={30}
-                className={`w-full px-4 py-3 rounded-xl border-2 bg-white transition focus:outline-none ${
+                className={`w-full px-4 py-3 rounded-xl border-2 bg-white text-gray-900 transition focus:outline-none ${
                   nameAvailable === false
                     ? 'border-red-300 focus:border-red-400'
                     : nameAvailable === true
@@ -368,7 +486,7 @@ export default function Profile() {
                 type="tel"
                 value={editPhone}
                 onChange={(e) => setEditPhone(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border-2 border-cinema-200 bg-white focus:border-primary focus:outline-none transition"
+                className="w-full px-4 py-3 rounded-xl border-2 border-cinema-200 bg-white text-gray-900 focus:border-primary focus:outline-none transition"
                 placeholder="0400 000 000"
               />
             </div>
@@ -384,7 +502,7 @@ export default function Profile() {
                 value={editSuburb}
                 onChange={(e) => setEditSuburb(e.target.value)}
                 maxLength={50}
-                className="w-full px-4 py-3 rounded-xl border-2 border-cinema-200 bg-white focus:border-primary focus:outline-none transition"
+                className="w-full px-4 py-3 rounded-xl border-2 border-cinema-200 bg-white text-gray-900 focus:border-primary focus:outline-none transition"
                 placeholder="e.g. St Kilda, Melbourne"
               />
               <p className="text-xs text-cinema-500">Helps us bring shows closer to you</p>
@@ -441,57 +559,125 @@ export default function Profile() {
 
       {/* Social Links Card */}
       <div className="bg-cinema-50 border border-cinema-200 rounded-2xl p-5 space-y-4">
-        <div className="text-sm font-semibold text-cinema-800">Social Links</div>
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-semibold text-cinema-800">Social Links</div>
+          {!isEditing && (
+            <span className="text-xs text-cinema-500">Tap edit to add</span>
+          )}
+        </div>
 
         {isEditing ? (
-          <div className="space-y-3">
-            {/* Instagram */}
-            <div className="flex items-center gap-3">
-              <Instagram className="w-5 h-5 text-pink-600 flex-shrink-0" />
-              <input
-                type="text"
-                value={editSocials.instagram || ''}
-                onChange={(e) => setEditSocials({ ...editSocials, instagram: e.target.value.replace('@', '') })}
-                className="flex-1 px-3 py-2 rounded-lg border border-cinema-200 bg-white focus:border-primary focus:outline-none transition text-sm"
-                placeholder="username"
-              />
+          <div className="space-y-4">
+            {/* Icon grid for selecting platforms */}
+            <div className="grid grid-cols-7 gap-2">
+              {SOCIAL_PLATFORMS.map(({ key, label, Icon, color, bgColor }) => {
+                const isActive = !!editSocials[key as keyof SocialLinks];
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => {
+                      if (isActive) {
+                        // Remove the social
+                        const updated = { ...editSocials };
+                        delete updated[key as keyof SocialLinks];
+                        setEditSocials(updated);
+                      } else {
+                        // Add empty to show input
+                        setEditSocials({ ...editSocials, [key]: '' });
+                      }
+                    }}
+                    className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                      isActive
+                        ? `${bgColor} ring-2 ring-primary`
+                        : 'bg-cinema-100 hover:bg-cinema-200'
+                    }`}
+                    title={label}
+                  >
+                    <Icon className={`w-5 h-5 ${isActive ? color : 'text-cinema-400'}`} />
+                    {isActive && (
+                      <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-primary rounded-full flex items-center justify-center">
+                        <CheckCircle className="w-2.5 h-2.5 text-white" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
-            {/* TikTok */}
-            <div className="flex items-center gap-3">
-              <TikTokIcon className="w-5 h-5 text-cinema-800 flex-shrink-0" />
-              <input
-                type="text"
-                value={editSocials.tiktok || ''}
-                onChange={(e) => setEditSocials({ ...editSocials, tiktok: e.target.value.replace('@', '') })}
-                className="flex-1 px-3 py-2 rounded-lg border border-cinema-200 bg-white focus:border-primary focus:outline-none transition text-sm"
-                placeholder="username"
-              />
+            {/* Input fields for active platforms */}
+            <div className="space-y-3">
+              {SOCIAL_PLATFORMS.filter(({ key }) => editSocials[key as keyof SocialLinks] !== undefined).map(({ key, Icon, color, placeholder }) => (
+                <div key={key} className="flex items-center gap-3">
+                  <Icon className={`w-5 h-5 ${color} flex-shrink-0`} />
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      value={editSocials[key as keyof SocialLinks] || ''}
+                      onChange={(e) => setEditSocials({ ...editSocials, [key]: e.target.value.replace('@', '') })}
+                      className="w-full px-3 py-2 rounded-lg border border-cinema-200 bg-white text-gray-900 focus:border-primary focus:outline-none transition text-sm"
+                      placeholder={placeholder}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = { ...editSocials };
+                      delete updated[key as keyof SocialLinks];
+                      setEditSocials(updated);
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-cinema-100 transition"
+                  >
+                    <X className="w-4 h-4 text-cinema-500" />
+                  </button>
+                </div>
+              ))}
             </div>
+
+            {Object.keys(editSocials).length === 0 && (
+              <p className="text-sm text-cinema-500 text-center py-2">
+                Tap an icon above to add your social links
+              </p>
+            )}
 
             <p className="text-xs text-cinema-500">
-              Connect your socials to share your show moments
+              Share your show moments and earn bonus stars!
             </p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {userProfile.socials?.instagram && (
-              <div className="flex items-center gap-2 text-sm">
-                <Instagram className="w-4 h-4 text-pink-600" />
-                <span className="text-cinema-700">@{userProfile.socials.instagram}</span>
+          <div className="space-y-3">
+            {/* Connected socials as clickable buttons - opens native app */}
+            {Object.keys(userProfile.socials || {}).filter(key => userProfile.socials?.[key as keyof SocialLinks]).length > 0 ? (
+              <>
+                <p className="text-xs text-cinema-500">Tap to open in app</p>
+                <div className="flex flex-wrap gap-2">
+                  {SOCIAL_PLATFORMS.filter(({ key }) => userProfile.socials?.[key as keyof SocialLinks]).map((platform) => {
+                    const username = userProfile.socials?.[platform.key as keyof SocialLinks];
+                    if (!username) return null;
+                    return (
+                      <button
+                        key={platform.key}
+                        onClick={() => openSocialProfile(platform, username)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl ${platform.bgColor} hover:opacity-80 active:scale-95 transition-all`}
+                      >
+                        <platform.Icon className={`w-4 h-4 ${platform.color}`} />
+                        <span className="text-sm text-cinema-800">@{username}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center gap-3 py-4 border-2 border-dashed border-cinema-200 rounded-xl">
+                <div className="flex gap-1 opacity-40">
+                  <Instagram className="w-5 h-5" />
+                  <TikTokIcon className="w-5 h-5" />
+                  <XIcon className="w-5 h-5" />
+                </div>
+                <p className="text-sm text-cinema-500">
+                  No socials linked yet
+                </p>
               </div>
-            )}
-            {userProfile.socials?.tiktok && (
-              <div className="flex items-center gap-2 text-sm">
-                <TikTokIcon className="w-4 h-4 text-cinema-800" />
-                <span className="text-cinema-700">@{userProfile.socials.tiktok}</span>
-              </div>
-            )}
-            {!userProfile.socials?.instagram && !userProfile.socials?.tiktok && (
-              <p className="text-sm text-cinema-500 flex items-center gap-2">
-                <Plus className="w-4 h-4" />
-                Add your social links
-              </p>
             )}
           </div>
         )}
@@ -609,14 +795,14 @@ export default function Profile() {
       )}
 
       {IS_TEST_MODE && isAdminEmail(auth.currentUser?.email) && (
-        <div className="bg-primary/10 border border-primary/30 rounded-2xl p-5 space-y-3">
-          <div className="text-sm font-semibold text-cinema-800">Testing</div>
-          <div className="text-sm text-cinema-700">
-            Mode: <code className="text-primary">Single path (no prefix)</code>
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-5 space-y-3">
+          <div className="text-sm font-semibold text-amber-900">Admin Testing</div>
+          <div className="text-sm text-amber-800">
+            Mode: <code className="px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 font-mono text-xs">Single path (no prefix)</code>
           </div>
           <Link
             to="/__testing/firebase"
-            className="block w-full px-6 py-3 rounded-xl border border-primary/40 bg-cinema-50 text-cinema-900 font-semibold hover:border-primary transition text-center"
+            className="block w-full px-6 py-3 rounded-xl border border-amber-400 bg-white text-amber-900 font-semibold hover:bg-amber-100 transition text-center"
           >
             Open Firebase diagnostics
           </Link>
