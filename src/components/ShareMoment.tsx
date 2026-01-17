@@ -9,7 +9,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Camera, X, Share2, RotateCcw, Sparkles, Instagram, Download,
-  CheckCircle, Star, Loader2
+  CheckCircle, Star, Loader2, Facebook
 } from 'lucide-react';
 
 interface ShareMomentProps {
@@ -24,6 +24,24 @@ function TikTokIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
       <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+    </svg>
+  );
+}
+
+// X (Twitter) icon
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+    </svg>
+  );
+}
+
+// Threads icon
+function ThreadsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.59 12c.025 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.75-.192 1.352-.622 2.446-1.284 3.272-.886 1.102-2.14 1.704-3.73 1.79-1.202.065-2.361-.218-3.259-.801-1.063-.689-1.685-1.74-1.752-2.96-.065-1.182.408-2.256 1.332-3.023.85-.704 2.043-1.135 3.553-1.282.898-.088 1.814-.078 2.734.032l.007-.017c-.006-.904-.157-1.614-.449-2.11-.353-.6-.947-.898-1.767-.898h-.034c-.659.007-1.195.183-1.596.523-.39.333-.66.802-.807 1.395l-1.992-.466c.217-.872.654-1.622 1.302-2.228.82-.766 1.865-1.155 3.107-1.155h.043c1.467.016 2.588.542 3.335 1.562.67.917.996 2.142 1.002 3.75.35.157.687.33 1.01.523 1.137.682 1.98 1.574 2.507 2.653.728 1.49.842 3.883-.849 5.54-1.793 1.756-4.016 2.548-7.205 2.572zm-1.248-6.63c-.72.038-1.263.222-1.617.547-.326.299-.48.653-.459 1.052.044.788.717 1.496 2.05 1.496.048 0 .097-.001.146-.003 1.433-.077 2.303-1.072 2.586-2.955-.879-.152-1.792-.197-2.706-.137z"/>
     </svg>
   );
 }
@@ -53,6 +71,16 @@ function ShareMomentContent({
     year: 'numeric',
   });
 
+  // Get screen dimensions for proper aspect ratio
+  const getScreenDimensions = () => {
+    const isPortrait = window.innerHeight > window.innerWidth;
+    if (isPortrait) {
+      return { width: 1080, height: 1920 };
+    } else {
+      return { width: 1920, height: 1080 };
+    }
+  };
+
   // Stop camera
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -62,7 +90,7 @@ function ShareMomentContent({
     setCameraReady(false);
   }, []);
 
-  // Start camera
+  // Start camera with proper constraints for mobile
   const startCamera = useCallback(async () => {
     try {
       setError(null);
@@ -74,11 +102,20 @@ function ShareMomentContent({
         streamRef.current.getTracks().forEach(track => track.stop());
       }
 
+      const dims = getScreenDimensions();
+
+      // Mobile-optimized constraints - avoid zoom issues
       const constraints: MediaStreamConstraints = {
         video: {
-          facingMode: { ideal: facingMode },
-          width: { ideal: 1080 },
-          height: { ideal: 1920 },
+          facingMode: facingMode,
+          width: { ideal: dims.width, max: 1920 },
+          height: { ideal: dims.height, max: 1920 },
+          // Explicitly disable zoom-related features that cause issues
+          // @ts-ignore - these are valid but not in TS types
+          zoom: 1,
+          // Request wide angle if available (helps with zoom issues)
+          // @ts-ignore
+          resizeMode: 'crop-and-scale',
         },
         audio: false,
       };
@@ -86,20 +123,40 @@ function ShareMomentContent({
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
 
+      // Try to set zoom to minimum if the track supports it
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        try {
+          const capabilities = videoTrack.getCapabilities?.() as any;
+          if (capabilities?.zoom) {
+            const minZoom = capabilities.zoom.min || 1;
+            await videoTrack.applyConstraints({
+              // @ts-ignore
+              advanced: [{ zoom: minZoom }]
+            });
+          }
+        } catch (e) {
+          // Zoom control not supported, that's okay
+        }
+      }
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
 
         // Wait for video to be ready
         await new Promise<void>((resolve, reject) => {
           const video = videoRef.current!;
+          const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
 
           const onLoadedMetadata = () => {
+            clearTimeout(timeout);
             video.removeEventListener('loadedmetadata', onLoadedMetadata);
             video.removeEventListener('error', onError);
             resolve();
           };
 
           const onError = () => {
+            clearTimeout(timeout);
             video.removeEventListener('loadedmetadata', onLoadedMetadata);
             video.removeEventListener('error', onError);
             reject(new Error('Video failed to load'));
@@ -137,11 +194,13 @@ function ShareMomentContent({
 
     try {
       setMode('loading');
+      const dims = getScreenDimensions();
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: { ideal: newMode },
-          width: { ideal: 1080 },
-          height: { ideal: 1920 },
+          facingMode: newMode,
+          width: { ideal: dims.width, max: 1920 },
+          height: { ideal: dims.height, max: 1920 },
         },
         audio: false,
       });
@@ -159,7 +218,7 @@ function ShareMomentContent({
     }
   }, [facingMode]);
 
-  // Capture photo with overlay
+  // Capture photo with overlay - handles orientation properly
   const capturePhoto = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return;
 
@@ -168,53 +227,72 @@ function ShareMomentContent({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    // Get actual video dimensions
+    const videoWidth = video.videoWidth;
+    const videoHeight = video.videoHeight;
 
-    // Draw video frame (mirror for selfie cam)
-    if (facingMode === 'user') {
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
+    // Determine if we should use portrait orientation based on screen
+    const screenIsPortrait = window.innerHeight > window.innerWidth;
+
+    // Set canvas to portrait if screen is portrait, regardless of video orientation
+    if (screenIsPortrait && videoWidth > videoHeight) {
+      // Video is landscape but screen is portrait - rotate
+      canvas.width = videoHeight;
+      canvas.height = videoWidth;
+
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(Math.PI / 2);
+      if (facingMode === 'user') {
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(video, -videoWidth / 2, -videoHeight / 2, videoWidth, videoHeight);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    } else {
+      // Normal orientation
+      canvas.width = videoWidth;
+      canvas.height = videoHeight;
+
+      if (facingMode === 'user') {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    // Reset transform
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     // Draw branded overlay
     const padding = canvas.width * 0.05;
-    const fontSize = canvas.width * 0.04;
+    const fontSize = Math.min(canvas.width, canvas.height) * 0.04;
 
     // Semi-transparent gradient at bottom
-    const gradient = ctx.createLinearGradient(0, canvas.height * 0.7, 0, canvas.height);
+    const gradient = ctx.createLinearGradient(0, canvas.height * 0.75, 0, canvas.height);
     gradient.addColorStop(0, 'rgba(0,0,0,0)');
-    gradient.addColorStop(1, 'rgba(0,0,0,0.7)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0.8)');
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, canvas.height * 0.7, canvas.width, canvas.height * 0.3);
+    ctx.fillRect(0, canvas.height * 0.75, canvas.width, canvas.height * 0.25);
 
     // Hollywood Groove branding
-    ctx.fillStyle = '#F59E0B'; // Primary gold
-    ctx.font = `bold ${fontSize * 1.5}px system-ui, sans-serif`;
+    ctx.fillStyle = '#F59E0B';
+    ctx.font = `bold ${fontSize * 1.5}px -apple-system, BlinkMacSystemFont, sans-serif`;
     ctx.textAlign = 'left';
-    ctx.fillText('Hollywood Groove', padding, canvas.height - padding * 2.5);
+    ctx.fillText('Hollywood Groove', padding, canvas.height - padding * 3);
 
     // Show/venue info
     ctx.fillStyle = '#ffffff';
-    ctx.font = `${fontSize}px system-ui, sans-serif`;
+    ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
     const infoText = venueName ? `${showName} @ ${venueName}` : showName;
-    ctx.fillText(infoText, padding, canvas.height - padding * 1.5);
+    ctx.fillText(infoText, padding, canvas.height - padding * 2);
 
     // Date
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.font = `${fontSize * 0.8}px system-ui, sans-serif`;
-    ctx.fillText(today, padding, canvas.height - padding * 0.5);
+    ctx.font = `${fontSize * 0.8}px -apple-system, BlinkMacSystemFont, sans-serif`;
+    ctx.fillText(today, padding, canvas.height - padding * 1.2);
 
     // Hashtag on right
     ctx.fillStyle = '#F59E0B';
     ctx.textAlign = 'right';
-    ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
-    ctx.fillText('#HollywoodGroove', canvas.width - padding, canvas.height - padding);
+    ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+    ctx.fillText('#HollywoodGroove', canvas.width - padding, canvas.height - padding * 1.2);
 
     // Convert to image
     const imageData = canvas.toDataURL('image/jpeg', 0.9);
@@ -229,12 +307,11 @@ function ShareMomentContent({
     startCamera();
   }, [startCamera]);
 
-  // Share using Web Share API
-  const shareImage = useCallback(async () => {
+  // Share using Web Share API (best for images)
+  const shareWithNativeSheet = useCallback(async () => {
     if (!capturedImage) return;
 
     try {
-      // Convert base64 to blob
       const response = await fetch(capturedImage);
       const blob = await response.blob();
       const file = new File([blob], 'hollywood-groove-moment.jpg', { type: 'image/jpeg' });
@@ -245,35 +322,116 @@ function ShareMomentContent({
           title: 'Hollywood Groove Moment',
           text: `Having a blast at ${showName}! 🎬✨ #HollywoodGroove`,
         });
-
-        // User completed share
         setStarsEarned(true);
         setMode('shared');
         onShareComplete?.();
       } else {
-        // Fallback: download the image
-        const link = document.createElement('a');
-        link.href = capturedImage;
-        link.download = 'hollywood-groove-moment.jpg';
-        link.click();
-
-        setStarsEarned(true);
-        setMode('shared');
-        onShareComplete?.();
+        // Fallback: download
+        downloadImage();
       }
     } catch (err) {
-      console.error('Share error:', err);
-      // User cancelled - that's okay
       if ((err as Error).name !== 'AbortError') {
         setError('Could not share. Try downloading instead.');
       }
     }
   }, [capturedImage, showName, onShareComplete]);
 
+  // Share to specific platform with pre-filled text
+  const shareToFacebook = useCallback(() => {
+    const text = encodeURIComponent(`Having a blast at ${showName}! 🎬✨ #HollywoodGroove`);
+    const url = encodeURIComponent('https://hollywoodgroove.com');
+    // Try native app first, fallback to web
+    window.location.href = `fb://share?quote=${text}`;
+    setTimeout(() => {
+      window.open(`https://www.facebook.com/sharer/sharer.php?quote=${text}&u=${url}`, '_blank');
+    }, 500);
+    // Still show success since they initiated share
+    setStarsEarned(true);
+    setMode('shared');
+    onShareComplete?.();
+  }, [showName, onShareComplete]);
+
+  const shareToTwitter = useCallback(() => {
+    const text = encodeURIComponent(`Having a blast at ${showName}! 🎬✨`);
+    const hashtags = 'HollywoodGroove';
+    const url = encodeURIComponent('https://hollywoodgroove.com');
+    // Twitter/X web intent works well and opens app if installed
+    window.open(`https://twitter.com/intent/tweet?text=${text}&hashtags=${hashtags}&url=${url}`, '_blank');
+    setStarsEarned(true);
+    setMode('shared');
+    onShareComplete?.();
+  }, [showName, onShareComplete]);
+
+  const shareToInstagram = useCallback(async () => {
+    // Instagram doesn't have a share URL, but we can:
+    // 1. Use native share sheet (best for images)
+    // 2. Or just download and open Instagram
+    if (capturedImage) {
+      try {
+        const response = await fetch(capturedImage);
+        const blob = await response.blob();
+        const file = new File([blob], 'hollywood-groove-moment.jpg', { type: 'image/jpeg' });
+
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: 'Share to Instagram',
+          });
+          setStarsEarned(true);
+          setMode('shared');
+          onShareComplete?.();
+          return;
+        }
+      } catch (e) {
+        // Fall through to download
+      }
+    }
+    // Fallback: download image, then try to open Instagram
+    downloadImage();
+    window.location.href = 'instagram://';
+    setStarsEarned(true);
+    setMode('shared');
+    onShareComplete?.();
+  }, [capturedImage, onShareComplete]);
+
+  const shareToThreads = useCallback(() => {
+    const text = encodeURIComponent(`Having a blast at ${showName}! 🎬✨ #HollywoodGroove`);
+    // Threads has a web intent
+    window.open(`https://www.threads.net/intent/post?text=${text}`, '_blank');
+    setStarsEarned(true);
+    setMode('shared');
+    onShareComplete?.();
+  }, [showName, onShareComplete]);
+
+  const shareToTikTok = useCallback(async () => {
+    // TikTok doesn't have direct share, use native sheet or download
+    if (capturedImage) {
+      try {
+        const response = await fetch(capturedImage);
+        const blob = await response.blob();
+        const file = new File([blob], 'hollywood-groove-moment.jpg', { type: 'image/jpeg' });
+
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file] });
+          setStarsEarned(true);
+          setMode('shared');
+          onShareComplete?.();
+          return;
+        }
+      } catch (e) {
+        // Fall through
+      }
+    }
+    downloadImage();
+    window.location.href = 'tiktok://';
+    setStarsEarned(true);
+    setMode('shared');
+    onShareComplete?.();
+  }, [capturedImage, onShareComplete]);
+
   // Download image
   const downloadImage = useCallback(() => {
     if (!capturedImage) return;
-
     const link = document.createElement('a');
     link.href = capturedImage;
     link.download = 'hollywood-groove-moment.jpg';
@@ -288,29 +446,28 @@ function ShareMomentContent({
 
   return (
     <div
-      className="fixed inset-0 bg-black"
       style={{
-        zIndex: 99999,
         position: 'fixed',
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        width: '100vw',
-        height: '100vh',
-        WebkitOverflowScrolling: 'touch',
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#000',
+        zIndex: 99999,
+        overflow: 'hidden',
       }}
     >
       {/* Hidden canvas for image processing */}
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-      {/* Video element - always mounted but hidden when not in camera mode */}
+      {/* Video element - always mounted for smooth transitions */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
-        webkit-playsinline="true"
         style={{
           position: 'absolute',
           top: 0,
@@ -319,109 +476,204 @@ function ShareMomentContent({
           height: '100%',
           objectFit: 'cover',
           transform: facingMode === 'user' ? 'scaleX(-1)' : 'none',
-          display: mode === 'camera' || mode === 'loading' ? 'block' : 'none',
+          opacity: mode === 'camera' ? 1 : 0,
+          transition: 'opacity 0.2s',
         }}
       />
 
-      {/* Close button - always visible */}
+      {/* Close button */}
       <button
         onClick={handleClose}
-        className="absolute top-4 right-4 p-3 rounded-full bg-black/60 text-white hover:bg-black/80 transition"
-        style={{ zIndex: 100001 }}
+        style={{
+          position: 'absolute',
+          top: '16px',
+          right: '16px',
+          zIndex: 100001,
+          padding: '12px',
+          borderRadius: '50%',
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          border: 'none',
+          cursor: 'pointer',
+        }}
       >
-        <X className="w-6 h-6" />
+        <X style={{ width: '24px', height: '24px', color: 'white' }} />
       </button>
 
-      {/* Setup mode - instructions */}
+      {/* Setup mode */}
       {mode === 'setup' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-black">
-          <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center mb-6">
-            <Camera className="w-10 h-10 text-primary" />
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+          textAlign: 'center',
+        }}>
+          <div style={{
+            width: '80px',
+            height: '80px',
+            borderRadius: '50%',
+            backgroundColor: 'rgba(245,158,11,0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: '24px',
+          }}>
+            <Camera style={{ width: '40px', height: '40px', color: '#F59E0B' }} />
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">Share Your Moment</h2>
-          <p className="text-gray-400 mb-2 max-w-xs">
+          <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: 'white', marginBottom: '8px' }}>
+            Share Your Moment
+          </h2>
+          <p style={{ color: '#9CA3AF', marginBottom: '8px', maxWidth: '280px' }}>
             Take a selfie with our branded frame!
           </p>
-          <p className="text-gray-500 mb-8 max-w-xs text-sm">
+          <p style={{ color: '#6B7280', marginBottom: '32px', maxWidth: '280px', fontSize: '14px' }}>
             The Hollywood Groove branding will appear at the bottom of your photo.
           </p>
 
           <button
             onClick={startCamera}
-            className="px-8 py-4 bg-primary text-black rounded-2xl font-bold text-lg hover:bg-primary/90 transition flex items-center gap-3"
+            style={{
+              padding: '16px 32px',
+              backgroundColor: '#F59E0B',
+              color: 'black',
+              borderRadius: '16px',
+              fontWeight: 'bold',
+              fontSize: '18px',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+            }}
           >
-            <Camera className="w-5 h-5" />
+            <Camera style={{ width: '20px', height: '20px' }} />
             Take Photo
           </button>
 
-          <div className="mt-8 flex items-center gap-2 text-gray-400 text-sm">
-            <Sparkles className="w-4 h-4 text-primary" />
-            <span>Earn <strong className="text-primary">0.5 stars</strong> for sharing!</span>
+          <div style={{ marginTop: '32px', display: 'flex', alignItems: 'center', gap: '8px', color: '#9CA3AF', fontSize: '14px' }}>
+            <Sparkles style={{ width: '16px', height: '16px', color: '#F59E0B' }} />
+            <span>Earn <strong style={{ color: '#F59E0B' }}>0.5 stars</strong> for sharing!</span>
           </div>
 
           {error && (
-            <p className="mt-4 text-red-400 text-sm">{error}</p>
+            <p style={{ marginTop: '16px', color: '#F87171', fontSize: '14px' }}>{error}</p>
           )}
         </div>
       )}
 
       {/* Loading mode */}
       {mode === 'loading' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black">
-          <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-          <p className="text-white">Opening camera...</p>
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <Loader2 style={{ width: '48px', height: '48px', color: '#F59E0B', animation: 'spin 1s linear infinite' }} />
+          <p style={{ color: 'white', marginTop: '16px' }}>Opening camera...</p>
         </div>
       )}
 
       {/* Camera mode overlays */}
       {mode === 'camera' && cameraReady && (
         <>
-          {/* Live overlay preview - shows what branding will look like */}
-          <div
-            className="absolute bottom-32 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent pointer-events-none"
-            style={{ zIndex: 100000 }}
-          >
-            <div className="text-primary font-bold text-xl">Hollywood Groove</div>
-            <div className="text-white text-sm">
+          {/* Live overlay preview */}
+          <div style={{
+            position: 'absolute',
+            bottom: '140px',
+            left: 0,
+            right: 0,
+            padding: '16px',
+            background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)',
+            pointerEvents: 'none',
+            zIndex: 100000,
+          }}>
+            <div style={{ color: '#F59E0B', fontWeight: 'bold', fontSize: '20px' }}>Hollywood Groove</div>
+            <div style={{ color: 'white', fontSize: '14px' }}>
               {venueName ? `${showName} @ ${venueName}` : showName}
             </div>
-            <div className="text-white/70 text-xs">{today}</div>
-            <div className="text-primary font-bold text-sm absolute bottom-4 right-4">
+            <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px' }}>{today}</div>
+            <div style={{ position: 'absolute', bottom: '16px', right: '16px', color: '#F59E0B', fontWeight: 'bold', fontSize: '14px' }}>
               #HollywoodGroove
             </div>
           </div>
 
-          {/* Camera controls */}
-          <div
-            className="absolute bottom-6 left-0 right-0 flex items-center justify-center gap-8 pb-safe"
-            style={{ zIndex: 100000 }}
-          >
+          {/* Camera controls - positioned safely above home indicator */}
+          <div style={{
+            position: 'absolute',
+            bottom: '40px',
+            left: 0,
+            right: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '32px',
+            zIndex: 100000,
+            paddingBottom: 'env(safe-area-inset-bottom, 20px)',
+          }}>
             {/* Flip camera */}
             <button
               onClick={flipCamera}
-              className="p-4 rounded-full bg-white/20 text-white hover:bg-white/30 transition backdrop-blur-sm"
+              style={{
+                padding: '16px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                border: 'none',
+                cursor: 'pointer',
+              }}
             >
-              <RotateCcw className="w-6 h-6" />
+              <RotateCcw style={{ width: '24px', height: '24px', color: 'white' }} />
             </button>
 
             {/* Capture button */}
             <button
               onClick={capturePhoto}
-              className="w-20 h-20 rounded-full bg-white border-4 border-primary flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-lg"
+              style={{
+                width: '72px',
+                height: '72px',
+                borderRadius: '50%',
+                backgroundColor: 'white',
+                border: '4px solid #F59E0B',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
-              <div className="w-16 h-16 rounded-full bg-primary" />
+              <div style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
+                backgroundColor: '#F59E0B',
+              }} />
             </button>
 
             {/* Placeholder for symmetry */}
-            <div className="w-14 h-14" />
+            <div style={{ width: '56px', height: '56px' }} />
           </div>
 
           {/* Hint text */}
-          <div
-            className="absolute top-20 left-0 right-0 text-center"
-            style={{ zIndex: 100000 }}
-          >
-            <p className="text-white/80 text-sm bg-black/40 inline-block px-4 py-2 rounded-full backdrop-blur-sm">
+          <div style={{
+            position: 'absolute',
+            top: '80px',
+            left: 0,
+            right: 0,
+            textAlign: 'center',
+            zIndex: 100000,
+          }}>
+            <p style={{
+              display: 'inline-block',
+              padding: '8px 16px',
+              borderRadius: '20px',
+              backgroundColor: 'rgba(0,0,0,0.4)',
+              color: 'rgba(255,255,255,0.8)',
+              fontSize: '14px',
+            }}>
               Tap the button to capture!
             </p>
           </div>
@@ -430,70 +682,116 @@ function ShareMomentContent({
 
       {/* Preview mode */}
       {mode === 'preview' && capturedImage && (
-        <div className="absolute inset-0 flex flex-col bg-black">
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: '#000',
+        }}>
           {/* Preview image */}
-          <div className="flex-1 flex items-center justify-center overflow-hidden">
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            padding: '16px',
+          }}>
             <img
               src={capturedImage}
               alt="Captured moment"
-              className="max-h-full max-w-full object-contain"
+              style={{
+                maxHeight: '100%',
+                maxWidth: '100%',
+                objectFit: 'contain',
+                borderRadius: '12px',
+              }}
             />
           </div>
 
           {/* Actions */}
-          <div className="p-6 bg-gray-900 space-y-4 pb-safe">
-            <div className="flex items-center justify-center gap-2 text-gray-400 text-sm">
-              <Sparkles className="w-4 h-4 text-primary" />
-              <span>Share to earn <strong className="text-primary">0.5 stars</strong>!</span>
+          <div style={{
+            padding: '16px',
+            paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+            backgroundColor: '#111',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#9CA3AF', fontSize: '14px', marginBottom: '12px' }}>
+              <Sparkles style={{ width: '16px', height: '16px', color: '#F59E0B' }} />
+              <span>Share to earn <strong style={{ color: '#F59E0B' }}>0.5 stars</strong>!</span>
             </div>
 
-            {/* Share buttons */}
-            <div className="flex gap-3">
-              <button
-                onClick={shareImage}
-                className="flex-1 py-4 bg-primary text-black rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-primary/90 transition"
-              >
-                <Share2 className="w-5 h-5" />
-                Share
-              </button>
+            {/* Main share button - uses native share sheet */}
+            <button
+              onClick={shareWithNativeSheet}
+              style={{
+                width: '100%',
+                padding: '14px',
+                backgroundColor: '#F59E0B',
+                color: 'black',
+                borderRadius: '12px',
+                fontWeight: 'bold',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                marginBottom: '12px',
+              }}
+            >
+              <Share2 style={{ width: '20px', height: '20px' }} />
+              Share Photo
+            </button>
 
-              <button
-                onClick={downloadImage}
-                className="px-4 py-4 bg-gray-800 text-white rounded-xl font-bold hover:bg-gray-700 transition"
-              >
-                <Download className="w-5 h-5" />
+            {/* Platform-specific share buttons */}
+            <p style={{ textAlign: 'center', color: '#6B7280', fontSize: '12px', marginBottom: '8px' }}>
+              Or share directly to:
+            </p>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '12px',
+              marginBottom: '12px',
+            }}>
+              <button onClick={shareToInstagram} style={{ padding: '10px', borderRadius: '10px', backgroundColor: 'rgba(236,72,153,0.2)', border: 'none', cursor: 'pointer' }}>
+                <Instagram style={{ width: '24px', height: '24px', color: '#EC4899' }} />
               </button>
-            </div>
-
-            {/* Quick share to specific platforms */}
-            <div className="flex items-center justify-center gap-4">
-              <span className="text-xs text-gray-500">Share to:</span>
-              <button
-                onClick={shareImage}
-                className="p-2 rounded-lg bg-pink-500/20 text-pink-500 hover:bg-pink-500/30 transition"
-                title="Instagram"
-              >
-                <Instagram className="w-5 h-5" />
+              <button onClick={shareToFacebook} style={{ padding: '10px', borderRadius: '10px', backgroundColor: 'rgba(59,130,246,0.2)', border: 'none', cursor: 'pointer' }}>
+                <Facebook style={{ width: '24px', height: '24px', color: '#3B82F6' }} />
               </button>
-              <button
-                onClick={shareImage}
-                className="p-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition"
-                title="TikTok"
-              >
-                <TikTokIcon className="w-5 h-5" />
+              <button onClick={shareToTwitter} style={{ padding: '10px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer' }}>
+                <XIcon className="w-6 h-6 text-white" />
+              </button>
+              <button onClick={shareToThreads} style={{ padding: '10px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer' }}>
+                <ThreadsIcon className="w-6 h-6 text-white" />
+              </button>
+              <button onClick={shareToTikTok} style={{ padding: '10px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer' }}>
+                <TikTokIcon className="w-6 h-6 text-white" />
+              </button>
+              <button onClick={downloadImage} style={{ padding: '10px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer' }}>
+                <Download style={{ width: '24px', height: '24px', color: 'white' }} />
               </button>
             </div>
 
             {/* Retake button */}
             <button
               onClick={retake}
-              className="w-full py-3 text-gray-400 font-medium hover:text-white transition"
+              style={{
+                width: '100%',
+                padding: '12px',
+                backgroundColor: 'transparent',
+                color: '#9CA3AF',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: '500',
+              }}
             >
               Retake Photo
             </button>
 
             {error && (
-              <p className="text-red-400 text-sm text-center">{error}</p>
+              <p style={{ textAlign: 'center', color: '#F87171', fontSize: '14px', marginTop: '8px' }}>{error}</p>
             )}
           </div>
         </div>
@@ -501,37 +799,90 @@ function ShareMomentContent({
 
       {/* Shared confirmation */}
       {mode === 'shared' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-black">
-          <div className="relative mb-6">
-            <div className="w-24 h-24 rounded-full bg-green-500/20 flex items-center justify-center">
-              <CheckCircle className="w-12 h-12 text-green-500" />
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+          textAlign: 'center',
+        }}>
+          <div style={{ position: 'relative', marginBottom: '24px' }}>
+            <div style={{
+              width: '96px',
+              height: '96px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(34,197,94,0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <CheckCircle style={{ width: '48px', height: '48px', color: '#22C55E' }} />
             </div>
             {starsEarned && (
-              <div className="absolute -top-2 -right-2 w-10 h-10 rounded-full bg-primary flex items-center justify-center animate-bounce">
-                <Star className="w-5 h-5 text-black fill-black" />
+              <div style={{
+                position: 'absolute',
+                top: '-8px',
+                right: '-8px',
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                backgroundColor: '#F59E0B',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <Star style={{ width: '20px', height: '20px', color: 'black', fill: 'black' }} />
               </div>
             )}
           </div>
 
-          <h2 className="text-2xl font-bold text-white mb-2">Thanks for Sharing!</h2>
-          <p className="text-gray-400 mb-4">
+          <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: 'white', marginBottom: '8px' }}>
+            Thanks for Sharing!
+          </h2>
+          <p style={{ color: '#9CA3AF', marginBottom: '16px' }}>
             Your Hollywood Groove moment is on its way!
           </p>
 
           {starsEarned && (
-            <div className="px-4 py-2 bg-primary/20 rounded-full text-primary font-bold mb-8">
+            <div style={{
+              padding: '8px 16px',
+              backgroundColor: 'rgba(245,158,11,0.2)',
+              borderRadius: '20px',
+              color: '#F59E0B',
+              fontWeight: 'bold',
+              marginBottom: '32px',
+            }}>
               +0.5 Stars Earned!
             </div>
           )}
 
           <button
             onClick={handleClose}
-            className="px-8 py-4 bg-gray-800 text-white rounded-2xl font-bold hover:bg-gray-700 transition"
+            style={{
+              padding: '16px 32px',
+              backgroundColor: '#374151',
+              color: 'white',
+              borderRadius: '16px',
+              fontWeight: 'bold',
+              border: 'none',
+              cursor: 'pointer',
+            }}
           >
             Done
           </button>
         </div>
       )}
+
+      {/* CSS for spinner animation */}
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
@@ -542,7 +893,6 @@ export default function ShareMoment(props: ShareMomentProps) {
 
   useEffect(() => {
     setMounted(true);
-    // Prevent body scroll when modal is open
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = '';
@@ -551,7 +901,6 @@ export default function ShareMoment(props: ShareMomentProps) {
 
   if (!mounted) return null;
 
-  // Use portal to render at document root level
   return createPortal(
     <ShareMomentContent {...props} />,
     document.body
