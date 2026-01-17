@@ -1,13 +1,15 @@
 import { Link } from 'react-router-dom';
 import {
   Mail, Phone, User, CheckCircle, AlertCircle, LogOut,
-  Edit3, Save, X, MapPin, Instagram, Loader2, Facebook, Youtube
+  Edit3, Save, X, MapPin, Instagram, Loader2, Facebook, Youtube,
+  Camera, RotateCcw
 } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 import { IS_TEST_MODE, isAdminEmail } from '../lib/mode';
 import { auth } from '../lib/firebase';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { SocialLinks } from '../types/firebaseContract';
+import md5 from 'md5';
 
 // TikTok icon component (not in lucide-react)
 function TikTokIcon({ className }: { className?: string }) {
@@ -136,6 +138,304 @@ function openSocialProfile(platform: typeof SOCIAL_PLATFORMS[number], username: 
   }, 1500);
 }
 
+// Generate Gravatar URL from email
+function getGravatarUrl(email: string | undefined, size = 200): string | null {
+  if (!email) return null;
+  const hash = md5(email.trim().toLowerCase());
+  return `https://www.gravatar.com/avatar/${hash}?s=${size}&d=404`;
+}
+
+// Profile Picture Picker Component
+interface ProfilePicturePickerProps {
+  currentPhotoURL?: string;
+  googlePhotoURL?: string | null;
+  email?: string;
+  onPhotoChange: (url: string | undefined) => void;
+  onClose: () => void;
+}
+
+function ProfilePicturePicker({
+  currentPhotoURL,
+  googlePhotoURL,
+  email,
+  onPhotoChange,
+  onClose,
+}: ProfilePicturePickerProps) {
+  const [mode, setMode] = useState<'select' | 'camera'>('select');
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [gravatarExists, setGravatarExists] = useState<boolean | null>(null);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const gravatarUrl = getGravatarUrl(email);
+
+  // Check if Gravatar exists
+  useEffect(() => {
+    if (!gravatarUrl) {
+      setGravatarExists(false);
+      return;
+    }
+
+    const img = new window.Image();
+    img.onload = () => setGravatarExists(true);
+    img.onerror = () => setGravatarExists(false);
+    img.src = gravatarUrl;
+  }, [gravatarUrl]);
+
+  // Start camera
+  const startCamera = useCallback(async () => {
+    try {
+      setCameraError(null);
+      setCameraReady(false);
+
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode },
+        audio: false,
+      });
+
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        setCameraReady(true);
+        setMode('camera');
+      }
+    } catch (err) {
+      console.error('Camera error:', err);
+      setCameraError('Could not access camera. Please allow camera permissions.');
+    }
+  }, [facingMode]);
+
+  // Stop camera
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setCameraReady(false);
+    setMode('select');
+  }, []);
+
+  // Flip camera
+  const flipCamera = useCallback(async () => {
+    const newMode = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(newMode);
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: newMode },
+      audio: false,
+    });
+
+    streamRef.current = stream;
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+    }
+  }, [facingMode]);
+
+  // Capture photo
+  const capturePhoto = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Square crop for profile pic
+    const size = Math.min(video.videoWidth, video.videoHeight);
+    const sourceX = (video.videoWidth - size) / 2;
+    const sourceY = (video.videoHeight - size) / 2;
+
+    canvas.width = 400;
+    canvas.height = 400;
+
+    // Mirror for front camera
+    if (facingMode === 'user') {
+      ctx.translate(400, 0);
+      ctx.scale(-1, 1);
+    }
+
+    ctx.drawImage(video, sourceX, sourceY, size, size, 0, 0, 400, 400);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const imageData = canvas.toDataURL('image/jpeg', 0.85);
+    onPhotoChange(imageData);
+    stopCamera();
+    onClose();
+  }, [facingMode, onPhotoChange, stopCamera, onClose]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  if (mode === 'camera') {
+    return (
+      <div className="fixed inset-0 bg-black z-50 flex flex-col">
+        <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+        {/* Camera preview */}
+        <div className="flex-1 relative overflow-hidden">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
+          />
+
+          {/* Square frame guide */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="w-64 h-64 border-4 border-white/50 rounded-full" />
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className="bg-black p-6 flex items-center justify-center gap-8">
+          <button
+            onClick={stopCamera}
+            className="p-3 rounded-full bg-white/20"
+          >
+            <X className="w-6 h-6 text-white" />
+          </button>
+
+          <button
+            onClick={capturePhoto}
+            disabled={!cameraReady}
+            className="w-16 h-16 rounded-full bg-white border-4 border-primary disabled:opacity-50"
+          />
+
+          <button
+            onClick={flipCamera}
+            className="p-3 rounded-full bg-white/20"
+          >
+            <RotateCcw className="w-6 h-6 text-white" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
+        <div className="p-4 border-b border-cinema-200 flex items-center justify-between">
+          <h3 className="font-bold text-lg">Profile Picture</h3>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-cinema-100">
+            <X className="w-5 h-5 text-cinema-500" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3">
+          {/* Current photo preview */}
+          <div className="flex justify-center mb-4">
+            <div className="w-24 h-24 rounded-full bg-cinema-100 border-2 border-cinema-200 overflow-hidden flex items-center justify-center">
+              {currentPhotoURL ? (
+                <img src={currentPhotoURL} alt="Current" className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-12 h-12 text-cinema-400" />
+              )}
+            </div>
+          </div>
+
+          {/* Take selfie option */}
+          <button
+            onClick={startCamera}
+            className="w-full flex items-center gap-3 p-3 rounded-xl border border-cinema-200 hover:bg-cinema-50 transition"
+          >
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <Camera className="w-5 h-5 text-primary" />
+            </div>
+            <span className="font-medium">Take a selfie</span>
+          </button>
+
+          {cameraError && (
+            <p className="text-sm text-red-600">{cameraError}</p>
+          )}
+
+          {/* Use Google photo option */}
+          {googlePhotoURL && (
+            <button
+              onClick={() => {
+                onPhotoChange(googlePhotoURL);
+                onClose();
+              }}
+              className="w-full flex items-center gap-3 p-3 rounded-xl border border-cinema-200 hover:bg-cinema-50 transition"
+            >
+              <img src={googlePhotoURL} alt="Google" className="w-10 h-10 rounded-full" />
+              <span className="font-medium">Use Google photo</span>
+              {currentPhotoURL === googlePhotoURL && (
+                <CheckCircle className="w-5 h-5 text-accent-green ml-auto" />
+              )}
+            </button>
+          )}
+
+          {/* Use Gravatar option */}
+          {gravatarExists && gravatarUrl && (
+            <button
+              onClick={() => {
+                onPhotoChange(gravatarUrl);
+                onClose();
+              }}
+              className="w-full flex items-center gap-3 p-3 rounded-xl border border-cinema-200 hover:bg-cinema-50 transition"
+            >
+              <img src={gravatarUrl} alt="Gravatar" className="w-10 h-10 rounded-full" />
+              <span className="font-medium">Use Gravatar</span>
+              {currentPhotoURL === gravatarUrl && (
+                <CheckCircle className="w-5 h-5 text-accent-green ml-auto" />
+              )}
+            </button>
+          )}
+
+          {/* Remove photo option */}
+          {currentPhotoURL && (
+            <button
+              onClick={() => {
+                onPhotoChange(undefined);
+                onClose();
+              }}
+              className="w-full flex items-center gap-3 p-3 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 transition"
+            >
+              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
+                <X className="w-5 h-5" />
+              </div>
+              <span className="font-medium">Remove photo</span>
+            </button>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-cinema-200">
+          <button
+            onClick={onClose}
+            className="w-full py-2 text-cinema-500 font-medium"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Profile() {
   const {
     userProfile,
@@ -166,6 +466,8 @@ export default function Profile() {
     marketingSMS: false,
     notifications: true,
   });
+  const [editPhotoURL, setEditPhotoURL] = useState<string | undefined>(undefined);
+  const [showPhotoPicker, setShowPhotoPicker] = useState(false);
 
   // Nickname validation state
   const [checkingName, setCheckingName] = useState(false);
@@ -184,9 +486,11 @@ export default function Profile() {
         marketingSMS: userProfile.preferences?.marketingSMS || false,
         notifications: userProfile.preferences?.notifications ?? true,
       });
+      setEditPhotoURL(userProfile.photoURL);
       setNameAvailable(null);
       setNameSuggestions([]);
       setSaveError(null);
+      setShowPhotoPicker(false);
     }
   }, [isEditing, userProfile]);
 
@@ -270,6 +574,7 @@ export default function Profile() {
       phone: editPhone.trim() || undefined,
       suburb: editSuburb.trim() || undefined,
       socials: editSocials,
+      photoURL: editPhotoURL,
       preferences: editPreferences,
     });
 
@@ -416,6 +721,71 @@ export default function Profile() {
           {saveError}
         </div>
       )}
+
+      {/* Profile Picture Picker Modal */}
+      {showPhotoPicker && (
+        <ProfilePicturePicker
+          currentPhotoURL={editPhotoURL}
+          googlePhotoURL={googlePhotoURL}
+          email={userProfile.email}
+          onPhotoChange={(url) => setEditPhotoURL(url)}
+          onClose={() => setShowPhotoPicker(false)}
+        />
+      )}
+
+      {/* Profile Picture Card */}
+      <div className="bg-cinema-50 border border-cinema-200 rounded-2xl p-5">
+        <div className="flex items-center gap-4">
+          {/* Photo */}
+          <div className="relative">
+            <div className="w-20 h-20 rounded-full bg-cinema-100 border-2 border-cinema-200 overflow-hidden flex items-center justify-center">
+              {(isEditing ? editPhotoURL : userProfile.photoURL) ? (
+                <img
+                  src={isEditing ? editPhotoURL : userProfile.photoURL}
+                  alt="Profile"
+                  className="w-full h-full object-cover"
+                />
+              ) : googlePhotoURL && !isEditing ? (
+                <img
+                  src={googlePhotoURL}
+                  alt="Google profile"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <User className="w-10 h-10 text-cinema-400" />
+              )}
+            </div>
+            {isEditing && (
+              <button
+                onClick={() => setShowPhotoPicker(true)}
+                className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:bg-primary/90 transition"
+              >
+                <Camera className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-lg truncate">{userProfile.displayName}</div>
+            <div className="text-sm text-cinema-500">
+              {isEditing ? 'Tap camera to change photo' : 'Your profile picture'}
+            </div>
+          </div>
+
+          {!isEditing && !userProfile.photoURL && !googlePhotoURL && (
+            <button
+              onClick={() => {
+                setIsEditing(true);
+                setTimeout(() => setShowPhotoPicker(true), 100);
+              }}
+              className="px-3 py-2 rounded-xl bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition"
+            >
+              Add photo
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Basic Info Card */}
       <div className="bg-cinema-50 border border-cinema-200 rounded-2xl p-5 space-y-4">

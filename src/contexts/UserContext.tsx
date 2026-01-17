@@ -38,6 +38,7 @@ export interface UpdateProfileData {
   phone?: string;
   suburb?: string;
   socials?: SocialLinks;
+  photoURL?: string;
   preferences?: {
     marketingEmails?: boolean;
     marketingSMS?: boolean;
@@ -142,6 +143,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
             marketingSMS: smsOptIn,
             notifications: rawProfile.preferences?.notifications ?? true,
           },
+          // Extended profile fields
+          suburb: rawProfile.suburb,
+          socials: rawProfile.socials,
+          photoURL: rawProfile.photo_url || rawProfile.photoURL,
         };
 
         console.log('Normalized profile:', normalizedProfile);
@@ -392,6 +397,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (data.socials !== undefined) {
         firebaseUpdates.socials = data.socials;
       }
+      if (data.photoURL !== undefined) {
+        firebaseUpdates.photo_url = data.photoURL || null;
+      }
       if (data.preferences !== undefined) {
         if (data.preferences.marketingEmails !== undefined) {
           firebaseUpdates.email_opt_in = data.preferences.marketingEmails;
@@ -425,6 +433,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
       if (data.socials !== undefined) {
         localUpdates.socials = data.socials;
+      }
+      if (data.photoURL !== undefined) {
+        localUpdates.photoURL = data.photoURL || undefined;
       }
       if (data.preferences !== undefined) {
         localUpdates.preferences = {

@@ -204,6 +204,7 @@ export interface MemberProfile {
   // Extended profile fields (progressive profiling)
   suburb?: string;           // Area/suburb location
   socials?: SocialLinks;     // Social media links
+  photo_url?: string;        // Profile picture URL (selfie, Google, or Gravatar)
 
   // Role-based permissions
   roles?: string[];
@@ -229,6 +230,7 @@ export interface UserProfile {
   // Extended profile fields (progressive profiling)
   suburb?: string;           // Area/suburb location
   socials?: SocialLinks;     // Social media links
+  photoURL?: string;         // Profile picture (selfie, Google, or Gravatar)
 }
 
 // ============================================
