@@ -71,14 +71,14 @@ function ShareMomentContent({
     year: 'numeric',
   });
 
-  // Get screen dimensions for proper aspect ratio
-  const getScreenDimensions = () => {
-    const isPortrait = window.innerHeight > window.innerWidth;
-    if (isPortrait) {
-      return { width: 1080, height: 1920 };
-    } else {
-      return { width: 1920, height: 1080 };
-    }
+  // Get reasonable camera dimensions - don't request too high to avoid zoom
+  const getCameraConstraints = () => {
+    // Request moderate resolution - let the camera choose its native aspect ratio
+    // High resolutions (1080x1920) cause iPhone to digitally zoom
+    return {
+      width: { ideal: 720 },
+      height: { ideal: 1280 },
+    };
   };
 
   // Stop camera
@@ -102,43 +102,20 @@ function ShareMomentContent({
         streamRef.current.getTracks().forEach(track => track.stop());
       }
 
-      const dims = getScreenDimensions();
+      const dims = getCameraConstraints();
 
-      // Mobile-optimized constraints - avoid zoom issues
+      // Mobile-optimized constraints - avoid zoom by not requesting high resolution
       const constraints: MediaStreamConstraints = {
         video: {
           facingMode: facingMode,
-          width: { ideal: dims.width, max: 1920 },
-          height: { ideal: dims.height, max: 1920 },
-          // Explicitly disable zoom-related features that cause issues
-          // @ts-ignore - these are valid but not in TS types
-          zoom: 1,
-          // Request wide angle if available (helps with zoom issues)
-          // @ts-ignore
-          resizeMode: 'crop-and-scale',
+          width: dims.width,
+          height: dims.height,
         },
         audio: false,
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
-
-      // Try to set zoom to minimum if the track supports it
-      const videoTrack = stream.getVideoTracks()[0];
-      if (videoTrack) {
-        try {
-          const capabilities = videoTrack.getCapabilities?.() as any;
-          if (capabilities?.zoom) {
-            const minZoom = capabilities.zoom.min || 1;
-            await videoTrack.applyConstraints({
-              // @ts-ignore
-              advanced: [{ zoom: minZoom }]
-            });
-          }
-        } catch (e) {
-          // Zoom control not supported, that's okay
-        }
-      }
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -194,13 +171,13 @@ function ShareMomentContent({
 
     try {
       setMode('loading');
-      const dims = getScreenDimensions();
+      const dims = getCameraConstraints();
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: newMode,
-          width: { ideal: dims.width, max: 1920 },
-          height: { ideal: dims.height, max: 1920 },
+          width: dims.width,
+          height: dims.height,
         },
         audio: false,
       });
@@ -218,7 +195,8 @@ function ShareMomentContent({
     }
   }, [facingMode]);
 
-  // Capture photo with overlay - handles orientation properly
+  // Capture photo with overlay
+  // Modern iOS Safari already provides video in correct orientation - no rotation needed
   const capturePhoto = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return;
 
@@ -227,38 +205,21 @@ function ShareMomentContent({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Get actual video dimensions
+    // Get actual video dimensions from the stream
     const videoWidth = video.videoWidth;
     const videoHeight = video.videoHeight;
 
-    // Determine if we should use portrait orientation based on screen
-    const screenIsPortrait = window.innerHeight > window.innerWidth;
+    // Use video dimensions directly - browser handles orientation
+    canvas.width = videoWidth;
+    canvas.height = videoHeight;
 
-    // Set canvas to portrait if screen is portrait, regardless of video orientation
-    if (screenIsPortrait && videoWidth > videoHeight) {
-      // Video is landscape but screen is portrait - rotate
-      canvas.width = videoHeight;
-      canvas.height = videoWidth;
-
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.rotate(Math.PI / 2);
-      if (facingMode === 'user') {
-        ctx.scale(-1, 1);
-      }
-      ctx.drawImage(video, -videoWidth / 2, -videoHeight / 2, videoWidth, videoHeight);
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-    } else {
-      // Normal orientation
-      canvas.width = videoWidth;
-      canvas.height = videoHeight;
-
-      if (facingMode === 'user') {
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
-      }
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // Mirror for front camera to match the preview
+    if (facingMode === 'user') {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
     }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     // Draw branded overlay
     const padding = canvas.width * 0.05;
