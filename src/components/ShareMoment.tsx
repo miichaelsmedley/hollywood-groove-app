@@ -196,7 +196,7 @@ function ShareMomentContent({
   }, [facingMode]);
 
   // Capture photo with overlay
-  // Modern iOS Safari already provides video in correct orientation - no rotation needed
+  // Simulates objectFit: 'cover' to capture exactly what user sees in preview
   const capturePhoto = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return;
 
@@ -209,16 +209,47 @@ function ShareMomentContent({
     const videoWidth = video.videoWidth;
     const videoHeight = video.videoHeight;
 
-    // Use video dimensions directly - browser handles orientation
-    canvas.width = videoWidth;
-    canvas.height = videoHeight;
+    // Determine target dimensions based on screen orientation
+    const screenIsPortrait = window.innerHeight > window.innerWidth;
+    const targetWidth = screenIsPortrait ? 1080 : 1920;
+    const targetHeight = screenIsPortrait ? 1920 : 1080;
+
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
+    // Calculate source crop to simulate objectFit: 'cover'
+    // This captures exactly what the user sees in the preview
+    const targetAspect = targetWidth / targetHeight;
+    const videoAspect = videoWidth / videoHeight;
+
+    let sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number;
+
+    if (videoAspect > targetAspect) {
+      // Video is wider than target - crop left and right
+      sourceHeight = videoHeight;
+      sourceWidth = videoHeight * targetAspect;
+      sourceX = (videoWidth - sourceWidth) / 2;
+      sourceY = 0;
+    } else {
+      // Video is taller than target - crop top and bottom
+      sourceWidth = videoWidth;
+      sourceHeight = videoWidth / targetAspect;
+      sourceX = 0;
+      sourceY = (videoHeight - sourceHeight) / 2;
+    }
 
     // Mirror for front camera to match the preview
     if (facingMode === 'user') {
-      ctx.translate(canvas.width, 0);
+      ctx.translate(targetWidth, 0);
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Draw the cropped portion of video to fill canvas (simulates cover)
+    ctx.drawImage(
+      video,
+      sourceX, sourceY, sourceWidth, sourceHeight,  // Source rectangle (crop)
+      0, 0, targetWidth, targetHeight                // Destination (full canvas)
+    );
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     // Draw branded overlay
