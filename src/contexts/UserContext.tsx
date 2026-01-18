@@ -114,11 +114,54 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
 
       // Check if user profile exists in Firebase (/members/ path per contract)
+      // Wrap in try-catch to handle network errors gracefully
       const userRef = ref(db, `members/${user.uid}`);
       console.log('Fetching profile from:', `members/${user.uid}`);
-      const snapshot = await get(userRef);
 
-      if (snapshot.exists()) {
+      let snapshot;
+      let firebaseReadFailed = false;
+
+      // Retry logic for Firebase read (handles transient network issues)
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          snapshot = await get(userRef);
+          break; // Success, exit retry loop
+        } catch (error) {
+          console.warn(`🔍 Firebase read attempt ${attempt}/3 failed:`, error);
+          if (attempt === 3) {
+            console.error('🔍 All Firebase read attempts failed, falling back to localStorage');
+            firebaseReadFailed = true;
+          } else {
+            // Wait before retry (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+          }
+        }
+      }
+
+      // If Firebase read failed, try localStorage first
+      if (firebaseReadFailed) {
+        const cached = localStorage.getItem('userProfile');
+        if (cached) {
+          try {
+            const profile = JSON.parse(cached) as UserProfile;
+            if (profile.uid === user.uid) {
+              console.log('🔍 Using cached profile after Firebase failure');
+              setUserProfile(profile);
+              setLoading(false);
+              return;
+            }
+          } catch (parseError) {
+            console.error('🔍 Failed to parse cached profile:', parseError);
+          }
+        }
+        // No valid cache, user appears not registered
+        console.log('🔍 No valid cached profile, user not registered');
+        setUserProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      if (snapshot && snapshot.exists()) {
         console.log('Profile exists in Firebase:', snapshot.val());
         const rawProfile = snapshot.val();
 
@@ -164,14 +207,37 @@ export function UserProvider({ children }: { children: ReactNode }) {
         const cached = localStorage.getItem('userProfile');
         console.log('🔍 Checking localStorage cache:', cached ? 'found' : 'not found');
         if (cached) {
-          const profile = JSON.parse(cached) as UserProfile;
-          console.log('🔍 Cached profile UID:', profile.uid, 'Current UID:', user.uid);
-          // Verify UID matches - if not, clear stale cache
-          if (profile.uid === user.uid) {
-            console.log('🔍 UID matches, using cached profile');
-            setUserProfile(profile);
-          } else {
-            console.warn('🔍 UID mismatch in cached profile, clearing cache');
+          try {
+            const profile = JSON.parse(cached) as UserProfile;
+            console.log('🔍 Cached profile UID:', profile.uid, 'Current UID:', user.uid);
+            // Verify UID matches - if not, clear stale cache
+            if (profile.uid === user.uid) {
+              console.log('🔍 UID matches, using cached profile');
+              setUserProfile(profile);
+
+              // Try to sync cached profile back to Firebase (in case write failed earlier)
+              console.log('🔍 Attempting to sync cached profile to Firebase...');
+              try {
+                const firebaseProfile = {
+                  display_name: profile.displayName,
+                  created_at: profile.createdAt,
+                  email_opt_in: profile.preferences?.marketingEmails ?? false,
+                  sms_opt_in: profile.preferences?.marketingSMS ?? false,
+                  ...(profile.email && { email: profile.email }),
+                  ...(profile.phone && { phone: profile.phone }),
+                };
+                await set(ref(db, `members/${user.uid}`), firebaseProfile);
+                console.log('✅ Synced cached profile to Firebase');
+              } catch (syncError) {
+                console.warn('⚠️ Failed to sync profile to Firebase:', syncError);
+              }
+            } else {
+              console.warn('🔍 UID mismatch in cached profile, clearing cache');
+              localStorage.removeItem('userProfile');
+              setUserProfile(null);
+            }
+          } catch (parseError) {
+            console.error('🔍 Failed to parse cached profile:', parseError);
             localStorage.removeItem('userProfile');
             setUserProfile(null);
           }
@@ -222,18 +288,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       ...(data.phone && { phone: data.phone }),
     };
 
-    // Save to Firebase (/members/ path per contract)
-    console.log('📝 Writing member profile to Firebase:', `members/${user.uid}`);
-    console.log('📝 Profile data:', JSON.stringify(firebaseProfile, null, 2));
-    try {
-      await set(ref(db, `members/${user.uid}`), firebaseProfile);
-      console.log('✅ Member profile saved to Firebase successfully');
-    } catch (firebaseError) {
-      console.error('❌ Firebase write failed:', firebaseError);
-      throw firebaseError; // Re-throw so the UI shows error
-    }
-
-    // Build local profile in UserProfile format (camelCase) for PWA state
+    // Build local profile in UserProfile format (camelCase) for PWA state FIRST
+    // This ensures we have a local copy even if Firebase write fails
     const localProfile: UserProfile = {
       uid: user.uid,
       displayName: data.displayName,
@@ -249,11 +305,37 @@ export function UserProvider({ children }: { children: ReactNode }) {
       },
     };
 
-    // Save to localStorage
+    // Save to localStorage FIRST (most reliable for persistence)
     localStorage.setItem('userProfile', JSON.stringify(localProfile));
+    console.log('💾 Profile saved to localStorage');
+
+    // Save to Firebase (/members/ path per contract)
+    console.log('📝 Writing member profile to Firebase:', `members/${user.uid}`);
+    console.log('📝 Profile data:', JSON.stringify(firebaseProfile, null, 2));
+    try {
+      await set(ref(db, `members/${user.uid}`), firebaseProfile);
+      console.log('✅ Member profile saved to Firebase successfully');
+
+      // Verify the write by reading back
+      const verifySnapshot = await get(ref(db, `members/${user.uid}`));
+      if (verifySnapshot.exists()) {
+        console.log('✅ Profile verified in Firebase');
+      } else {
+        console.warn('⚠️ Profile not found in Firebase after write - relying on localStorage');
+      }
+    } catch (firebaseError) {
+      console.error('❌ Firebase write failed:', firebaseError);
+      // Don't throw - we have the profile in localStorage
+      // The sync logic in onAuthStateChanged will retry later
+      console.log('⚠️ Continuing with localStorage profile only');
+    }
 
     // Update auth profile
-    await updateProfile(user, { displayName: data.displayName });
+    try {
+      await updateProfile(user, { displayName: data.displayName });
+    } catch (profileError) {
+      console.warn('⚠️ Failed to update auth display name:', profileError);
+    }
 
     setUserProfile(localProfile);
   };
