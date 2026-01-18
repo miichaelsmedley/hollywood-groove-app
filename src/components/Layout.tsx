@@ -12,27 +12,29 @@ export default function Layout() {
     <div className="min-h-screen bg-cinema text-cinema-900">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-cinema/90 backdrop-blur border-b border-cinema-200">
-        <div className="max-w-3xl mx-auto px-4 pt-4 pb-3">
-          <div className="flex items-center justify-between">
-            <Link to="/" className="flex items-center gap-2">
-              <Music className="w-7 h-7 text-primary" />
-              <span className="text-lg font-bold font-display">Hollywood Groove</span>
-            </Link>
-          </div>
+        <div className="max-w-3xl mx-auto px-4 pt-3 pb-2">
+          {/* Logo Bar - subtle grey background, clickable to home */}
+          <Link
+            to="/"
+            className="flex items-center justify-center gap-2 py-2 -mx-4 px-4 bg-cinema-50/20 hover:bg-cinema-50/30 transition"
+          >
+            <Music className="w-9 h-9 text-primary" />
+            <span className="text-xl font-bold font-display">Hollywood Groove</span>
+          </Link>
 
-          <nav className="mt-3 grid grid-cols-3 gap-2">
+          <nav className="mt-2 grid grid-cols-3 gap-1.5">
             <NavLink
               to={withTestParam('/shows')}
               className={({ isActive }) =>
                 [
-                  'flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold border transition',
+                  'flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold border transition',
                   isActive
                     ? 'bg-primary text-cinema border-primary shadow-glow'
                     : 'bg-cinema-50 text-cinema-800 border-cinema-200 hover:border-primary/60',
                 ].join(' ')
               }
             >
-              <Music className="w-4 h-4" />
+              <Music className="w-3.5 h-3.5" />
               <span>Shows</span>
             </NavLink>
 
@@ -40,14 +42,14 @@ export default function Layout() {
               to={withTestParam('/upcoming')}
               className={({ isActive }) =>
                 [
-                  'flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold border transition',
+                  'flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold border transition',
                   isActive
                     ? 'bg-primary text-cinema border-primary shadow-glow'
                     : 'bg-cinema-50 text-cinema-800 border-cinema-200 hover:border-primary/60',
                 ].join(' ')
               }
             >
-              <Ticket className="w-4 h-4" />
+              <Ticket className="w-3.5 h-3.5" />
               <span>Tickets</span>
             </NavLink>
 
@@ -55,14 +57,14 @@ export default function Layout() {
               to={withTestParam('/join')}
               className={({ isActive }) =>
                 [
-                  'flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold border transition',
+                  'flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold border transition',
                   isActive
                     ? 'bg-primary text-cinema border-primary shadow-glow'
                     : 'bg-cinema-50 text-cinema-800 border-cinema-200 hover:border-primary/60',
                 ].join(' ')
               }
             >
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="w-3.5 h-3.5" />
               <span>Join</span>
             </NavLink>
           </nav>
@@ -70,26 +72,26 @@ export default function Layout() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-3xl mx-auto px-4 py-6 pb-24">
+      <main className="max-w-3xl mx-auto px-4 py-4 pb-20">
         <Outlet />
       </main>
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 inset-x-0 z-40 bg-cinema/95 backdrop-blur border-t border-cinema-200 pb-[env(safe-area-inset-bottom)]">
         <div className="max-w-3xl mx-auto px-4">
-          <div className="grid grid-cols-3 gap-2 py-2">
+          <div className="grid grid-cols-3 gap-1.5 py-1.5">
             <NavLink
               to={withTestParam('/scores')}
               className={({ isActive }) =>
                 [
-                  'flex flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold border transition',
+                  'flex flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-semibold border transition',
                   isActive
                     ? 'bg-primary text-cinema border-primary shadow-glow'
                     : 'bg-cinema-50 text-cinema-800 border-cinema-200 hover:border-primary/60',
                 ].join(' ')
               }
             >
-              <BarChart3 className="w-5 h-5" />
+              <BarChart3 className="w-4 h-4" />
               <span>Scores</span>
             </NavLink>
 
@@ -97,14 +99,14 @@ export default function Layout() {
               to={withTestParam('/leaderboard')}
               className={({ isActive }) =>
                 [
-                  'flex flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold border transition',
+                  'flex flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-semibold border transition',
                   isActive
                     ? 'bg-primary text-cinema border-primary shadow-glow'
                     : 'bg-cinema-50 text-cinema-800 border-cinema-200 hover:border-primary/60',
                 ].join(' ')
               }
             >
-              <Trophy className="w-5 h-5" />
+              <Trophy className="w-4 h-4" />
               <span>Leaderboard</span>
             </NavLink>
 
@@ -112,14 +114,14 @@ export default function Layout() {
               to={withTestParam('/profile')}
               className={({ isActive }) =>
                 [
-                  'flex flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold border transition',
+                  'flex flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-semibold border transition',
                   isActive
                     ? 'bg-primary text-cinema border-primary shadow-glow'
                     : 'bg-cinema-50 text-cinema-800 border-cinema-200 hover:border-primary/60',
                 ].join(' ')
               }
             >
-              <User className="w-5 h-5" />
+              <User className="w-4 h-4" />
               <span>Profile</span>
             </NavLink>
           </div>
