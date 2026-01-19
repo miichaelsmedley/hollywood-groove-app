@@ -60,14 +60,25 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     console.log('🔍 UserContext: Setting up auth listener');
 
+    // Track if we've already loaded profile to avoid redundant Firebase reads
+    let profileLoadedForUid: string | null = null;
+
     // Load user profile from Firebase when auth changes
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      console.log('🔍 UserContext: onAuthStateChanged fired', user ? { uid: user.uid, isAnonymous: user.isAnonymous } : 'null');
+      const timestamp = new Date().toISOString();
+      console.log(`🔍 UserContext [${timestamp}]: onAuthStateChanged fired`, user ? {
+        uid: user.uid,
+        isAnonymous: user.isAnonymous,
+        email: user.email,
+        providers: user.providerData?.map(p => p.providerId),
+      } : 'null');
 
       if (!user) {
+        console.log('🔍 UserContext: No user, clearing profile');
         setUserProfile(null);
         setIsGoogleUser(false);
         setGooglePhotoURL(null);
+        profileLoadedForUid = null;
         // Keep test access if it was granted via URL code (don't clear hg_test_access)
         const hasLocalTestAccess = localStorage.getItem('hg_test_access') === 'true';
         setCanUseTestMode(hasLocalTestAccess);
@@ -75,7 +86,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      console.log('Auth state changed:', {
+      // Skip redundant loads for the same user
+      if (profileLoadedForUid === user.uid) {
+        console.log('🔍 UserContext: Profile already loaded for this UID, skipping');
+        return;
+      }
+
+      console.log('🔍 UserContext: Auth state changed, loading profile for:', {
         uid: user.uid,
         isAnonymous: user.isAnonymous,
         providerData: user.providerData,
@@ -192,8 +209,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
           photoURL: rawProfile.photo_url || rawProfile.photoURL,
         };
 
-        console.log('Normalized profile:', normalizedProfile);
+        console.log('✅ Normalized profile:', normalizedProfile);
         setUserProfile(normalizedProfile);
+        profileLoadedForUid = user.uid;
         // Save to localStorage with current UID
         localStorage.setItem('userProfile', JSON.stringify(normalizedProfile));
 
@@ -212,8 +230,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
             console.log('🔍 Cached profile UID:', profile.uid, 'Current UID:', user.uid);
             // Verify UID matches - if not, clear stale cache
             if (profile.uid === user.uid) {
-              console.log('🔍 UID matches, using cached profile');
+              console.log('✅ UID matches, using cached profile');
               setUserProfile(profile);
+              profileLoadedForUid = user.uid;
 
               // Try to sync cached profile back to Firebase (in case write failed earlier)
               console.log('🔍 Attempting to sync cached profile to Firebase...');

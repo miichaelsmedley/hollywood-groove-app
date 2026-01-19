@@ -105,57 +105,69 @@ export default function App() {
         return;
       }
 
-      // Set up auth state listener for anonymous sign-in fallback
-      // This only runs if user is NOT already signed in with Google
-      unsubscribe = onAuthStateChanged(auth, async (user) => {
-        console.log('onAuthStateChanged fired:', user ? {
-          uid: user.uid,
-          isAnonymous: user.isAnonymous,
-          email: user.email,
-          providerData: user.providerData?.map(p => p.providerId),
-        } : 'null');
+      // CRITICAL: Wait for auth state to be fully restored from localStorage
+      // This is essential because onAuthStateChanged fires immediately with null
+      // before the persisted auth state is loaded
+      console.log('⏳ Waiting for auth state to be fully ready...');
+      await auth.authStateReady();
+      console.log('✅ Auth state ready, current user:', auth.currentUser ? {
+        uid: auth.currentUser.uid,
+        isAnonymous: auth.currentUser.isAnonymous,
+        email: auth.currentUser.email,
+        providers: auth.currentUser.providerData?.map(p => p.providerId),
+      } : 'null');
 
-        if (!user) {
-          // CRITICAL: Don't sign in anonymously if Google auth might be in progress
-          if (isGoogleAuthInProgress()) {
-            console.log('⏳ No user but Google auth in progress, waiting...');
-            setAuthReady(true);
-            return;
-          }
+      // Check if we already have a user after auth state is ready
+      if (auth.currentUser) {
+        console.log('✅ User already signed in after auth state ready');
+        setAuthReady(true);
 
-          // Double-check: if we just returned from a redirect, wait a bit more
-          // Auth state restoration can be delayed on some mobile browsers
-          if (redirectResult.wasRedirectPending) {
-            console.log('⏳ Redirect was pending, giving extra time for auth restoration...');
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            // Recheck after delay
-            if (auth.currentUser) {
-              console.log('✅ User appeared after delay:', auth.currentUser.uid);
-              setAuthReady(true);
-              return;
-            }
-          }
-
-          // No user and no redirect in progress - sign in anonymously
-          try {
-            console.log('👤 No user, signing in anonymously...');
-            await signInAnonymously(auth);
-          } catch (error) {
-            console.error('Firebase auth error:', error);
-            setAuthError('Authentication failed. Please refresh the page.');
-          }
-        } else {
-          console.log('✅ User signed in:', {
+        // Set up listener for future changes only
+        unsubscribe = onAuthStateChanged(auth, (user) => {
+          console.log('🔄 Auth state changed:', user ? {
             uid: user.uid,
             isAnonymous: user.isAnonymous,
             email: user.email,
-            providerData: user.providerData,
-          });
-        }
+          } : 'null');
+        });
+        return;
+      }
 
-        // Mark auth as ready once we have a user or have processed the state
+      // No user after auth state is ready - need to handle anonymous sign-in
+      // But first check if Google auth is in progress
+      if (isGoogleAuthInProgress()) {
+        console.log('⏳ No user but Google auth in progress, waiting...');
         setAuthReady(true);
+
+        unsubscribe = onAuthStateChanged(auth, (user) => {
+          console.log('🔄 Auth state changed (waiting for Google):', user ? {
+            uid: user.uid,
+            isAnonymous: user.isAnonymous,
+          } : 'null');
+        });
+        return;
+      }
+
+      // Truly no user - sign in anonymously
+      try {
+        console.log('👤 No user found, signing in anonymously...');
+        await signInAnonymously(auth);
+        console.log('✅ Anonymous sign-in complete');
+      } catch (error) {
+        console.error('Firebase auth error:', error);
+        setAuthError('Authentication failed. Please refresh the page.');
+      }
+
+      // Mark auth as ready
+      setAuthReady(true);
+
+      // Set up listener for future changes
+      unsubscribe = onAuthStateChanged(auth, (user) => {
+        console.log('🔄 Auth state changed:', user ? {
+          uid: user.uid,
+          isAnonymous: user.isAnonymous,
+          email: user.email,
+        } : 'null');
       });
     })();
 
