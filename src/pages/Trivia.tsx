@@ -33,11 +33,15 @@ export default function Trivia() {
   useEffect(() => {
     if (!id) return;
 
+    const triviaPath = getPath(id, 'live/trivia');
+    console.log(`📡 Trivia: Listening to ${triviaPath} (testMode=${isTestShow})`);
+
     // Listen to live trivia state
     const unsubscribeLive = onValue(
-      ref(db, getPath(id, 'live/trivia')),
+      ref(db, triviaPath),
       (snapshot) => {
         const state = snapshot.val() as LiveTriviaState | null;
+        console.log(`📡 Trivia: Received data from ${triviaPath}:`, state);
         setLiveTrivia(state);
 
         // Reset answered state when new question appears
@@ -227,12 +231,24 @@ export default function Trivia() {
             <span>Back to Show</span>
           </Link>
 
+          {/* Test Mode Indicator */}
+          {isTestShow && (
+            <div className="mb-4 px-3 py-2 bg-purple-500/20 border border-purple-500/50 rounded-lg text-center">
+              <span className="text-purple-300 text-sm font-medium">🧪 Test Mode Active</span>
+            </div>
+          )}
+
           <div className="max-w-2xl mx-auto text-center py-12">
             <Trophy className="w-16 h-16 text-gray-600 mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-2">No Active Trivia</h2>
             <p className="text-gray-400">
               Wait for the next question to appear during the show!
             </p>
+            {isTestShow && (
+              <p className="text-purple-400 text-sm mt-4">
+                Listening for test trivia at: test/shows/{id}/live/trivia
+              </p>
+            )}
           </div>
         </div>
         {/* Sticky ActionBar at bottom */}
@@ -248,6 +264,13 @@ export default function Trivia() {
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 pb-40 max-w-lg mx-auto">
+          {/* Test Mode Banner */}
+          {isTestShow && (
+            <div className="mb-3 px-2 py-1 bg-purple-500/20 border border-purple-500/50 rounded-lg text-center">
+              <span className="text-purple-300 text-xs font-medium">🧪 Test Mode</span>
+            </div>
+          )}
+
           {/* Header */}
           <div className="flex items-center justify-between mb-3">
             <Link

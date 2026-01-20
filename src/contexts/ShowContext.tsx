@@ -1,8 +1,8 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
 import { ref, onValue, set } from 'firebase/database';
 import { auth, db } from '../lib/firebase';
 import { ShowSettings, LiveActivityState, LiveTriviaState } from '../types/firebaseContract';
-import { getShowPath } from '../lib/mode';
+import { getShowPath, getTestShowPath } from '../lib/mode';
 
 interface DanceClaimRecord {
   lastClaimAt: number;
@@ -61,10 +61,25 @@ const DEFAULT_SETTINGS: ShowSettings = {
 
 interface ShowProviderProps {
   showId: number;
+  isTestShow?: boolean;
   children: ReactNode;
 }
 
-export function ShowProvider({ showId, children }: ShowProviderProps) {
+export function ShowProvider({ showId, isTestShow = false, children }: ShowProviderProps) {
+  // Create path helper that respects test mode
+  const getPath = useMemo(() => {
+    return (suffix?: string) => {
+      return isTestShow
+        ? getTestShowPath(String(showId), suffix)
+        : getShowPath(String(showId), suffix);
+    };
+  }, [showId, isTestShow]);
+
+  // Log path mode for debugging
+  useEffect(() => {
+    console.log(`📡 ShowContext: Using ${isTestShow ? 'TEST' : 'PRODUCTION'} paths for show ${showId}`);
+    console.log(`📡 Example path: ${getPath('live/trivia')}`);
+  }, [showId, isTestShow, getPath]);
   const [settings, setSettings] = useState<ShowSettings | null>(null);
   const [liveActivity, setLiveActivity] = useState<LiveActivityState | null>(null);
   const [liveTrivia, setLiveTrivia] = useState<LiveTriviaState | null>(null);
@@ -82,7 +97,8 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
 
   // Listen to show settings
   useEffect(() => {
-    const settingsRef = ref(db, getShowPath(String(showId), 'settings'));
+    const settingsRef = ref(db, getPath('settings'));
+    console.log(`📡 ShowContext: Listening to settings at ${getPath('settings')}`);
     const unsubscribe = onValue(settingsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
@@ -92,40 +108,43 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
       }
     });
     return () => unsubscribe();
-  }, [showId]);
+  }, [getPath]);
 
   // Listen to live activity state
   useEffect(() => {
-    const activityRef = ref(db, getShowPath(String(showId), 'live/activity'));
+    const activityRef = ref(db, getPath('live/activity'));
+    console.log(`📡 ShowContext: Listening to live/activity at ${getPath('live/activity')}`);
     const unsubscribe = onValue(activityRef, (snapshot) => {
       const data = snapshot.val();
       setLiveActivity(data as LiveActivityState | null);
     });
     return () => unsubscribe();
-  }, [showId]);
+  }, [getPath]);
 
   // Listen to live trivia state
   useEffect(() => {
-    const triviaRef = ref(db, getShowPath(String(showId), 'live/trivia'));
+    const triviaRef = ref(db, getPath('live/trivia'));
+    console.log(`📡 ShowContext: Listening to live/trivia at ${getPath('live/trivia')}`);
     const unsubscribe = onValue(triviaRef, (snapshot) => {
       const data = snapshot.val();
+      console.log(`📡 ShowContext: Received trivia data:`, data);
       setLiveTrivia(data as LiveTriviaState | null);
     });
     return () => unsubscribe();
-  }, [showId]);
+  }, [getPath]);
 
   // Listen to user's dance claims for cooldown tracking
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
 
-    const claimsRef = ref(db, getShowPath(String(showId), `dance_claims/${uid}`));
+    const claimsRef = ref(db, getPath(`dance_claims/${uid}`));
     const unsubscribe = onValue(claimsRef, (snapshot) => {
       const data = snapshot.val();
       setLastDanceClaim(data as DanceClaimRecord | null);
     });
     return () => unsubscribe();
-  }, [showId]);
+  }, [getPath]);
 
   // Update cooldown timer
   useEffect(() => {
@@ -175,7 +194,7 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
       const claimedMedian = currentMedian ?? effectiveSettings.dancing_floor;
 
       // Write to responses (for scoring by Cloud Functions)
-      await set(ref(db, getShowPath(String(showId), `responses/${activityId}/${uid}`)), {
+      await set(ref(db, getPath(`responses/${activityId}/${uid}`)), {
         type: 'dance_claim',
         claimedAt: Date.now(),
         displayName: auth.currentUser?.displayName || 'Anonymous',
@@ -184,7 +203,7 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
 
       // Update dance claims record for cooldown tracking
       const newClaimCount = (lastDanceClaim?.claimCount || 0) + 1;
-      await set(ref(db, getShowPath(String(showId), `dance_claims/${uid}`)), {
+      await set(ref(db, getPath(`dance_claims/${uid}`)), {
         lastClaimAt: Date.now(),
         claimCount: newClaimCount,
         activityId,
@@ -200,7 +219,7 @@ export function ShowProvider({ showId, children }: ShowProviderProps) {
       console.error('Failed to claim dance points:', error);
       return false;
     }
-  }, [showId, canClaimDance, liveActivity, currentMedian, lastDanceClaim, effectiveSettings.dancing_floor, isOnBreak]);
+  }, [getPath, showId, canClaimDance, liveActivity, currentMedian, lastDanceClaim, effectiveSettings.dancing_floor, isOnBreak]);
 
   // Clear break timers
   const clearBreakTimers = useCallback(() => {

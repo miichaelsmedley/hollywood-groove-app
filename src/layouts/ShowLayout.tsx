@@ -1,4 +1,4 @@
-import { Outlet, useParams } from 'react-router-dom';
+import { Outlet, useParams, useSearchParams } from 'react-router-dom';
 import { ShowProvider } from '../contexts/ShowContext';
 
 /**
@@ -7,7 +7,9 @@ import { ShowProvider } from '../contexts/ShowContext';
  */
 export default function ShowLayout() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const showId = id ? Number(id) : null;
+  const isTestShow = searchParams.get('test') === 'true';
 
   if (!showId || isNaN(showId)) {
     return (
@@ -18,7 +20,7 @@ export default function ShowLayout() {
   }
 
   return (
-    <ShowProvider showId={showId}>
+    <ShowProvider showId={showId} isTestShow={isTestShow}>
       <Outlet />
     </ShowProvider>
   );
