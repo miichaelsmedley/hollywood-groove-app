@@ -24,20 +24,27 @@ export default function Home() {
 
   // Check for active test shows (only if user can use test mode)
   useEffect(() => {
+    console.log('🧪 Home: canUseTestMode =', canUseTestMode);
+
     if (!canUseTestMode) {
+      console.log('🧪 Home: User cannot use test mode, skipping test show check');
       setCheckingTestShow(false);
       return;
     }
 
     // Listen to test shows path for active test shows
     const showsRef = ref(db, 'test/shows');
+    console.log('🧪 Home: Listening to test/shows for active test shows');
 
     const unsubscribe = onValue(
       showsRef,
       (snapshot) => {
         setCheckingTestShow(false);
         const data = snapshot.val();
+        console.log('🧪 Home: Received test/shows data:', data);
+
         if (!data) {
+          console.log('🧪 Home: No test shows data found');
           setActiveTestShow(null);
           return;
         }
@@ -60,8 +67,9 @@ export default function Home() {
           // Check if trivia data is stale (older than 30 minutes)
           const isTriviaStale = !triviaTimestamp || (now - triviaTimestamp) > MAX_STALE_MS;
 
-          // Trivia is active when in question, reveal, or countdown phases AND not stale
-          const activeTriviaPhases = ['question', 'reveal', 'countdown', 'answering'];
+          // Trivia is active when in question or answer phases AND not stale
+          // Per firebaseContract.ts: TriviaPhase = 'idle' | 'question' | 'answer'
+          const activeTriviaPhases = ['question', 'answer'];
           const triviaActive = Boolean(
             phase &&
             activeTriviaPhases.includes(phase) &&
@@ -75,12 +83,24 @@ export default function Home() {
           const isActivityStale = !activityTimestamp || (now - activityTimestamp) > MAX_STALE_MS;
           const activityActive = liveActivity?.status === 'active' && !isActivityStale;
 
+          console.log(`🧪 Home: Show ${showId} check:`, {
+            meta,
+            phase,
+            triviaTimestamp,
+            isTriviaStale,
+            triviaActive,
+            activityActive,
+            hasTitle: Boolean(meta?.title),
+          });
+
           if (meta?.title && (triviaActive || activityActive)) {
+            console.log(`🧪 Home: Found active test show: ${showId} - ${meta.title}`);
             setActiveTestShow({ showId, title: meta.title });
             return;
           }
         }
 
+        console.log('🧪 Home: No active test shows found (all either missing title, inactive, or stale)');
         setActiveTestShow(null);
       },
       (err) => {

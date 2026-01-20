@@ -108,25 +108,34 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // 1. URL test code (?testCode=groove2024) - sets hg_test_access in localStorage
       // 2. Firebase /testers/{uid} entry for non-anonymous users
       const hasLocalTestAccess = localStorage.getItem('hg_test_access') === 'true';
+      console.log('🧪 UserContext: Test mode check:', {
+        hasLocalTestAccess,
+        isAnonymous: user.isAnonymous,
+        uid: user.uid,
+      });
 
       if (hasLocalTestAccess) {
         // Already has test access (from URL code or previous Firebase check)
+        console.log('🧪 UserContext: Test access granted via localStorage');
         setCanUseTestMode(true);
       } else if (!user.isAnonymous) {
         // Check Firebase testers list for non-anonymous users
         try {
           const testerRef = ref(db, `testers/${user.uid}`);
+          console.log('🧪 UserContext: Checking Firebase testers list at:', `testers/${user.uid}`);
           const testerSnap = await get(testerRef);
           const allowed = Boolean(testerSnap.val());
+          console.log('🧪 UserContext: Firebase testers check result:', { allowed, value: testerSnap.val() });
           setCanUseTestMode(allowed);
           if (allowed) {
             localStorage.setItem('hg_test_access', 'true');
           }
         } catch (error) {
-          console.warn('Failed to check test mode access:', error);
+          console.warn('🧪 UserContext: Failed to check test mode access:', error);
           setCanUseTestMode(false);
         }
       } else {
+        console.log('🧪 UserContext: User is anonymous, no test access');
         setCanUseTestMode(false);
       }
 
