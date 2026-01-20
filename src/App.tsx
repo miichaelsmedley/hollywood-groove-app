@@ -186,7 +186,20 @@ export default function App() {
           <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-cinema-400">Loading...</p>
           {authError && (
-            <p className="text-red-400 mt-4 text-sm">{authError}</p>
+            <div className="mt-4">
+              <p className="text-red-400 text-sm mb-3">{authError}</p>
+              <button
+                onClick={() => {
+                  // Clear any stuck auth state and reload
+                  localStorage.removeItem('hg_google_auth_redirect_pending');
+                  localStorage.removeItem('hg_google_auth_redirect_timestamp');
+                  window.location.reload();
+                }}
+                className="px-4 py-2 bg-primary text-cinema rounded-lg text-sm font-medium hover:bg-primary/90"
+              >
+                Try Again
+              </button>
+            </div>
           )}
         </div>
       </div>
