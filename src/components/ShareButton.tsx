@@ -12,7 +12,7 @@ import { recordSocialShare, getSocialShareStats } from '../lib/engagementService
 import { useUser } from '../contexts/UserContext';
 
 interface ShareButtonProps {
-  variant?: 'floating' | 'inline' | 'compact';
+  variant?: 'floating' | 'inline' | 'compact' | 'bright';
   showName?: string;
   venueName?: string;
   shareType?: 'photo' | 'achievement' | 'trivia_win' | 'show_moment';
@@ -88,6 +88,45 @@ export default function ShareButton({
           title={canShare ? 'Share a moment' : 'Daily limit reached'}
         >
           <Camera className="w-5 h-5" />
+        </button>
+
+        {showCamera && (
+          <ShareMoment
+            showName={showName}
+            venueName={venueName}
+            onClose={() => setShowCamera(false)}
+            onShareComplete={handleShareComplete}
+          />
+        )}
+      </>
+    );
+  }
+
+  // Bright variant (prominent, colorful button)
+  if (variant === 'bright') {
+    return (
+      <>
+        <button
+          onClick={() => setShowCamera(true)}
+          disabled={!canShare}
+          className={`flex items-center gap-3 px-5 py-3 rounded-xl bg-gradient-to-r from-primary to-pink-500 text-white shadow-lg shadow-primary/30 hover:shadow-primary/50 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 ${className}`}
+        >
+          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+            <Camera className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex-1 text-left">
+            <div className="font-bold text-white">Share a Moment</div>
+            <div className="text-xs text-white/80">
+              {canShare ? (
+                <>Earn <span className="text-yellow-300 font-semibold">0.5 stars</span> per share</>
+              ) : (
+                'Come back tomorrow for more!'
+              )}
+            </div>
+          </div>
+          {canShare && (
+            <Sparkles className="w-5 h-5 text-yellow-300" />
+          )}
         </button>
 
         {showCamera && (

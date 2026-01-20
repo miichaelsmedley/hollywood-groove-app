@@ -210,13 +210,6 @@ export default function Home() {
           </div>
         </Link>
 
-        {/* Share a Moment - Photo sharing for stars */}
-        <ShareButton
-          variant="inline"
-          showName="Hollywood Groove"
-          shareType="show_moment"
-        />
-
         {/* Tester Mode Entry Point - Only shows when test show is active */}
         {canUseTestMode && !checkingTestShow && activeTestShow && (
           !IS_TEST_MODE ? (
@@ -274,6 +267,15 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {/* Share a Moment - centered at bottom */}
+      <div className="flex justify-center mt-6">
+        <ShareButton
+          variant="bright"
+          showName="Hollywood Groove"
+          shareType="show_moment"
+        />
+      </div>
     </div>
   );
 }
