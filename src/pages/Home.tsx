@@ -263,6 +263,16 @@ export default function Home() {
             </div>
           </Link>
         )}
+
+        {/* Debug: Tester status indicator - shows for testers */}
+        {canUseTestMode && (
+          <div className="mt-4 p-2 bg-purple-900/30 border border-purple-700/50 rounded-lg text-xs text-purple-300">
+            <div className="flex items-center gap-2">
+              <FlaskConical className="h-3 w-3" />
+              <span>Tester Mode: {activeTestShow ? `Active (${activeTestShow.title})` : checkingTestShow ? 'Checking...' : 'No active test show'}</span>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );
