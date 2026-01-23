@@ -25,6 +25,8 @@ import Leaderboard from './pages/Leaderboard';
 import Profile from './pages/Profile';
 import Play from './pages/Play';
 import Score from './pages/Score';
+import { TeamsHub, CreateTeam, JoinTeam, TeamDetail } from './pages/Teams';
+import Test from './pages/Test';
 import { IS_TEST_MODE } from './lib/mode';
 
 // TEMPORARY: Mobile debugging console - remove after fixing auth
@@ -224,6 +226,11 @@ export default function App() {
             <Route path="activities" element={<GlobalActivities />} />
             <Route path="play" element={<Play />} />
             <Route path="score" element={<Score />} />
+            <Route path="teams" element={<TeamsHub />} />
+            <Route path="teams/create" element={<CreateTeam />} />
+            <Route path="teams/join" element={<JoinTeam />} />
+            <Route path="teams/:teamId" element={<TeamDetail />} />
+            <Route path="test" element={<Test />} />
             <Route path="shows/:id" element={<ShowDetail />} />
             {IS_TEST_MODE && (
               <>
