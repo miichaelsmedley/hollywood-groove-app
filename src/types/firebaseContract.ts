@@ -364,3 +364,66 @@ export interface TriviaLibraryUsage {
   total_activities_completed: number;
   total_stars_from_engagement: number;
 }
+
+// ============================================
+// TEAMS (Competitive Team Feature)
+// ============================================
+
+// Path: /teams/{teamId}
+export interface Team {
+  name: string;                     // Team display name (e.g., "The Smiths")
+  code: string;                     // Join code (6-char alphanumeric, e.g., "HG4X9K")
+  created_by: string;               // Owner's uid
+  created_at: number;               // Timestamp
+  settings: TeamSettings;
+  member_count: number;             // Denormalized for quick reads
+}
+
+export interface TeamSettings {
+  max_members: number;              // Default 8
+  top_contributors: number;         // How many scores count (default 5)
+}
+
+// Path: /teams/{teamId}/members/{uid}
+export interface TeamMember {
+  display_name: string;
+  joined_at: number;
+  role: 'owner' | 'member';
+  photo_url?: string;
+}
+
+// Stored in /members/{uid}/current_team
+export interface MemberTeamInfo {
+  team_id: string;
+  team_name: string;
+  joined_at: number;
+  role: 'owner' | 'member';
+}
+
+// Path: /team_codes/{code}
+export interface TeamCodeIndex {
+  team_id: string;
+}
+
+// Path: /shows/{showId}/team_scores/{teamId}
+export interface TeamShowScore {
+  team_name: string;
+  combined_score: number;           // Sum of top N contributors
+  member_scores: Record<string, { display_name: string; score: number }>;
+  contributing_members: string[];   // UIDs of top N included in combined score
+  updated_at: number;
+}
+
+// Path: /shows/{showId}/team_leaderboard
+export interface TeamLeaderboardEntry {
+  team_id: string;
+  team_name: string;
+  combined_score: number;
+  member_count: number;
+  rank?: number;
+}
+
+export interface TeamLeaderboard {
+  top: TeamLeaderboardEntry[];
+  updated_at: number;
+}
