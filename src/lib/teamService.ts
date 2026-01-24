@@ -177,7 +177,8 @@ export async function createTeam(
     display_name: ownerDisplayName,
     joined_at: now,
     role: 'owner',
-    photo_url: ownerPhotoUrl,
+    // Only include photo_url if it exists (Firebase doesn't allow undefined)
+    ...(ownerPhotoUrl ? { photo_url: ownerPhotoUrl } : {}),
   };
 
   const memberTeamInfo: MemberTeamInfo = {
@@ -269,7 +270,8 @@ export async function joinTeam(
     display_name: userDisplayName,
     joined_at: now,
     role: 'member',
-    photo_url: userPhotoUrl,
+    // Only include photo_url if it exists (Firebase doesn't allow undefined)
+    ...(userPhotoUrl ? { photo_url: userPhotoUrl } : {}),
   };
 
   const memberTeamInfo: MemberTeamInfo = {

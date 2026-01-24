@@ -306,7 +306,7 @@ export function CreateTeam() {
             onChange={(e) => setTeamName(e.target.value)}
             placeholder="e.g., The Smiths, Team Awesome"
             maxLength={30}
-            className="w-full px-4 py-3 rounded-xl bg-cinema-50/10 border border-cinema-200 text-cinema-100 placeholder-cinema-500 focus:border-primary focus:outline-none transition"
+            className="w-full px-4 py-3 rounded-xl bg-cinema-50/10 border border-cinema-200 text-cinema-800 placeholder-cinema-500 focus:border-primary focus:outline-none transition"
           />
           <p className="text-xs text-cinema-500 mt-1">{teamName.length}/30 characters</p>
         </div>
@@ -547,7 +547,7 @@ export function JoinTeam() {
               }}
               placeholder="e.g., HG4X9K"
               maxLength={6}
-              className="flex-1 px-4 py-3 rounded-xl bg-cinema-50/10 border border-cinema-200 text-cinema-100 placeholder-cinema-500 focus:border-primary focus:outline-none transition font-mono text-lg tracking-wider text-center uppercase"
+              className="flex-1 px-4 py-3 rounded-xl bg-cinema-50/10 border border-cinema-200 text-cinema-800 placeholder-cinema-500 focus:border-primary focus:outline-none transition font-mono text-lg tracking-wider text-center uppercase"
             />
             <button
               onClick={() => setShowScanner(true)}
@@ -793,7 +793,7 @@ export function TeamDetail() {
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
               maxLength={30}
-              className="w-full px-4 py-3 rounded-xl bg-cinema-50/10 border border-cinema-200 text-cinema-100 focus:border-primary focus:outline-none transition"
+              className="w-full px-4 py-3 rounded-xl bg-cinema-50/10 border border-cinema-200 text-cinema-800 focus:border-primary focus:outline-none transition"
             />
           </div>
 
