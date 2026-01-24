@@ -3,6 +3,8 @@
  *
  * Real-time listener for the current user's team membership.
  * Returns null if user is not in a team.
+ *
+ * Supports test mode: when isTestMode is true, listens to test/ paths.
  */
 
 import { useState, useEffect } from 'react';
@@ -19,7 +21,12 @@ export interface UseUserTeamResult {
   isOwner: boolean;
 }
 
-export function useUserTeam(): UseUserTeamResult {
+export interface UseUserTeamOptions {
+  isTestMode?: boolean;
+}
+
+export function useUserTeam(options: UseUserTeamOptions = {}): UseUserTeamResult {
+  const { isTestMode = false } = options;
   const { userProfile } = useUser();
   const [team, setTeam] = useState<MemberTeamInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,7 +39,8 @@ export function useUserTeam(): UseUserTeamResult {
       return;
     }
 
-    const teamRef = ref(db, `members/${userProfile.uid}/current_team`);
+    const prefix = isTestMode ? 'test/' : '';
+    const teamRef = ref(db, `${prefix}members/${userProfile.uid}/current_team`);
 
     const unsubscribe = onValue(
       teamRef,
@@ -54,7 +62,7 @@ export function useUserTeam(): UseUserTeamResult {
     );
 
     return () => unsubscribe();
-  }, [userProfile?.uid]);
+  }, [userProfile?.uid, isTestMode]);
 
   return {
     team,

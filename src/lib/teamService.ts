@@ -3,6 +3,8 @@
  *
  * Handles all team CRUD operations, join/leave functionality,
  * and team code management.
+ *
+ * Supports test mode: when isTestMode is true, all paths are prefixed with 'test/'
  */
 
 import { ref, get, update, push, runTransaction } from 'firebase/database';
@@ -20,6 +22,24 @@ const DEFAULT_TEAM_SETTINGS: TeamSettings = {
   max_members: 8,
   top_contributors: 5,
 };
+
+// ============================================
+// Path Helpers (Test Mode Support)
+// ============================================
+
+/**
+ * Get the path prefix for test mode
+ */
+function getPathPrefix(isTestMode: boolean): string {
+  return isTestMode ? 'test/' : '';
+}
+
+/**
+ * Build a path with optional test mode prefix
+ */
+function buildPath(path: string, isTestMode: boolean): string {
+  return `${getPathPrefix(isTestMode)}${path}`;
+}
 
 // ============================================
 // Team Code Generation
@@ -41,8 +61,8 @@ export function generateTeamCode(): string {
 /**
  * Check if a team code is available
  */
-export async function isTeamCodeAvailable(code: string): Promise<boolean> {
-  const codeRef = ref(db, `team_codes/${code.toUpperCase()}`);
+export async function isTeamCodeAvailable(code: string, isTestMode = false): Promise<boolean> {
+  const codeRef = ref(db, buildPath(`team_codes/${code.toUpperCase()}`, isTestMode));
   const snapshot = await get(codeRef);
   return !snapshot.exists();
 }
@@ -50,8 +70,8 @@ export async function isTeamCodeAvailable(code: string): Promise<boolean> {
 /**
  * Check if a team name is available (case-insensitive)
  */
-export async function isTeamNameAvailable(name: string): Promise<boolean> {
-  const teamsRef = ref(db, 'teams');
+export async function isTeamNameAvailable(name: string, isTestMode = false): Promise<boolean> {
+  const teamsRef = ref(db, buildPath('teams', isTestMode));
   const snapshot = await get(teamsRef);
 
   if (!snapshot.exists()) return true;
@@ -79,6 +99,15 @@ export interface CreateTeamResult {
   error?: string;
 }
 
+export interface CreateTeamOptions {
+  ownerId: string;
+  ownerDisplayName: string;
+  teamName: string;
+  ownerPhotoUrl?: string;
+  settings?: Partial<TeamSettings>;
+  isTestMode?: boolean;
+}
+
 /**
  * Create a new team
  */
@@ -87,8 +116,11 @@ export async function createTeam(
   ownerDisplayName: string,
   teamName: string,
   ownerPhotoUrl?: string,
-  settings?: Partial<TeamSettings>
+  settings?: Partial<TeamSettings>,
+  isTestMode = false
 ): Promise<CreateTeamResult> {
+  const prefix = getPathPrefix(isTestMode);
+
   // Validate team name
   const trimmedName = teamName.trim();
   if (!trimmedName || trimmedName.length < 2) {
@@ -99,13 +131,13 @@ export async function createTeam(
   }
 
   // Check if user already has a team
-  const existingTeam = await getUserTeam(ownerId);
+  const existingTeam = await getUserTeam(ownerId, isTestMode);
   if (existingTeam) {
     return { success: false, error: 'You are already in a team. Leave your current team first.' };
   }
 
   // Check if name is available
-  const nameAvailable = await isTeamNameAvailable(trimmedName);
+  const nameAvailable = await isTeamNameAvailable(trimmedName, isTestMode);
   if (!nameAvailable) {
     return { success: false, error: 'Team name is already taken' };
   }
@@ -113,7 +145,7 @@ export async function createTeam(
   // Generate unique code
   let code = generateTeamCode();
   let attempts = 0;
-  while (!(await isTeamCodeAvailable(code)) && attempts < 10) {
+  while (!(await isTeamCodeAvailable(code, isTestMode)) && attempts < 10) {
     code = generateTeamCode();
     attempts++;
   }
@@ -122,7 +154,7 @@ export async function createTeam(
   }
 
   // Create team
-  const teamsRef = ref(db, 'teams');
+  const teamsRef = ref(db, `${prefix}teams`);
   const newTeamRef = push(teamsRef);
   const teamId = newTeamRef.key!;
   const now = Date.now();
@@ -160,11 +192,11 @@ export async function createTeam(
   };
 
   // Write all data atomically
-  const updates: Record<string, any> = {};
-  updates[`teams/${teamId}`] = team;
-  updates[`teams/${teamId}/members/${ownerId}`] = ownerMember;
-  updates[`team_codes/${code}`] = codeIndex;
-  updates[`members/${ownerId}/current_team`] = memberTeamInfo;
+  const updates: Record<string, unknown> = {};
+  updates[`${prefix}teams/${teamId}`] = team;
+  updates[`${prefix}teams/${teamId}/members/${ownerId}`] = ownerMember;
+  updates[`${prefix}team_codes/${code}`] = codeIndex;
+  updates[`${prefix}members/${ownerId}/current_team`] = memberTeamInfo;
 
   try {
     await update(ref(db), updates);
@@ -193,18 +225,20 @@ export async function joinTeam(
   userId: string,
   userDisplayName: string,
   teamCode: string,
-  userPhotoUrl?: string
+  userPhotoUrl?: string,
+  isTestMode = false
 ): Promise<JoinTeamResult> {
+  const prefix = getPathPrefix(isTestMode);
   const normalizedCode = teamCode.toUpperCase().trim();
 
   // Check if user already has a team
-  const existingTeam = await getUserTeam(userId);
+  const existingTeam = await getUserTeam(userId, isTestMode);
   if (existingTeam) {
     return { success: false, error: 'You are already in a team. Leave your current team first.' };
   }
 
   // Look up team by code
-  const codeRef = ref(db, `team_codes/${normalizedCode}`);
+  const codeRef = ref(db, `${prefix}team_codes/${normalizedCode}`);
   const codeSnapshot = await get(codeRef);
 
   if (!codeSnapshot.exists()) {
@@ -214,7 +248,7 @@ export async function joinTeam(
   const { team_id: teamId } = codeSnapshot.val() as TeamCodeIndex;
 
   // Get team details
-  const teamRef = ref(db, `teams/${teamId}`);
+  const teamRef = ref(db, `${prefix}teams/${teamId}`);
   const teamSnapshot = await get(teamRef);
 
   if (!teamSnapshot.exists()) {
@@ -247,7 +281,7 @@ export async function joinTeam(
 
   try {
     // Use transaction to safely increment member count
-    await runTransaction(ref(db, `teams/${teamId}/member_count`), (currentCount) => {
+    await runTransaction(ref(db, `${prefix}teams/${teamId}/member_count`), (currentCount) => {
       const count = currentCount || 0;
       if (count >= team.settings.max_members) {
         // Abort transaction if team became full
@@ -257,9 +291,9 @@ export async function joinTeam(
     });
 
     // Write member data
-    const updates: Record<string, any> = {};
-    updates[`teams/${teamId}/members/${userId}`] = newMember;
-    updates[`members/${userId}/current_team`] = memberTeamInfo;
+    const updates: Record<string, unknown> = {};
+    updates[`${prefix}teams/${teamId}/members/${userId}`] = newMember;
+    updates[`${prefix}members/${userId}/current_team`] = memberTeamInfo;
 
     await update(ref(db), updates);
 
@@ -277,8 +311,9 @@ export async function joinTeam(
 /**
  * Leave current team
  */
-export async function leaveTeam(userId: string): Promise<{ success: boolean; error?: string }> {
-  const currentTeam = await getUserTeam(userId);
+export async function leaveTeam(userId: string, isTestMode = false): Promise<{ success: boolean; error?: string }> {
+  const prefix = getPathPrefix(isTestMode);
+  const currentTeam = await getUserTeam(userId, isTestMode);
 
   if (!currentTeam) {
     return { success: false, error: 'You are not in a team.' };
@@ -294,14 +329,14 @@ export async function leaveTeam(userId: string): Promise<{ success: boolean; err
 
   try {
     // Decrement member count
-    await runTransaction(ref(db, `teams/${currentTeam.team_id}/member_count`), (currentCount) => {
+    await runTransaction(ref(db, `${prefix}teams/${currentTeam.team_id}/member_count`), (currentCount) => {
       return Math.max((currentCount || 1) - 1, 0);
     });
 
     // Remove member data
-    const updates: Record<string, any> = {};
-    updates[`teams/${currentTeam.team_id}/members/${userId}`] = null;
-    updates[`members/${userId}/current_team`] = null;
+    const updates: Record<string, unknown> = {};
+    updates[`${prefix}teams/${currentTeam.team_id}/members/${userId}`] = null;
+    updates[`${prefix}members/${userId}/current_team`] = null;
 
     await update(ref(db), updates);
 
@@ -321,10 +356,13 @@ export async function leaveTeam(userId: string): Promise<{ success: boolean; err
  */
 export async function disbandTeam(
   ownerId: string,
-  teamId: string
+  teamId: string,
+  isTestMode = false
 ): Promise<{ success: boolean; error?: string }> {
+  const prefix = getPathPrefix(isTestMode);
+
   // Verify ownership
-  const teamRef = ref(db, `teams/${teamId}`);
+  const teamRef = ref(db, `${prefix}teams/${teamId}`);
   const teamSnapshot = await get(teamRef);
 
   if (!teamSnapshot.exists()) {
@@ -338,19 +376,19 @@ export async function disbandTeam(
   }
 
   // Get all members
-  const membersRef = ref(db, `teams/${teamId}/members`);
+  const membersRef = ref(db, `${prefix}teams/${teamId}/members`);
   const membersSnapshot = await get(membersRef);
   const memberUids = membersSnapshot.exists() ? Object.keys(membersSnapshot.val()) : [];
 
   try {
     // Remove team data
-    const updates: Record<string, any> = {};
-    updates[`teams/${teamId}`] = null;
-    updates[`team_codes/${team.code}`] = null;
+    const updates: Record<string, unknown> = {};
+    updates[`${prefix}teams/${teamId}`] = null;
+    updates[`${prefix}team_codes/${team.code}`] = null;
 
     // Remove current_team from all members
     for (const uid of memberUids) {
-      updates[`members/${uid}/current_team`] = null;
+      updates[`${prefix}members/${uid}/current_team`] = null;
     }
 
     await update(ref(db), updates);
@@ -369,8 +407,8 @@ export async function disbandTeam(
 /**
  * Get team by ID
  */
-export async function getTeam(teamId: string): Promise<Team | null> {
-  const teamRef = ref(db, `teams/${teamId}`);
+export async function getTeam(teamId: string, isTestMode = false): Promise<Team | null> {
+  const teamRef = ref(db, buildPath(`teams/${teamId}`, isTestMode));
   const snapshot = await get(teamRef);
 
   if (!snapshot.exists()) return null;
@@ -382,16 +420,17 @@ export async function getTeam(teamId: string): Promise<Team | null> {
  * Get team by join code
  */
 export async function getTeamByCode(
-  code: string
+  code: string,
+  isTestMode = false
 ): Promise<{ teamId: string; team: Team } | null> {
   const normalizedCode = code.toUpperCase().trim();
-  const codeRef = ref(db, `team_codes/${normalizedCode}`);
+  const codeRef = ref(db, buildPath(`team_codes/${normalizedCode}`, isTestMode));
   const codeSnapshot = await get(codeRef);
 
   if (!codeSnapshot.exists()) return null;
 
   const { team_id: teamId } = codeSnapshot.val() as TeamCodeIndex;
-  const team = await getTeam(teamId);
+  const team = await getTeam(teamId, isTestMode);
 
   if (!team) return null;
 
@@ -401,8 +440,8 @@ export async function getTeamByCode(
 /**
  * Get all members of a team
  */
-export async function getTeamMembers(teamId: string): Promise<Record<string, TeamMember>> {
-  const membersRef = ref(db, `teams/${teamId}/members`);
+export async function getTeamMembers(teamId: string, isTestMode = false): Promise<Record<string, TeamMember>> {
+  const membersRef = ref(db, buildPath(`teams/${teamId}/members`, isTestMode));
   const snapshot = await get(membersRef);
 
   if (!snapshot.exists()) return {};
@@ -413,8 +452,8 @@ export async function getTeamMembers(teamId: string): Promise<Record<string, Tea
 /**
  * Get user's current team info
  */
-export async function getUserTeam(userId: string): Promise<MemberTeamInfo | null> {
-  const teamRef = ref(db, `members/${userId}/current_team`);
+export async function getUserTeam(userId: string, isTestMode = false): Promise<MemberTeamInfo | null> {
+  const teamRef = ref(db, buildPath(`members/${userId}/current_team`, isTestMode));
   const snapshot = await get(teamRef);
 
   if (!snapshot.exists()) return null;
@@ -432,9 +471,10 @@ export async function getUserTeam(userId: string): Promise<MemberTeamInfo | null
 export async function updateTeamSettings(
   teamId: string,
   ownerId: string,
-  settings: Partial<TeamSettings>
+  settings: Partial<TeamSettings>,
+  isTestMode = false
 ): Promise<{ success: boolean; error?: string }> {
-  const team = await getTeam(teamId);
+  const team = await getTeam(teamId, isTestMode);
 
   if (!team) {
     return { success: false, error: 'Team not found.' };
@@ -461,7 +501,7 @@ export async function updateTeamSettings(
   }
 
   try {
-    const settingsRef = ref(db, `teams/${teamId}/settings`);
+    const settingsRef = ref(db, buildPath(`teams/${teamId}/settings`, isTestMode));
     await update(settingsRef, settings);
     return { success: true };
   } catch (error) {
@@ -476,9 +516,11 @@ export async function updateTeamSettings(
 export async function updateTeamName(
   teamId: string,
   ownerId: string,
-  newName: string
+  newName: string,
+  isTestMode = false
 ): Promise<{ success: boolean; error?: string }> {
-  const team = await getTeam(teamId);
+  const prefix = getPathPrefix(isTestMode);
+  const team = await getTeam(teamId, isTestMode);
 
   if (!team) {
     return { success: false, error: 'Team not found.' };
@@ -498,7 +540,7 @@ export async function updateTeamName(
 
   // Check if name is available (unless it's the same name)
   if (trimmedName.toLowerCase() !== team.name.toLowerCase()) {
-    const nameAvailable = await isTeamNameAvailable(trimmedName);
+    const nameAvailable = await isTeamNameAvailable(trimmedName, isTestMode);
     if (!nameAvailable) {
       return { success: false, error: 'Team name is already taken.' };
     }
@@ -506,14 +548,14 @@ export async function updateTeamName(
 
   try {
     // Update team name and all member references
-    const members = await getTeamMembers(teamId);
+    const members = await getTeamMembers(teamId, isTestMode);
     const memberUids = Object.keys(members);
 
-    const updates: Record<string, any> = {};
-    updates[`teams/${teamId}/name`] = trimmedName;
+    const updates: Record<string, unknown> = {};
+    updates[`${prefix}teams/${teamId}/name`] = trimmedName;
 
     for (const uid of memberUids) {
-      updates[`members/${uid}/current_team/team_name`] = trimmedName;
+      updates[`${prefix}members/${uid}/current_team/team_name`] = trimmedName;
     }
 
     await update(ref(db), updates);
@@ -534,9 +576,11 @@ export async function updateTeamName(
 export async function transferOwnership(
   teamId: string,
   currentOwnerId: string,
-  newOwnerId: string
+  newOwnerId: string,
+  isTestMode = false
 ): Promise<{ success: boolean; error?: string }> {
-  const team = await getTeam(teamId);
+  const prefix = getPathPrefix(isTestMode);
+  const team = await getTeam(teamId, isTestMode);
 
   if (!team) {
     return { success: false, error: 'Team not found.' };
@@ -551,24 +595,24 @@ export async function transferOwnership(
   }
 
   // Verify new owner is a member
-  const members = await getTeamMembers(teamId);
+  const members = await getTeamMembers(teamId, isTestMode);
   if (!members[newOwnerId]) {
     return { success: false, error: 'New owner must be a team member.' };
   }
 
   try {
-    const updates: Record<string, any> = {};
+    const updates: Record<string, unknown> = {};
 
     // Update team created_by
-    updates[`teams/${teamId}/created_by`] = newOwnerId;
+    updates[`${prefix}teams/${teamId}/created_by`] = newOwnerId;
 
     // Update roles in team members
-    updates[`teams/${teamId}/members/${currentOwnerId}/role`] = 'member';
-    updates[`teams/${teamId}/members/${newOwnerId}/role`] = 'owner';
+    updates[`${prefix}teams/${teamId}/members/${currentOwnerId}/role`] = 'member';
+    updates[`${prefix}teams/${teamId}/members/${newOwnerId}/role`] = 'owner';
 
     // Update roles in member profiles
-    updates[`members/${currentOwnerId}/current_team/role`] = 'member';
-    updates[`members/${newOwnerId}/current_team/role`] = 'owner';
+    updates[`${prefix}members/${currentOwnerId}/current_team/role`] = 'member';
+    updates[`${prefix}members/${newOwnerId}/current_team/role`] = 'owner';
 
     await update(ref(db), updates);
     return { success: true };
@@ -588,9 +632,11 @@ export async function transferOwnership(
 export async function removeMember(
   teamId: string,
   ownerId: string,
-  memberToRemoveId: string
+  memberToRemoveId: string,
+  isTestMode = false
 ): Promise<{ success: boolean; error?: string }> {
-  const team = await getTeam(teamId);
+  const prefix = getPathPrefix(isTestMode);
+  const team = await getTeam(teamId, isTestMode);
 
   if (!team) {
     return { success: false, error: 'Team not found.' };
@@ -605,21 +651,21 @@ export async function removeMember(
   }
 
   // Verify member exists
-  const members = await getTeamMembers(teamId);
+  const members = await getTeamMembers(teamId, isTestMode);
   if (!members[memberToRemoveId]) {
     return { success: false, error: 'Member not found in team.' };
   }
 
   try {
     // Decrement member count
-    await runTransaction(ref(db, `teams/${teamId}/member_count`), (currentCount) => {
+    await runTransaction(ref(db, `${prefix}teams/${teamId}/member_count`), (currentCount) => {
       return Math.max((currentCount || 1) - 1, 0);
     });
 
     // Remove member data
-    const updates: Record<string, any> = {};
-    updates[`teams/${teamId}/members/${memberToRemoveId}`] = null;
-    updates[`members/${memberToRemoveId}/current_team`] = null;
+    const updates: Record<string, unknown> = {};
+    updates[`${prefix}teams/${teamId}/members/${memberToRemoveId}`] = null;
+    updates[`${prefix}members/${memberToRemoveId}/current_team`] = null;
 
     await update(ref(db), updates);
 

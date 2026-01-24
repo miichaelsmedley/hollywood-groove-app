@@ -2,6 +2,8 @@
  * useTeam Hook
  *
  * Real-time listener for team details and members.
+ *
+ * Supports test mode: when isTestMode is true, listens to test/ paths.
  */
 
 import { useState, useEffect } from 'react';
@@ -17,11 +19,18 @@ export interface UseTeamResult {
   error: Error | null;
 }
 
-export function useTeam(teamId: string | null): UseTeamResult {
+export interface UseTeamOptions {
+  isTestMode?: boolean;
+}
+
+export function useTeam(teamId: string | null, options: UseTeamOptions = {}): UseTeamResult {
+  const { isTestMode = false } = options;
   const [team, setTeam] = useState<Team | null>(null);
   const [members, setMembers] = useState<Record<string, TeamMember>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+
+  const prefix = isTestMode ? 'test/' : '';
 
   // Listen to team details
   useEffect(() => {
@@ -32,7 +41,7 @@ export function useTeam(teamId: string | null): UseTeamResult {
     }
 
     setLoading(true);
-    const teamRef = ref(db, `teams/${teamId}`);
+    const teamRef = ref(db, `${prefix}teams/${teamId}`);
 
     const unsubscribe = onValue(
       teamRef,
@@ -57,7 +66,7 @@ export function useTeam(teamId: string | null): UseTeamResult {
     );
 
     return () => unsubscribe();
-  }, [teamId]);
+  }, [teamId, prefix]);
 
   // Listen to team members separately
   useEffect(() => {
@@ -66,7 +75,7 @@ export function useTeam(teamId: string | null): UseTeamResult {
       return;
     }
 
-    const membersRef = ref(db, `teams/${teamId}/members`);
+    const membersRef = ref(db, `${prefix}teams/${teamId}/members`);
 
     const unsubscribe = onValue(
       membersRef,
@@ -84,7 +93,7 @@ export function useTeam(teamId: string | null): UseTeamResult {
     );
 
     return () => unsubscribe();
-  }, [teamId]);
+  }, [teamId, prefix]);
 
   // Convert members object to sorted array
   const membersList = Object.entries(members)

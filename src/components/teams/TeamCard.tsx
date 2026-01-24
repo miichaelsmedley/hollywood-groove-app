@@ -16,6 +16,10 @@ interface TeamCardProps {
   showQR?: boolean;
   showActions?: boolean;
   className?: string;
+  /** Custom link for the "View Team" button (useful for preserving test mode) */
+  linkTo?: string;
+  /** Whether in test mode - affects QR code URL */
+  isTestMode?: boolean;
 }
 
 export default function TeamCard({
@@ -25,8 +29,13 @@ export default function TeamCard({
   showQR = false,
   showActions = true,
   className = '',
+  linkTo,
+  isTestMode = false,
 }: TeamCardProps) {
   const isOwner = memberInfo?.role === 'owner';
+
+  // Default link if none provided
+  const teamLink = linkTo || `/teams/${teamId}`;
 
   return (
     <div className={`rounded-xl bg-cinema-50/10 border border-cinema-200 overflow-hidden ${className}`}>
@@ -51,7 +60,7 @@ export default function TeamCard({
           </div>
 
           {showQR && (
-            <TeamQRCodeCompact teamCode={team.code} size={60} />
+            <TeamQRCodeCompact teamCode={team.code} size={60} isTestMode={isTestMode} />
           )}
         </div>
       </div>
@@ -78,7 +87,7 @@ export default function TeamCard({
         <div className="p-3 border-t border-cinema-200">
           <div className="flex gap-2">
             <Link
-              to={`/teams/${teamId}`}
+              to={teamLink}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-cinema font-semibold hover:bg-primary/90 transition"
             >
               <span>View Team</span>
@@ -86,7 +95,7 @@ export default function TeamCard({
             </Link>
             {isOwner && (
               <Link
-                to={`/teams/${teamId}?settings=true`}
+                to={isTestMode ? `${teamLink}&settings=true` : `${teamLink}?settings=true`}
                 className="flex items-center justify-center p-2 rounded-lg bg-cinema-50/20 border border-cinema-200 text-cinema-400 hover:text-cinema-100 hover:border-cinema-100 transition"
               >
                 <Settings className="w-5 h-5" />

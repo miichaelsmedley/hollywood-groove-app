@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Camera,
   X,
+  FlaskConical,
 } from 'lucide-react';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { useUser } from '../contexts/UserContext';
@@ -35,14 +36,31 @@ import {
 } from '../lib/teamService';
 import type { Team } from '../types/firebaseContract';
 
+/**
+ * Hook to get test mode from URL params
+ * Teams uses ?test=true to indicate test mode
+ */
+function useIsTestMode(): boolean {
+  const [searchParams] = useSearchParams();
+  return searchParams.get('test') === 'true';
+}
+
+/**
+ * Get URL with test mode param preserved
+ */
+function getTestAwareUrl(path: string, isTestMode: boolean): string {
+  return isTestMode ? `${path}?test=true` : path;
+}
+
 // ============================================
 // Teams Hub Page
 // ============================================
 
 export function TeamsHub() {
   useUser(); // For auth context
-  const { team: userTeam, loading, isInTeam } = useUserTeam();
-  const { team: teamDetails } = useTeam(userTeam?.team_id || null);
+  const isTestMode = useIsTestMode();
+  const { team: userTeam, loading, isInTeam } = useUserTeam({ isTestMode });
+  const { team: teamDetails } = useTeam(userTeam?.team_id || null, { isTestMode });
 
   if (loading) {
     return (
@@ -56,6 +74,13 @@ export function TeamsHub() {
   if (isInTeam && userTeam && teamDetails) {
     return (
       <div className="mx-auto max-w-md space-y-6">
+        {isTestMode && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm">
+            <FlaskConical className="w-4 h-4" />
+            <span>Test Mode - Data isolated from production</span>
+          </div>
+        )}
+
         <section className="text-center space-y-2">
           <h1 className="text-2xl font-bold text-cinema-100">Your Team</h1>
           <p className="text-cinema-400">Compete together at shows</p>
@@ -67,6 +92,8 @@ export function TeamsHub() {
           memberInfo={userTeam}
           showQR={true}
           showActions={true}
+          linkTo={getTestAwareUrl(`/teams/${userTeam.team_id}`, isTestMode)}
+          isTestMode={isTestMode}
         />
 
         <section className="p-4 bg-cinema-50/10 rounded-xl border border-cinema-200">
@@ -83,6 +110,13 @@ export function TeamsHub() {
   // User has no team - show create/join options
   return (
     <div className="mx-auto max-w-md space-y-6">
+      {isTestMode && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm">
+          <FlaskConical className="w-4 h-4" />
+          <span>Test Mode - Data isolated from production</span>
+        </div>
+      )}
+
       <section className="text-center space-y-2">
         <div className="w-16 h-16 mx-auto rounded-full bg-primary/20 flex items-center justify-center">
           <Users className="w-8 h-8 text-primary" />
@@ -93,7 +127,7 @@ export function TeamsHub() {
 
       <section className="space-y-3">
         <Link
-          to="/teams/create"
+          to={getTestAwareUrl('/teams/create', isTestMode)}
           className="block w-full rounded-xl bg-primary px-4 py-4 text-cinema font-bold shadow-glow-lg active:scale-[0.99] transition"
         >
           <div className="flex items-center justify-between gap-3">
@@ -108,7 +142,7 @@ export function TeamsHub() {
         </Link>
 
         <Link
-          to="/teams/join"
+          to={getTestAwareUrl('/teams/join', isTestMode)}
           className="block w-full rounded-xl bg-cinema-50 border border-cinema-200 px-4 py-4 font-semibold text-cinema-900 hover:border-primary/60 transition"
         >
           <div className="flex items-center justify-between gap-3">
@@ -148,8 +182,9 @@ export function TeamsHub() {
 
 export function CreateTeam() {
   const navigate = useNavigate();
+  const isTestMode = useIsTestMode();
   const { userProfile } = useUser();
-  const { isInTeam, loading: teamLoading } = useUserTeam();
+  const { isInTeam, loading: teamLoading } = useUserTeam({ isTestMode });
 
   const [teamName, setTeamName] = useState('');
   const [maxMembers, setMaxMembers] = useState(8);
@@ -161,9 +196,9 @@ export function CreateTeam() {
   // Redirect if already in a team
   useEffect(() => {
     if (!teamLoading && isInTeam) {
-      navigate('/teams');
+      navigate(getTestAwareUrl('/teams', isTestMode));
     }
-  }, [teamLoading, isInTeam, navigate]);
+  }, [teamLoading, isInTeam, navigate, isTestMode]);
 
   const handleCreate = async () => {
     if (!userProfile?.uid || !userProfile?.displayName) {
@@ -184,7 +219,8 @@ export function CreateTeam() {
       userProfile.displayName,
       teamName.trim(),
       userProfile.photoURL,
-      { max_members: maxMembers, top_contributors: topContributors }
+      { max_members: maxMembers, top_contributors: topContributors },
+      isTestMode
     );
 
     setCreating(false);
@@ -200,6 +236,13 @@ export function CreateTeam() {
   if (createdTeam) {
     return (
       <div className="mx-auto max-w-md space-y-6">
+        {isTestMode && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm">
+            <FlaskConical className="w-4 h-4" />
+            <span>Test Mode - Team created in test namespace</span>
+          </div>
+        )}
+
         <section className="text-center space-y-2">
           <div className="w-16 h-16 mx-auto rounded-full bg-green-500/20 flex items-center justify-center">
             <Check className="w-8 h-8 text-green-400" />
@@ -213,10 +256,11 @@ export function CreateTeam() {
           teamName={createdTeam.name}
           size={180}
           showCode={true}
+          isTestMode={isTestMode}
         />
 
         <Link
-          to={`/teams/${createdTeam.teamId}`}
+          to={getTestAwareUrl(`/teams/${createdTeam.teamId}`, isTestMode)}
           className="block w-full text-center rounded-xl bg-primary px-4 py-3 text-cinema font-bold shadow-glow-lg active:scale-[0.99] transition"
         >
           Go to Team
@@ -227,8 +271,15 @@ export function CreateTeam() {
 
   return (
     <div className="mx-auto max-w-md space-y-6">
+      {isTestMode && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm">
+          <FlaskConical className="w-4 h-4" />
+          <span>Test Mode - Team will be created in test namespace</span>
+        </div>
+      )}
+
       <Link
-        to="/teams"
+        to={getTestAwareUrl('/teams', isTestMode)}
         className="inline-flex items-center gap-2 text-cinema-400 hover:text-cinema-200 transition"
       >
         <ArrowLeft className="w-4 h-4" />
@@ -329,8 +380,9 @@ export function CreateTeam() {
 export function JoinTeam() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isTestMode = useIsTestMode();
   const { userProfile } = useUser();
-  const { isInTeam, loading: teamLoading } = useUserTeam();
+  const { isInTeam, loading: teamLoading } = useUserTeam({ isTestMode });
 
   const [code, setCode] = useState(searchParams.get('code') || '');
   const [previewTeam, setPreviewTeam] = useState<{ teamId: string; team: Team } | null>(null);
@@ -342,9 +394,9 @@ export function JoinTeam() {
   // Redirect if already in a team
   useEffect(() => {
     if (!teamLoading && isInTeam) {
-      navigate('/teams');
+      navigate(getTestAwareUrl('/teams', isTestMode));
     }
-  }, [teamLoading, isInTeam, navigate]);
+  }, [teamLoading, isInTeam, navigate, isTestMode]);
 
   // Auto-search if code from URL
   useEffect(() => {
@@ -363,7 +415,7 @@ export function JoinTeam() {
     setError(null);
     setPreviewTeam(null);
 
-    const result = await getTeamByCode(code.trim());
+    const result = await getTeamByCode(code.trim(), isTestMode);
 
     setSearching(false);
 
@@ -392,13 +444,14 @@ export function JoinTeam() {
       userProfile.uid,
       userProfile.displayName,
       code.trim(),
-      userProfile.photoURL
+      userProfile.photoURL,
+      isTestMode
     );
 
     setJoining(false);
 
     if (result.success && result.teamId) {
-      navigate(`/teams/${result.teamId}`);
+      navigate(getTestAwareUrl(`/teams/${result.teamId}`, isTestMode));
     } else {
       setError(result.error || 'Failed to join team');
     }
@@ -406,8 +459,15 @@ export function JoinTeam() {
 
   return (
     <div className="mx-auto max-w-md space-y-6">
+      {isTestMode && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm">
+          <FlaskConical className="w-4 h-4" />
+          <span>Test Mode - Searching test teams only</span>
+        </div>
+      )}
+
       <Link
-        to="/teams"
+        to={getTestAwareUrl('/teams', isTestMode)}
         className="inline-flex items-center gap-2 text-cinema-400 hover:text-cinema-200 transition"
       >
         <ArrowLeft className="w-4 h-4" />
@@ -542,9 +602,10 @@ export function TeamDetail() {
   const { teamId } = useParams<{ teamId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isTestMode = useIsTestMode();
   const { userProfile } = useUser();
-  const { team: userTeam } = useUserTeam();
-  const { team, membersList, loading, error } = useTeam(teamId || null);
+  const { team: userTeam } = useUserTeam({ isTestMode });
+  const { team, membersList, loading, error } = useTeam(teamId || null, { isTestMode });
 
   const [showSettings, setShowSettings] = useState(searchParams.get('settings') === 'true');
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
@@ -575,12 +636,12 @@ export function TeamDetail() {
     setActionLoading(true);
     setActionError(null);
 
-    const result = await leaveTeam(userProfile.uid);
+    const result = await leaveTeam(userProfile.uid, isTestMode);
 
     setActionLoading(false);
 
     if (result.success) {
-      navigate('/teams');
+      navigate(getTestAwareUrl('/teams', isTestMode));
     } else {
       setActionError(result.error || 'Failed to leave team');
       setShowLeaveConfirm(false);
@@ -593,12 +654,12 @@ export function TeamDetail() {
     setActionLoading(true);
     setActionError(null);
 
-    const result = await disbandTeam(userProfile.uid, teamId);
+    const result = await disbandTeam(userProfile.uid, teamId, isTestMode);
 
     setActionLoading(false);
 
     if (result.success) {
-      navigate('/teams');
+      navigate(getTestAwareUrl('/teams', isTestMode));
     } else {
       setActionError(result.error || 'Failed to disband team');
       setShowDisbandConfirm(false);
@@ -613,7 +674,7 @@ export function TeamDetail() {
 
     // Update name if changed
     if (editName !== team.name) {
-      const nameResult = await updateTeamName(teamId, userProfile.uid, editName);
+      const nameResult = await updateTeamName(teamId, userProfile.uid, editName, isTestMode);
       if (!nameResult.success) {
         setActionError(nameResult.error || 'Failed to update name');
         setActionLoading(false);
@@ -629,7 +690,7 @@ export function TeamDetail() {
       const settingsResult = await updateTeamSettings(teamId, userProfile.uid, {
         max_members: editMaxMembers,
         top_contributors: editTopContributors,
-      });
+      }, isTestMode);
       if (!settingsResult.success) {
         setActionError(settingsResult.error || 'Failed to update settings');
         setActionLoading(false);
@@ -646,7 +707,7 @@ export function TeamDetail() {
     if (!confirm(`Remove ${displayName} from the team?`)) return;
 
     setActionLoading(true);
-    const result = await removeMember(teamId, userProfile.uid, uid);
+    const result = await removeMember(teamId, userProfile.uid, uid, isTestMode);
     setActionLoading(false);
 
     if (!result.success) {
@@ -659,7 +720,7 @@ export function TeamDetail() {
     if (!confirm(`Transfer team ownership to ${displayName}? This cannot be undone.`)) return;
 
     setActionLoading(true);
-    const result = await transferOwnership(teamId, userProfile.uid, uid);
+    const result = await transferOwnership(teamId, userProfile.uid, uid, isTestMode);
     setActionLoading(false);
 
     if (!result.success) {
@@ -679,7 +740,7 @@ export function TeamDetail() {
     return (
       <div className="mx-auto max-w-md space-y-6">
         <Link
-          to="/teams"
+          to={getTestAwareUrl('/teams', isTestMode)}
           className="inline-flex items-center gap-2 text-cinema-400 hover:text-cinema-200 transition"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -701,6 +762,13 @@ export function TeamDetail() {
   if (showSettings && isOwner) {
     return (
       <div className="mx-auto max-w-md space-y-6">
+        {isTestMode && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm">
+            <FlaskConical className="w-4 h-4" />
+            <span>Test Mode</span>
+          </div>
+        )}
+
         <button
           onClick={() => setShowSettings(false)}
           className="inline-flex items-center gap-2 text-cinema-400 hover:text-cinema-200 transition"
@@ -821,8 +889,15 @@ export function TeamDetail() {
   // Main Team View
   return (
     <div className="mx-auto max-w-md space-y-6">
+      {isTestMode && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm">
+          <FlaskConical className="w-4 h-4" />
+          <span>Test Mode - Data isolated from production</span>
+        </div>
+      )}
+
       <Link
-        to="/teams"
+        to={getTestAwareUrl('/teams', isTestMode)}
         className="inline-flex items-center gap-2 text-cinema-400 hover:text-cinema-200 transition"
       >
         <ArrowLeft className="w-4 h-4" />

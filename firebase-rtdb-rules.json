@@ -163,6 +163,26 @@
       "admins": {
         ".read": "root.child('test/admins').child(auth.uid).exists()",
         ".write": "auth != null"
+      },
+
+      "teams": {
+        ".read": "auth != null",
+        ".indexOn": ["name", "code"],
+        "$teamId": {
+          ".write": "auth != null && (!data.exists() || data.child('created_by').val() == auth.uid || root.child('test/admins').child(auth.uid).exists())",
+          "members": {
+            "$uid": {
+              ".write": "auth != null && (auth.uid == $uid || data.parent().parent().child('created_by').val() == auth.uid || root.child('test/admins').child(auth.uid).exists())"
+            }
+          }
+        }
+      },
+
+      "team_codes": {
+        ".read": "auth != null",
+        "$code": {
+          ".write": "auth != null"
+        }
       }
     },
 
