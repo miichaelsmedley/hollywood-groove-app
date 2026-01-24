@@ -9,10 +9,12 @@ import {
   Settings,
   LogOut,
   Trash2,
-  Copy,
   Check,
   AlertTriangle,
+  Camera,
+  X,
 } from 'lucide-react';
+import { Scanner } from '@yudiel/react-qr-scanner';
 import { useUser } from '../contexts/UserContext';
 import { useUserTeam } from '../hooks/useUserTeam';
 import { useTeam } from '../hooks/useTeam';
@@ -31,14 +33,14 @@ import {
   transferOwnership,
   removeMember,
 } from '../lib/teamService';
-import type { Team, TeamSettings } from '../types/firebaseContract';
+import type { Team } from '../types/firebaseContract';
 
 // ============================================
 // Teams Hub Page
 // ============================================
 
 export function TeamsHub() {
-  const { userProfile } = useUser();
+  useUser(); // For auth context
   const { team: userTeam, loading, isInTeam } = useUserTeam();
   const { team: teamDetails } = useTeam(userTeam?.team_id || null);
 
@@ -335,6 +337,7 @@ export function JoinTeam() {
   const [searching, setSearching] = useState(false);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
 
   // Redirect if already in a team
   useEffect(() => {
@@ -420,6 +423,54 @@ export function JoinTeam() {
       </section>
 
       <section className="space-y-4">
+        {/* QR Scanner */}
+        {showScanner && (
+          <div className="relative rounded-xl overflow-hidden border border-cinema-200">
+            <button
+              onClick={() => setShowScanner(false)}
+              className="absolute top-2 right-2 z-10 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <Scanner
+              onScan={(result) => {
+                if (result && result[0]?.rawValue) {
+                  const scannedUrl = result[0].rawValue;
+                  // Extract code from URL like /teams/join?code=ABC123
+                  const codeMatch = scannedUrl.match(/[?&]code=([A-Z0-9]{6})/i);
+                  if (codeMatch) {
+                    setCode(codeMatch[1].toUpperCase());
+                    setShowScanner(false);
+                    // Auto-search after scanning
+                    setTimeout(() => {
+                      const searchBtn = document.querySelector('[data-search-btn]') as HTMLButtonElement;
+                      searchBtn?.click();
+                    }, 100);
+                  } else {
+                    // Maybe the QR code is just the code itself
+                    const plainCode = scannedUrl.match(/^[A-Z0-9]{6}$/i);
+                    if (plainCode) {
+                      setCode(plainCode[0].toUpperCase());
+                      setShowScanner(false);
+                      setTimeout(() => {
+                        const searchBtn = document.querySelector('[data-search-btn]') as HTMLButtonElement;
+                        searchBtn?.click();
+                      }, 100);
+                    }
+                  }
+                }
+              }}
+              styles={{
+                container: { height: '250px' },
+                video: { objectFit: 'cover' },
+              }}
+            />
+            <p className="text-center text-cinema-400 text-sm py-2 bg-cinema-900/80">
+              Point camera at team QR code
+            </p>
+          </div>
+        )}
+
         {/* Code Input */}
         <div>
           <label className="block text-sm font-medium text-cinema-300 mb-2">
@@ -439,8 +490,16 @@ export function JoinTeam() {
               className="flex-1 px-4 py-3 rounded-xl bg-cinema-50/10 border border-cinema-200 text-cinema-100 placeholder-cinema-500 focus:border-primary focus:outline-none transition font-mono text-lg tracking-wider text-center uppercase"
             />
             <button
+              onClick={() => setShowScanner(true)}
+              className="px-3 py-3 rounded-xl bg-cinema-50/20 border border-cinema-200 text-cinema-300 hover:border-primary hover:text-primary transition"
+              title="Scan QR Code"
+            >
+              <Camera className="w-5 h-5" />
+            </button>
+            <button
               onClick={handleSearch}
               disabled={searching || !code.trim()}
+              data-search-btn
               className="px-4 py-3 rounded-xl bg-cinema-50/20 border border-cinema-200 text-cinema-300 hover:border-primary hover:text-primary transition disabled:opacity-50"
             >
               {searching ? '...' : 'Find'}

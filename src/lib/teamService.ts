@@ -5,7 +5,7 @@
  * and team code management.
  */
 
-import { ref, get, set, update, remove, push, runTransaction } from 'firebase/database';
+import { ref, get, update, push, runTransaction } from 'firebase/database';
 import { db } from './firebase';
 import type {
   Team,

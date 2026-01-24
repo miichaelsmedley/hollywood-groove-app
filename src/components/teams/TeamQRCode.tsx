@@ -38,15 +38,8 @@ export default function TeamQRCode({
     }
   };
 
-  const handleCopyUrl = async () => {
-    try {
-      await navigator.clipboard.writeText(joinUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy URL:', err);
-    }
-  };
+  // handleCopyUrl available if needed for future "Copy Link" button
+  // const handleCopyUrl = async () => { ... };
 
   return (
     <div className={`flex flex-col items-center ${className}`}>
