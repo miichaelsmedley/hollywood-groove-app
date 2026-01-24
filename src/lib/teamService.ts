@@ -164,21 +164,25 @@ export async function createTeam(
     ...settings,
   };
 
-  const team: Team = {
-    name: trimmedName,
-    code: code,
-    created_by: ownerId,
-    created_at: now,
-    settings: teamSettings,
-    member_count: 1,
-  };
-
   const ownerMember: TeamMember = {
     display_name: ownerDisplayName,
     joined_at: now,
     role: 'owner',
     // Only include photo_url if it exists (Firebase doesn't allow undefined)
     ...(ownerPhotoUrl ? { photo_url: ownerPhotoUrl } : {}),
+  };
+
+  // Include members in the team object to avoid parent/child path conflict
+  const teamWithMembers = {
+    name: trimmedName,
+    code: code,
+    created_by: ownerId,
+    created_at: now,
+    settings: teamSettings,
+    member_count: 1,
+    members: {
+      [ownerId]: ownerMember,
+    },
   };
 
   const memberTeamInfo: MemberTeamInfo = {
@@ -194,8 +198,7 @@ export async function createTeam(
 
   // Write all data atomically
   const updates: Record<string, unknown> = {};
-  updates[`${prefix}teams/${teamId}`] = team;
-  updates[`${prefix}teams/${teamId}/members/${ownerId}`] = ownerMember;
+  updates[`${prefix}teams/${teamId}`] = teamWithMembers;
   updates[`${prefix}team_codes/${code}`] = codeIndex;
   updates[`${prefix}members/${ownerId}/current_team`] = memberTeamInfo;
 
