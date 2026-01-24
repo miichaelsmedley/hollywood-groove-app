@@ -1,9 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, NavLink, Outlet, useSearchParams } from 'react-router-dom';
 import { Ticket, Music, Sparkles, BarChart3, Trophy, User, Home, Camera, ClipboardCheck, FlaskConical } from 'lucide-react';
+import { ref, onValue } from 'firebase/database';
+import { db } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
 import { useUserRole } from '../hooks/useUserRole';
 import ShareMoment from './ShareMoment';
+
+interface ActiveTestShow {
+  showId: string;
+  title: string;
+}
 
 export default function Layout() {
   const [searchParams] = useSearchParams();
@@ -11,12 +18,66 @@ export default function Layout() {
   const { canUseTestMode } = useUser();
   const { canScoreActivities } = useUserRole();
   const [showShareModal, setShowShareModal] = useState(false);
+  const [activeTestShow, setActiveTestShow] = useState<ActiveTestShow | null>(null);
+
+  // Listen for active test shows
+  useEffect(() => {
+    if (!canUseTestMode) {
+      setActiveTestShow(null);
+      return;
+    }
+
+    const showsRef = ref(db, 'test/shows');
+    const unsubscribe = onValue(showsRef, (snapshot) => {
+      if (!snapshot.exists()) {
+        setActiveTestShow(null);
+        return;
+      }
+
+      const shows = snapshot.val();
+      const now = Date.now();
+      const thirtyMinutesAgo = now - 30 * 60 * 1000;
+
+      // Find an active test show (trivia or activity updated recently)
+      for (const [showId, showData] of Object.entries(shows)) {
+        const show = showData as Record<string, unknown>;
+        const meta = show.meta as Record<string, unknown> | undefined;
+        const live = show.live as Record<string, unknown> | undefined;
+
+        if (!meta?.title) continue;
+
+        // Check if trivia is active
+        const trivia = live?.trivia as Record<string, unknown> | undefined;
+        if (trivia?.phase && trivia?.timestamp) {
+          const timestamp = trivia.timestamp as number;
+          if ((trivia.phase === 'question' || trivia.phase === 'answer') && timestamp > thirtyMinutesAgo) {
+            setActiveTestShow({ showId, title: meta.title as string });
+            return;
+          }
+        }
+
+        // Check if activity is active
+        const activity = live?.activity as Record<string, unknown> | undefined;
+        if (activity?.status === 'active' && activity?.timestamp) {
+          const timestamp = activity.timestamp as number;
+          if (timestamp > thirtyMinutesAgo) {
+            setActiveTestShow({ showId, title: meta.title as string });
+            return;
+          }
+        }
+      }
+
+      setActiveTestShow(null);
+    });
+
+    return () => unsubscribe();
+  }, [canUseTestMode]);
 
   // Helper to append test param to navigation paths
   const withTestParam = (path: string) => (isTestMode ? `${path}?test=true` : path);
 
-  // Show permission row if user has any special permissions
-  const showPermissionRow = canScoreActivities || canUseTestMode;
+  // Show permission row if user has scorer access OR there's an active test show
+  const showPermissionRow = canScoreActivities || (canUseTestMode && activeTestShow);
 
   return (
     <div className="min-h-screen bg-cinema text-cinema-900">
@@ -110,27 +171,20 @@ export default function Layout() {
                 </NavLink>
               )}
 
-              {/* Tester button */}
-              {canUseTestMode && (
-                <NavLink
-                  to={withTestParam('/test')}
-                  className={({ isActive }) =>
-                    [
-                      'flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[10px] font-semibold border transition',
-                      isActive
-                        ? 'bg-purple-500 text-white border-purple-500'
-                        : 'bg-purple-500/20 border-purple-500/50 text-purple-200 hover:bg-purple-500/30',
-                    ].join(' ')
-                  }
+              {/* Test Show button - only shows when there's an active test show */}
+              {canUseTestMode && activeTestShow && (
+                <Link
+                  to={`/shows/${activeTestShow.showId}/join?test=true`}
+                  className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[10px] font-semibold border transition bg-purple-500/20 border-purple-500/50 text-purple-200 hover:bg-purple-500 hover:text-white hover:border-purple-500 animate-pulse"
                 >
                   <FlaskConical className="w-3.5 h-3.5" />
-                  <span>Tester</span>
-                </NavLink>
+                  <span>Test Show</span>
+                </Link>
               )}
 
               {/* Empty slots for future permission-based buttons */}
               {!canScoreActivities && <div />}
-              {!canUseTestMode && <div />}
+              {!(canUseTestMode && activeTestShow) && <div />}
               <div />
               <div />
             </div>
