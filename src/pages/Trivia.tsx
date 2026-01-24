@@ -44,8 +44,8 @@ export default function Trivia() {
         console.log(`📡 Trivia: Received data from ${triviaPath}:`, state);
         setLiveTrivia(state);
 
-        // Reset answered state when new question appears
-        if (state?.phase === 'question') {
+        // Reset answered state when activity changes (new question)
+        if (state?.activityId !== liveTrivia?.activityId) {
           setHasAnswered(false);
           setSelectedOption(null);
           setFreeformText('');

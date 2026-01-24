@@ -37,8 +37,9 @@ export default function ActionBar() {
 
   const [showBreakMenu, setShowBreakMenu] = useState(false);
 
-  const handleBreakSelect = async (mode: Exclude<BreakMode, 'off'>) => {
+  const handleBreakSelect = async (mode: Exclude<BreakMode, 'off'>, customDuration?: number) => {
     setShowBreakMenu(false);
+    // Note: customDuration is available if needed for future break timing logic
     await enterBreakMode(mode);
   };
 
