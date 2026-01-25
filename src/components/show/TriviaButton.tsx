@@ -30,11 +30,11 @@ export default function TriviaButton() {
   return (
     <button
       onClick={handleClick}
-      className="flex-1 flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-lg bg-primary/20 border border-primary text-primary hover:bg-primary/30 transition-all active:scale-95"
+      className="flex-1 flex flex-col items-center justify-center gap-0.5 px-2 py-2 rounded-xl bg-primary/20 border border-primary text-primary hover:bg-primary/30 transition-all active:scale-95 min-w-0"
     >
-      <HelpCircle className="w-4 h-4" />
-      <span className="text-xs font-bold">
-        {liveTrivia.phase === 'question' ? 'Answer Now!' : 'See Answer'}
+      <HelpCircle className="w-4 h-4 shrink-0" />
+      <span className="text-xs font-bold truncate">
+        {liveTrivia.phase === 'question' ? 'Answer!' : 'Answer'}
       </span>
     </button>
   );

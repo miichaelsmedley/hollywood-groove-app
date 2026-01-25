@@ -152,22 +152,22 @@ export default function Layout() {
         <div className="max-w-3xl mx-auto px-4">
           {/* Permission Row - conditional */}
           {showPermissionRow && (
-            <div className="grid grid-cols-4 gap-1.5 py-1.5 border-b border-cinema-200">
+            <div className="flex gap-1 py-1.5 border-b border-cinema-200">
               {/* Scorer button */}
               {canScoreActivities && (
                 <NavLink
                   to={withTestParam('/score')}
                   className={({ isActive }) =>
                     [
-                      'flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[10px] font-semibold border transition',
+                      'flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[9px] font-semibold border transition min-w-0',
                       isActive
                         ? 'bg-emerald-500 text-white border-emerald-500'
                         : 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200 hover:bg-emerald-500/30',
                     ].join(' ')
                   }
                 >
-                  <ClipboardCheck className="w-3.5 h-3.5" />
-                  <span>Scorer</span>
+                  <ClipboardCheck className="w-3 h-3 shrink-0" />
+                  <span className="truncate">Scorer</span>
                 </NavLink>
               )}
 
@@ -175,98 +175,92 @@ export default function Layout() {
               {canUseTestMode && activeTestShow && (
                 <Link
                   to={`/shows/${activeTestShow.showId}/join?test=true`}
-                  className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[10px] font-semibold border transition bg-purple-500/20 border-purple-500/50 text-purple-200 hover:bg-purple-500 hover:text-white hover:border-purple-500 animate-pulse"
+                  className="flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[9px] font-semibold border transition bg-purple-500/20 border-purple-500/50 text-purple-200 hover:bg-purple-500 hover:text-white hover:border-purple-500 animate-pulse min-w-0"
                 >
-                  <FlaskConical className="w-3.5 h-3.5" />
-                  <span>Test Show</span>
+                  <FlaskConical className="w-3 h-3 shrink-0" />
+                  <span className="truncate">Test Show</span>
                 </Link>
               )}
-
-              {/* Empty slots for future permission-based buttons */}
-              {!canScoreActivities && <div />}
-              {!(canUseTestMode && activeTestShow) && <div />}
-              <div />
-              <div />
             </div>
           )}
 
           {/* Main Navigation Row */}
           <div className="relative flex items-center justify-between py-1.5">
             {/* Left side: Home, Leaderboard */}
-            <div className="flex gap-1.5 flex-1">
+            <div className="flex gap-1 flex-1 min-w-0">
               <NavLink
                 to={withTestParam('/')}
                 end
                 className={({ isActive }) =>
                   [
-                    'flex flex-col items-center justify-center gap-0.5 rounded-lg px-3 py-1.5 text-[10px] font-semibold border transition flex-1',
+                    'flex flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-1.5 text-[9px] font-semibold border transition flex-1 min-w-0',
                     isActive
                       ? 'bg-primary text-cinema border-primary shadow-glow'
                       : 'bg-cinema-50 text-cinema-800 border-cinema-200 hover:border-primary/60',
                   ].join(' ')
                 }
               >
-                <Home className="w-4 h-4" />
-                <span>Home</span>
+                <Home className="w-4 h-4 shrink-0" />
+                <span className="truncate">Home</span>
               </NavLink>
 
               <NavLink
                 to={withTestParam('/leaderboard')}
                 className={({ isActive }) =>
                   [
-                    'flex flex-col items-center justify-center gap-0.5 rounded-lg px-3 py-1.5 text-[10px] font-semibold border transition flex-1',
+                    'flex flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-1.5 text-[9px] font-semibold border transition flex-1 min-w-0',
                     isActive
                       ? 'bg-primary text-cinema border-primary shadow-glow'
                       : 'bg-cinema-50 text-cinema-800 border-cinema-200 hover:border-primary/60',
                   ].join(' ')
                 }
               >
-                <Trophy className="w-4 h-4" />
-                <span>Leaderboard</span>
+                <Trophy className="w-4 h-4 shrink-0" />
+                <span className="truncate">Ranks</span>
               </NavLink>
             </div>
 
             {/* Center: Share FAB */}
-            <div className="relative mx-2">
+            <div className="relative mx-1 shrink-0">
               <button
                 onClick={() => setShowShareModal(true)}
-                className="w-14 h-14 -mt-4 rounded-full flex flex-col items-center justify-center bg-gradient-to-r from-primary to-pink-500 text-white shadow-lg shadow-primary/30 hover:scale-105 active:scale-95 transition-transform"
+                className="w-12 h-12 -mt-3 rounded-full flex flex-col items-center justify-center bg-gradient-to-r from-primary to-pink-500 text-white shadow-lg shadow-primary/30 hover:scale-105 active:scale-95 transition-transform"
               >
-                <Camera className="w-6 h-6" />
-                <span className="text-[8px] font-bold mt-0.5">Share</span>
+                <Camera className="w-5 h-5" />
+                <span className="text-[7px] font-bold mt-0.5">Share</span>
               </button>
             </div>
 
             {/* Right side: Scores, Profile */}
-            <div className="flex gap-1.5 flex-1">
+            <div className="flex gap-1 flex-1 min-w-0">
               <NavLink
                 to={withTestParam('/scores')}
                 className={({ isActive }) =>
                   [
-                    'flex flex-col items-center justify-center gap-0.5 rounded-lg px-3 py-1.5 text-[10px] font-semibold border transition flex-1',
+                    'flex flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-1.5 text-[9px] font-semibold border transition flex-1 min-w-0',
                     isActive
                       ? 'bg-primary text-cinema border-primary shadow-glow'
                       : 'bg-cinema-50 text-cinema-800 border-cinema-200 hover:border-primary/60',
                   ].join(' ')
                 }
               >
-                <BarChart3 className="w-4 h-4" />
-                <span>Scores</span>
+                <BarChart3 className="w-4 h-4 shrink-0" />
+                <span className="truncate">Scores</span>
               </NavLink>
 
               <NavLink
                 to={withTestParam('/profile')}
                 className={({ isActive }) =>
                   [
-                    'flex flex-col items-center justify-center gap-0.5 rounded-lg px-3 py-1.5 text-[10px] font-semibold border transition flex-1',
+                    'flex flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-1.5 text-[9px] font-semibold border transition flex-1 min-w-0',
                     isActive
                       ? 'bg-primary text-cinema border-primary shadow-glow'
                       : 'bg-cinema-50 text-cinema-800 border-cinema-200 hover:border-primary/60',
                   ].join(' ')
                 }
               >
-                <User className="w-4 h-4" />
-                <span>Profile</span>
+                <User className="w-4 h-4 shrink-0" />
+                <span className="truncate">Profile</span>
               </NavLink>
             </div>
           </div>
