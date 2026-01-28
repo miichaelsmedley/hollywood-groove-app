@@ -6,7 +6,6 @@ import {
   linkWithRedirect,
   getRedirectResult,
   signOut as firebaseSignOut,
-  signInAnonymously,
   signInWithCredential,
   User,
 } from 'firebase/auth';
@@ -23,9 +22,13 @@ let googleAuthInProgress = false;
 // Storage keys for tracking auth state across redirects
 const REDIRECT_PENDING_KEY = 'hg_google_auth_redirect_pending';
 const REDIRECT_TIMESTAMP_KEY = 'hg_google_auth_redirect_timestamp';
+// NEW: Track popup auth start (survives page focus changes)
+const POPUP_AUTH_KEY = 'hg_google_auth_popup_pending';
 
 // Maximum time to wait for redirect result (5 minutes)
 const REDIRECT_MAX_AGE_MS = 5 * 60 * 1000;
+// Popup auth timeout (30 seconds - popups should complete quickly)
+const POPUP_MAX_AGE_MS = 30 * 1000;
 
 export interface RedirectResult {
   success: boolean;
@@ -35,25 +38,53 @@ export interface RedirectResult {
 }
 
 export function isGoogleAuthInProgress(): boolean {
-  // Check both in-memory flag and localStorage (for cross-redirect detection)
+  // Check in-memory flag first
   if (googleAuthInProgress) return true;
 
-  const pending = localStorage.getItem(REDIRECT_PENDING_KEY) === 'true';
-  if (!pending) return false;
-
-  // Check if the redirect is stale (user may have navigated away)
-  const timestamp = localStorage.getItem(REDIRECT_TIMESTAMP_KEY);
-  if (timestamp) {
-    const age = Date.now() - parseInt(timestamp, 10);
-    if (age > REDIRECT_MAX_AGE_MS) {
-      // Stale redirect, clear it
-      console.log('🧹 Clearing stale redirect state (age:', Math.round(age / 1000), 'seconds)');
-      clearRedirectPending();
-      return false;
+  // Check localStorage for redirect pending
+  const redirectPending = localStorage.getItem(REDIRECT_PENDING_KEY) === 'true';
+  if (redirectPending) {
+    const timestamp = localStorage.getItem(REDIRECT_TIMESTAMP_KEY);
+    if (timestamp) {
+      const age = Date.now() - parseInt(timestamp, 10);
+      if (age > REDIRECT_MAX_AGE_MS) {
+        console.log('🧹 Clearing stale redirect state (age:', Math.round(age / 1000), 'seconds)');
+        clearRedirectPending();
+      } else {
+        return true;
+      }
     }
   }
 
-  return pending;
+  // Check localStorage for popup pending (survives page focus changes)
+  const popupPending = localStorage.getItem(POPUP_AUTH_KEY) === 'true';
+  if (popupPending) {
+    const timestamp = localStorage.getItem(REDIRECT_TIMESTAMP_KEY);
+    if (timestamp) {
+      const age = Date.now() - parseInt(timestamp, 10);
+      if (age > POPUP_MAX_AGE_MS) {
+        console.log('🧹 Clearing stale popup auth state (age:', Math.round(age / 1000), 'seconds)');
+        clearPopupPending();
+      } else {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function setPopupPending(pending: boolean): void {
+  if (pending) {
+    localStorage.setItem(POPUP_AUTH_KEY, 'true');
+    localStorage.setItem(REDIRECT_TIMESTAMP_KEY, Date.now().toString());
+  } else {
+    clearPopupPending();
+  }
+}
+
+function clearPopupPending(): void {
+  localStorage.removeItem(POPUP_AUTH_KEY);
 }
 
 function setRedirectPending(pending: boolean): void {
@@ -68,6 +99,15 @@ function setRedirectPending(pending: boolean): void {
 function clearRedirectPending(): void {
   localStorage.removeItem(REDIRECT_PENDING_KEY);
   localStorage.removeItem(REDIRECT_TIMESTAMP_KEY);
+}
+
+/**
+ * Clear all pending auth state - use when auth completes or fails
+ */
+export function clearAllPendingAuth(): void {
+  clearRedirectPending();
+  clearPopupPending();
+  googleAuthInProgress = false;
 }
 
 /**
@@ -127,11 +167,19 @@ async function waitForAuthStateStable(maxWaitMs: number = 2000): Promise<User | 
  */
 export async function handleRedirectResult(): Promise<RedirectResult> {
   const wasRedirectPending = localStorage.getItem(REDIRECT_PENDING_KEY) === 'true';
+  const wasPopupPending = localStorage.getItem(POPUP_AUTH_KEY) === 'true';
 
   console.log('🔍 Checking for redirect result...');
   console.log('Current URL:', window.location.href);
   console.log('Auth domain configured:', auth.app.options.authDomain);
   console.log('Redirect was pending:', wasRedirectPending);
+  console.log('Popup was pending:', wasPopupPending);
+
+  // Clear popup pending since we're now checking auth state
+  // (popup should have completed or failed by now)
+  if (wasPopupPending) {
+    clearPopupPending();
+  }
 
   // CRITICAL: Wait for auth state to fully stabilize
   // On mobile, this can take longer due to localStorage restoration
@@ -317,8 +365,10 @@ export async function signInWithGoogle(): Promise<boolean> {
     return true;
   }
 
-  // Set flag to prevent auto-anonymous sign-in during this flow
+  // Set flags to prevent auto-anonymous sign-in during this flow
   googleAuthInProgress = true;
+  // Track popup auth in localStorage so it survives page focus loss
+  setPopupPending(true);
 
   try {
     console.log('🔐 Starting Google sign-in (popup mode)...');
@@ -337,12 +387,14 @@ export async function signInWithGoogle(): Promise<boolean> {
           isAnonymous: result.user.isAnonymous,
           providerData: result.user.providerData,
         });
+        clearPopupPending();
         return true;
       } catch (popupError: any) {
         console.log('Popup attempt result:', popupError.code, popupError.message);
 
         if (popupError.code === 'auth/popup-blocked') {
           console.log('📱 Popup blocked, falling back to redirect...');
+          clearPopupPending();
           setRedirectPending(true);
           await linkWithRedirect(currentUser, googleProvider);
           return false; // Will complete after redirect
@@ -356,6 +408,7 @@ export async function signInWithGoogle(): Promise<boolean> {
               uid: result.user.uid,
               email: result.user.email,
             });
+            clearPopupPending();
             return true;
           }
           throw popupError;
@@ -364,6 +417,7 @@ export async function signInWithGoogle(): Promise<boolean> {
           popupError.code === 'auth/cancelled-popup-request'
         ) {
           console.log('User cancelled sign-in');
+          clearPopupPending();
           throw new Error('Sign-in cancelled');
         } else {
           throw popupError;
@@ -382,6 +436,7 @@ export async function signInWithGoogle(): Promise<boolean> {
         isAnonymous: result.user.isAnonymous,
         providerData: result.user.providerData,
       });
+      clearPopupPending();
       return true;
     } catch (popupError: any) {
       console.log('Popup attempt result:', popupError.code, popupError.message);
@@ -389,6 +444,7 @@ export async function signInWithGoogle(): Promise<boolean> {
       // Only fall back to redirect if popup was actually blocked (not just closed)
       if (popupError.code === 'auth/popup-blocked') {
         console.log('📱 Popup blocked, falling back to redirect...');
+        clearPopupPending();
         setRedirectPending(true);
         await signInWithRedirect(auth, googleProvider);
         return false; // Will complete after redirect
@@ -397,9 +453,8 @@ export async function signInWithGoogle(): Promise<boolean> {
         popupError.code === 'auth/cancelled-popup-request'
       ) {
         console.log('User cancelled sign-in');
-        if (!auth.currentUser) {
-          await signInAnonymously(auth);
-        }
+        clearPopupPending();
+        // DON'T auto-sign-in anonymously here - let the caller decide
         throw new Error('Sign-in cancelled');
       } else {
         throw popupError;
@@ -407,10 +462,8 @@ export async function signInWithGoogle(): Promise<boolean> {
     }
   } catch (error: any) {
     console.error('Google sign-in error:', error.code, error.message);
-    // Re-sign in anonymously on any error (if not already signed in)
-    if (!auth.currentUser) {
-      await signInAnonymously(auth);
-    }
+    clearPopupPending();
+    // DON'T auto-sign-in anonymously - let the error bubble up
     throw error;
   } finally {
     googleAuthInProgress = false;

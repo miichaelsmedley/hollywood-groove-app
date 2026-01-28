@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged, signInAnonymously, onIdTokenChanged } from 'firebase/auth';
 import { auth, authPersistenceReady } from './lib/firebase';
-import { handleRedirectResult, isGoogleAuthInProgress, RedirectResult } from './lib/auth';
+import { handleRedirectResult, isGoogleAuthInProgress, clearAllPendingAuth, RedirectResult } from './lib/auth';
 import { UserProvider } from './contexts/UserContext';
 
 import Layout from './components/Layout';
@@ -44,6 +44,16 @@ import { IS_TEST_MODE } from './lib/mode';
 export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [showErrorBanner, setShowErrorBanner] = useState(false);
+
+  // Handle error banner display - auto-dismiss after 10 seconds
+  useEffect(() => {
+    if (authError && authReady) {
+      setShowErrorBanner(true);
+      const timer = setTimeout(() => setShowErrorBanner(false), 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [authError, authReady]);
 
   // Handle auth initialization: redirect result first, then anonymous sign-in
   useEffect(() => {
@@ -59,18 +69,26 @@ export default function App() {
       // Handle redirect result FIRST - this is critical for mobile auth
       // handleRedirectResult now waits for auth state to stabilize internally
       let redirectResult: RedirectResult;
+      let hadAuthAttempt = false; // Track if user was trying to sign in
+
       try {
         console.log('🔐 Processing redirect result...');
         redirectResult = await handleRedirectResult();
         console.log('📋 Redirect result:', redirectResult);
 
+        // Track if there was an auth attempt (redirect or popup pending)
+        hadAuthAttempt = redirectResult.wasRedirectPending;
+
         // Show error to user if redirect failed
         if (!redirectResult.success && redirectResult.error) {
           console.error('❌ Auth redirect failed:', redirectResult.error);
+          // Clear all pending state to prevent loops
+          clearAllPendingAuth();
           setAuthError('Sign-in failed. Please try again.');
         }
       } catch (error) {
         console.error('❌ Error handling redirect:', error);
+        clearAllPendingAuth();
         redirectResult = {
           success: false,
           userSignedInWithGoogle: false,
@@ -150,7 +168,22 @@ export default function App() {
         return;
       }
 
-      // Truly no user - sign in anonymously
+      // IMPORTANT: If we just came from a failed auth attempt, DON'T auto-sign-in anonymously
+      // Let the user see the error and try again manually
+      if (hadAuthAttempt && !redirectResult.success) {
+        console.log('⚠️ Auth attempt failed, not auto-signing in anonymously');
+        setAuthReady(true);
+
+        unsubscribe = onAuthStateChanged(auth, (user) => {
+          console.log('🔄 Auth state changed (after failed attempt):', user ? {
+            uid: user.uid,
+            isAnonymous: user.isAnonymous,
+          } : 'null');
+        });
+        return;
+      }
+
+      // Truly no user and no pending auth - sign in anonymously
       try {
         console.log('👤 No user found, signing in anonymously...');
         await signInAnonymously(auth);
@@ -195,6 +228,7 @@ export default function App() {
                   // Clear any stuck auth state and reload
                   localStorage.removeItem('hg_google_auth_redirect_pending');
                   localStorage.removeItem('hg_google_auth_redirect_timestamp');
+                  localStorage.removeItem('hg_google_auth_popup_pending');
                   window.location.reload();
                 }}
                 className="px-4 py-2 bg-primary text-cinema rounded-lg text-sm font-medium hover:bg-primary/90"
@@ -208,12 +242,33 @@ export default function App() {
     );
   }
 
-  // If there's an auth error but we're ready, show it briefly then continue
-  // The error will clear when user successfully authenticates
-
   return (
     <BrowserRouter>
       <UserProvider>
+        {/* Auth error banner */}
+        {showErrorBanner && authError && (
+          <div className="fixed top-0 left-0 right-0 z-50 bg-red-600 text-white px-4 py-3 flex items-center justify-between shadow-lg">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="font-medium">{authError}</span>
+            </div>
+            <button
+              onClick={() => {
+                setShowErrorBanner(false);
+                setAuthError(null);
+                // Clear stuck auth state and allow retry
+                clearAllPendingAuth();
+              }}
+              className="text-white/80 hover:text-white"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Home />} />

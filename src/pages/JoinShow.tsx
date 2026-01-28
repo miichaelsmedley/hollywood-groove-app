@@ -74,6 +74,7 @@ export default function JoinShow() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [marketingConsent, setMarketingConsent] = useState(true);
+  const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
 
   // Pre-fill form when user signs in with Google
   useEffect(() => {
@@ -110,17 +111,33 @@ export default function JoinShow() {
 
   const handleGoogleSignIn = async () => {
     setSigningInWithGoogle(true);
+    setGoogleAuthError(null); // Clear previous error
     try {
-      await signInWithGoogle();
-      // Form will auto-populate from the useEffect above
+      const success = await signInWithGoogle();
+      if (success) {
+        // Form will auto-populate from the useEffect above
+        console.log('✅ Google sign-in successful');
+      } else {
+        // Redirect was initiated - page will reload after auth
+        console.log('📱 Google sign-in redirecting...');
+      }
     } catch (error: any) {
       console.error('Google sign-in error:', error);
       console.error('Error code:', error?.code);
       console.error('Error message:', error?.message);
 
-      // Don't show alert for user-cancelled sign-in
+      // Don't show error for user-cancelled sign-in
       if (error?.message !== 'Sign-in cancelled') {
-        alert('Failed to sign in with Google. Please try again.');
+        // Show inline error instead of alert for better UX
+        if (error?.code === 'auth/network-request-failed') {
+          setGoogleAuthError('Network error. Check your connection and try again.');
+        } else if (error?.code === 'auth/popup-blocked') {
+          setGoogleAuthError('Popup was blocked. Please allow popups or try again.');
+        } else if (error?.code === 'auth/too-many-requests') {
+          setGoogleAuthError('Too many attempts. Please wait a moment.');
+        } else {
+          setGoogleAuthError('Sign-in failed. Please try again or fill out the form manually.');
+        }
       }
     } finally {
       setSigningInWithGoogle(false);
@@ -657,6 +674,23 @@ export default function JoinShow() {
                   </svg>
                   {signingInWithGoogle ? 'Signing in...' : 'Sign in with Google'}
                 </button>
+
+                {/* Google Auth Error Message */}
+                {googleAuthError && (
+                  <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm text-red-700">{googleAuthError}</p>
+                      <button
+                        type="button"
+                        onClick={() => setGoogleAuthError(null)}
+                        className="text-xs text-red-600 underline mt-1"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
