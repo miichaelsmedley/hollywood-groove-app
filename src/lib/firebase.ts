@@ -45,6 +45,8 @@ const firebaseConfig = {
 };
 
 console.log('🔧 Firebase initialized (single path mode - no test prefix)');
+console.log('🌐 Current origin:', typeof window !== 'undefined' ? window.location.origin : 'SSR');
+console.log('🔑 Auth domain:', firebaseConfig.authDomain);
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 

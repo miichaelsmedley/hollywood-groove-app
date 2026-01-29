@@ -441,6 +441,17 @@ export async function signInWithGoogle(): Promise<boolean> {
     } catch (popupError: any) {
       console.log('Popup attempt result:', popupError.code, popupError.message);
 
+      // Check for CORS/network errors - these indicate domain authorization issues
+      if (popupError.code === 'auth/network-request-failed' ||
+          popupError.message?.includes('access control') ||
+          popupError.message?.includes('CORS')) {
+        console.error('🚨 CORS/Network error - domain may not be authorized in Firebase');
+        console.error('🌐 Current origin:', window.location.origin);
+        console.error('📋 Add this domain to Firebase Console → Authentication → Settings → Authorized domains');
+        clearPopupPending();
+        throw new Error('Domain not authorized. Please contact support.');
+      }
+
       // Only fall back to redirect if popup was actually blocked (not just closed)
       if (popupError.code === 'auth/popup-blocked') {
         console.log('📱 Popup blocked, falling back to redirect...');

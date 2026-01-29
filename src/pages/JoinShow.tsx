@@ -129,7 +129,12 @@ export default function JoinShow() {
       // Don't show error for user-cancelled sign-in
       if (error?.message !== 'Sign-in cancelled') {
         // Show inline error instead of alert for better UX
-        if (error?.code === 'auth/network-request-failed') {
+        if (error?.message?.includes('Domain not authorized') ||
+            error?.message?.includes('access control') ||
+            error?.code === 'auth/unauthorized-domain') {
+          setGoogleAuthError('Google sign-in is temporarily unavailable. Please fill out the form manually below.');
+          console.error('🚨 Domain authorization error - check Firebase Console');
+        } else if (error?.code === 'auth/network-request-failed') {
           setGoogleAuthError('Network error. Check your connection and try again.');
         } else if (error?.code === 'auth/popup-blocked') {
           setGoogleAuthError('Popup was blocked. Please allow popups or try again.');
