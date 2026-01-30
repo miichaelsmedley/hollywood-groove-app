@@ -650,8 +650,9 @@ export default function JoinShow() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Google Sign-In Option */}
-            {!isGoogleUser && (
+            {/* Google Sign-In Option - TEMPORARILY DISABLED pending OAuth verification */}
+            {/* TODO: Re-enable after Google OAuth verification completes */}
+            {false && !isGoogleUser && (
               <div className="space-y-3">
                 <button
                   type="button"
@@ -851,8 +852,9 @@ export default function JoinShow() {
               )}
             </button>
 
-            {/* Warning for non-Google users */}
-            {!isGoogleUser && (
+            {/* Warning for non-Google users - TEMPORARILY HIDDEN while Google OAuth is disabled */}
+            {/* TODO: Re-enable after Google OAuth verification completes */}
+            {false && !isGoogleUser && (
               <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                 <p className="text-xs text-amber-700 text-center">
                   <strong>Tip:</strong> Sign in with Google above to save your progress permanently.
