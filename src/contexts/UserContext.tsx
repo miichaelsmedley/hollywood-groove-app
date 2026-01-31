@@ -104,6 +104,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
       setIsGoogleUser(isSignedInWithGoogle());
       setGooglePhotoURL(getGooglePhotoURL());
 
+      // TEMPORARY: Grant ALL users test access for tonight's show
+      // TODO: Revert this after the show - restore the original test mode logic below
+      console.log('🧪 UserContext: TEMPORARY - Granting test access to ALL users');
+      setCanUseTestMode(true);
+      localStorage.setItem('hg_test_access', 'true');
+
+      /* ORIGINAL TEST MODE LOGIC - RESTORE AFTER SHOW:
       // Test mode access can be granted via:
       // 1. URL test code (?testCode=groove2024) - sets hg_test_access in localStorage
       // 2. Firebase /testers/{uid} entry for non-anonymous users
@@ -138,6 +145,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         console.log('🧪 UserContext: User is anonymous, no test access');
         setCanUseTestMode(false);
       }
+      */
 
       // Check if user profile exists in Firebase (/members/ path per contract)
       // Wrap in try-catch to handle network errors gracefully
