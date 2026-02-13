@@ -48,7 +48,7 @@ export interface TriviaActivity extends BaseActivity {
   trivia: {
     question: string;
     // Controller uses `freeform`; keep `text` as a backward-compatible alias.
-    kind: 'multi' | 'freeform' | 'text' | 'boolean' | 'scale';
+    kind: 'multi' | 'multiple_choice' | 'freeform' | 'text' | 'boolean' | 'scale';
     durationSeconds?: number;
     image?: {
       mimeType: 'image/png' | 'image/jpeg';
@@ -94,6 +94,7 @@ export interface LiveTriviaState {
   phase: TriviaPhase;
   startedAt: number;      // Server timestamp
   durationSeconds: number;
+  revealedCorrectAnswer?: string | null;
   revealedWinnerUid?: string | null;
 }
 

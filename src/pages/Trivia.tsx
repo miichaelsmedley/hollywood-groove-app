@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { onValue, ref, set } from 'firebase/database';
 import { ArrowLeft, Clock, Trophy, CheckCircle } from 'lucide-react';
@@ -19,6 +19,8 @@ export default function Trivia() {
   const [scaleValue, setScaleValue] = useState<number | null>(null);
   const [hasAnswered, setHasAnswered] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const activityUnsubscribeRef = useRef<(() => void) | null>(null);
+  const activeActivityIdRef = useRef<string | null>(null);
 
   // Check if this is a test show via query param
   const isTestShow = searchParams.get('test') === 'true';
@@ -35,6 +37,12 @@ export default function Trivia() {
 
     const triviaPath = getPath(id, 'live/trivia');
     console.log(`📡 Trivia: Listening to ${triviaPath} (testMode=${isTestShow})`);
+    const cleanupActivityListener = () => {
+      if (activityUnsubscribeRef.current) {
+        activityUnsubscribeRef.current();
+        activityUnsubscribeRef.current = null;
+      }
+    };
 
     // Listen to live trivia state
     const unsubscribeLive = onValue(
@@ -42,54 +50,79 @@ export default function Trivia() {
       (snapshot) => {
         const state = snapshot.val() as LiveTriviaState | null;
         console.log(`📡 Trivia: Received data from ${triviaPath}:`, state);
-        setLiveTrivia(state);
+        const nextActivityId = state?.activityId ?? null;
+        const previousActivityId = activeActivityIdRef.current;
 
         // Reset answered state when activity changes (new question)
-        if (state?.activityId !== liveTrivia?.activityId) {
+        if (nextActivityId !== previousActivityId) {
           setHasAnswered(false);
           setSelectedOption(null);
           setFreeformText('');
           setBooleanValue(null);
           setScaleValue(null);
+          setCurrentActivity(null);
         }
 
-        // Load the current activity
-        if (state?.activityId) {
-          const activityRef = ref(db, getPath(id, `activities/${state.activityId}`));
-          onValue(activityRef, (activitySnapshot) => {
-            setCurrentActivity(activitySnapshot.val() as CrowdActivity | null);
-          });
+        // Subscribe to the current activity (and clean up prior subscription)
+        if (nextActivityId !== previousActivityId) {
+          cleanupActivityListener();
+          activeActivityIdRef.current = nextActivityId;
+
+          if (nextActivityId) {
+            const activityRef = ref(db, getPath(id, `activities/${nextActivityId}`));
+            activityUnsubscribeRef.current = onValue(activityRef, (activitySnapshot) => {
+              setCurrentActivity(activitySnapshot.val() as CrowdActivity | null);
+            });
+          }
         }
+
+        setLiveTrivia(state);
       }
     );
 
     // Listen to user's score
     const uid = auth.currentUser?.uid;
+    let unsubscribeScore: (() => void) | null = null;
     if (uid) {
-      const unsubscribeScore = onValue(
+      unsubscribeScore = onValue(
         ref(db, getPath(id, `scores/${uid}`)),
         (snapshot) => {
           setMyScore(snapshot.val() as UserScore | null);
         }
       );
-
-      return () => {
-        unsubscribeLive();
-        unsubscribeScore();
-      };
     }
 
-    return () => unsubscribeLive();
+    return () => {
+      unsubscribeLive();
+      unsubscribeScore?.();
+      cleanupActivityListener();
+      activeActivityIdRef.current = null;
+    };
   }, [id, getPath]);
 
   const isTriviaActivity = currentActivity?.type === 'trivia';
   const triviaData = isTriviaActivity && 'trivia' in currentActivity
     ? currentActivity.trivia
     : null;
+  const activityContext = (() => {
+    const title = currentActivity?.title?.trim();
+    if (!title) return null;
+    const normalizedTitle = title.toLowerCase();
+    const normalizedQuestion = (triviaData?.question ?? '').trim().toLowerCase();
+    return normalizedTitle === normalizedQuestion ? null : title;
+  })();
 
   const kindRaw = triviaData?.kind ?? null;
-  const kind = kindRaw === 'text' ? 'freeform' : kindRaw;
+  const kind = kindRaw === 'text'
+    ? 'freeform'
+    : kindRaw === 'multiple_choice'
+      ? 'multi'
+      : kindRaw;
   const options = Array.isArray(triviaData?.options) ? triviaData.options : [];
+  const revealedCorrectAnswer =
+    typeof liveTrivia?.revealedCorrectAnswer === 'string' && liveTrivia.revealedCorrectAnswer.trim().length > 0
+      ? liveTrivia.revealedCorrectAnswer.trim()
+      : null;
 
   const scaleConfig = triviaData?.scale;
   const scaleMin = typeof scaleConfig?.min === 'number' ? scaleConfig.min : 0;
@@ -309,6 +342,12 @@ export default function Trivia() {
 
               {/* Question Card - Compact Layout */}
               <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+                {activityContext && (
+                  <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-3">
+                    From: {activityContext}
+                  </p>
+                )}
+
                 {/* Image + Question Row (side by side if image exists) */}
                 {triviaData.image ? (
                   <div className="flex gap-3 mb-4">
@@ -454,6 +493,12 @@ export default function Trivia() {
           {liveTrivia.phase === 'answer' && triviaData && (
             <div className="space-y-3">
               <div className="bg-gray-900 rounded-lg p-4 border border-gray-800">
+                {activityContext && (
+                  <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-3">
+                    From: {activityContext}
+                  </p>
+                )}
+
                 {/* Image + Question Row (side by side if image exists) */}
                 {triviaData.image ? (
                   <div className="flex gap-3 mb-4">
@@ -471,6 +516,13 @@ export default function Trivia() {
                     {triviaData.question}
                   </h2>
                 )}
+
+                <div className="mb-4 p-3 bg-green-500/10 border border-green-500/40 rounded-lg">
+                  <p className="text-sm text-center">
+                    <span className="text-green-300 font-medium">Correct answer:</span>
+                    <span className="text-gray-100 font-semibold ml-2">{revealedCorrectAnswer ?? 'Answer unavailable'}</span>
+                  </p>
+                </div>
 
                 {hasAnswered && (
                   <div className="mb-4 p-3 bg-gray-950 border border-gray-800 rounded-lg">

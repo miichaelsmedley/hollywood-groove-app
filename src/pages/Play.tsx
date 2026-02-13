@@ -672,6 +672,15 @@ export default function Play() {
   }
 
   const question = currentQuestion.question;
+  const formatContextLabel = (value: string) =>
+    value
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/\b\w/g, (match) => match.toUpperCase());
+  const questionContext = question.subcategory
+    ? `${formatContextLabel(question.subcategory)} • ${formatContextLabel(question.category_id)}`
+    : formatContextLabel(question.category_id);
 
   return (
     <div className="mx-auto max-w-lg space-y-4">
@@ -721,6 +730,9 @@ export default function Play() {
         </div>
 
         {/* Question */}
+        <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">
+          {questionContext}
+        </p>
         <h2 className="text-lg font-bold mb-4 leading-snug">{question.question}</h2>
 
         {/* Options */}
