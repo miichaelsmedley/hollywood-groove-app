@@ -14,6 +14,7 @@ import ShowDetail from './pages/ShowDetail';
 import JoinShow from './pages/JoinShow';
 import Trivia from './pages/Trivia';
 import Activity from './pages/Activity';
+import DailyTrivia from './pages/DailyTrivia';
 import FirebaseTest from './pages/FirebaseTest';
 import JoinCurrentShow from './pages/JoinCurrentShow';
 import Scores from './pages/Scores';
@@ -89,6 +90,7 @@ export default function App() {
             <Route path="shows" element={<ShowsPage mode="all" />} />
             <Route path="upcoming" element={<ShowsPage mode="upcoming" />} />
             <Route path="join" element={<JoinCurrentShow />} />
+            <Route path="daily-trivia" element={<DailyTrivia />} />
             <Route path="scores" element={<Scores />} />
             <Route path="leaderboard" element={<Leaderboard />} />
             <Route path="profile" element={<Profile />} />
