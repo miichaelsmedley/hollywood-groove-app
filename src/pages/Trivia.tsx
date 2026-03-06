@@ -75,7 +75,12 @@ export default function Trivia() {
 
   const kindRaw = triviaData?.kind ?? null;
   const kind = kindRaw === 'text' ? 'freeform' : kindRaw;
-  const options = Array.isArray(triviaData?.options) ? triviaData.options : [];
+
+  // SECURITY: Strip any correct answer indicators from options
+  // Options should never include isCorrect, correct, correctAnswer, etc.
+  const options = Array.isArray(triviaData?.options)
+    ? triviaData.options.map(({ index, text }) => ({ index, text }))
+    : [];
 
   const scaleConfig = triviaData?.scale;
   const scaleMin = typeof scaleConfig?.min === 'number' ? scaleConfig.min : 0;
