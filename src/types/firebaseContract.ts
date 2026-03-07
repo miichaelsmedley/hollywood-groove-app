@@ -340,6 +340,10 @@ export interface TriviaLibrarySchedule {
   theme_name: string;
   description: string;
   priority: number;                // If multiple schedules, highest wins
+  source?: 'manual' | 'auto';      // Optional metadata for scheduler ownership
+  generated_at?: number;           // Auto scheduler timestamp (ms epoch)
+  generator_version?: string;      // Scheduler version marker
+  generated_question_count?: number;
 }
 
 // Path: trivia_library/usage/{userId}
