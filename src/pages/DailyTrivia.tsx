@@ -11,6 +11,11 @@ interface TriviaQuestion {
   topic?: string; // e.g., "Spirited Away", "The Breakfast Club"
   difficulty: 'Easy' | 'Medium' | 'Hard';
   points: number;
+  image?: {
+    mimeType: 'image/png' | 'image/jpeg';
+    base64: string;
+  };
+  imageLayout?: 'thumbnail' | 'large' | 'full'; // How to display the image
   options: {
     index: number;
     text: string;
@@ -198,9 +203,59 @@ export default function DailyTrivia() {
               </span>
             </div>
 
-            <h2 className="text-lg font-semibold leading-tight">
-              {currentQuestion.question}
-            </h2>
+            {/* Image - if present, show based on layout preference */}
+            {currentQuestion.image && (
+              <>
+                {(!currentQuestion.imageLayout || currentQuestion.imageLayout === 'thumbnail') && (
+                  // Small thumbnail next to question
+                  <div className="flex gap-3">
+                    <img
+                      src={`data:${currentQuestion.image.mimeType};base64,${currentQuestion.image.base64}`}
+                      alt="Question"
+                      className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg border-2 border-cinema-700 flex-shrink-0"
+                    />
+                    <h2 className="text-lg font-semibold leading-tight flex-1">
+                      {currentQuestion.question}
+                    </h2>
+                  </div>
+                )}
+
+                {currentQuestion.imageLayout === 'large' && (
+                  // Large image, good for face recognition, maps
+                  <div className="space-y-3">
+                    <img
+                      src={`data:${currentQuestion.image.mimeType};base64,${currentQuestion.image.base64}`}
+                      alt="Question"
+                      className="w-full max-h-64 object-contain rounded-lg border-2 border-cinema-700 bg-cinema-900"
+                    />
+                    <h2 className="text-lg font-semibold leading-tight">
+                      {currentQuestion.question}
+                    </h2>
+                  </div>
+                )}
+
+                {currentQuestion.imageLayout === 'full' && (
+                  // Full-width, maximum detail
+                  <div className="space-y-3">
+                    <img
+                      src={`data:${currentQuestion.image.mimeType};base64,${currentQuestion.image.base64}`}
+                      alt="Question"
+                      className="w-full max-h-96 object-contain rounded-lg border-2 border-cinema-700 bg-cinema-900"
+                    />
+                    <h2 className="text-base sm:text-lg font-semibold leading-tight">
+                      {currentQuestion.question}
+                    </h2>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Question text (if no image) */}
+            {!currentQuestion.image && (
+              <h2 className="text-lg font-semibold leading-tight">
+                {currentQuestion.question}
+              </h2>
+            )}
 
             {/* Options */}
             <div className="space-y-2">
