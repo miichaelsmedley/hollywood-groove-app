@@ -1,0 +1,32 @@
+#:schema node_modules/wrangler/config-schema.json
+
+# Hollywood Groove PWA — Cloudflare Worker
+# Replaces Azure Static Web Apps deployment.
+
+name = "hollywoodgroove-app"
+main = "worker/index.ts"
+compatibility_date = "2026-04-26"
+
+# Enable the *.workers.dev preview URL for initial testing.
+# Safe to flip to false once you're confident only the custom domain is needed.
+workers_dev = true
+
+# Custom domain — Cloudflare manages the DNS record + SSL automatically.
+[[routes]]
+pattern = "app.hollywoodgroove.com.au"
+custom_domain = true
+
+# Static assets binding — serves the Vite build output.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+# SPA mode: any unmatched path returns /index.html with status 200.
+# Equivalent to navigationFallback in the old staticwebapp.config.json.
+not_found_handling = "single-page-application"
+# Run the worker for every request so we can attach security headers.
+# Requests are still cheap on the Workers Paid plan ($0.30 per million).
+run_worker_first = true
+
+# Logs in the Cloudflare dashboard.
+[observability]
+enabled = true

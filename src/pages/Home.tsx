@@ -6,7 +6,7 @@ import { useUser } from '../contexts/UserContext';
 import { useTriviaHome } from '../lib/triviaLibraryService';
 import { onValue, ref } from 'firebase/database';
 import { db } from '../lib/firebase';
-import { ShowMeta } from '../types/firebaseContract';
+import { isShowLive, ShowRecordSnapshot } from '../lib/showStatus';
 
 interface ActiveTestShow {
   showId: string;
@@ -46,51 +46,19 @@ export default function Home() {
           return;
         }
 
-        // Find any test show with actively running trivia or activity
-        // Must have explicit active states AND recent updates (within last 30 minutes)
-        const MAX_STALE_MS = 30 * 60 * 1000; // 30 minutes
-        const now = Date.now();
+        const showRecords = data as Record<string, ShowRecordSnapshot>;
 
-        for (const [showId, showData] of Object.entries(data) as [string, any][]) {
-          const meta = showData?.meta as ShowMeta | undefined;
-          const liveTrivia = showData?.live?.trivia;
-          const phase = liveTrivia?.phase as string | undefined;
-
-          // Check timestamps - prefer updatedAt, fall back to startedAt
-          const triviaUpdatedAt = liveTrivia?.updatedAt as number | undefined;
-          const triviaStartedAt = liveTrivia?.startedAt as number | undefined;
-          const triviaTimestamp = triviaUpdatedAt || triviaStartedAt;
-
-          // Check if trivia data is stale (older than 30 minutes)
-          const isTriviaStale = !triviaTimestamp || (now - triviaTimestamp) > MAX_STALE_MS;
-
-          // Trivia is active when in question or answer phases AND not stale
-          // Per firebaseContract.ts: TriviaPhase = 'idle' | 'question' | 'answer'
-          const activeTriviaPhases = ['question', 'answer'];
-          const triviaActive = Boolean(
-            phase &&
-            activeTriviaPhases.includes(phase) &&
-            !isTriviaStale
-          );
-
-          const liveActivity = showData?.live?.activity;
-          const activityUpdatedAt = liveActivity?.updatedAt as number | undefined;
-          const activityStartedAt = liveActivity?.startedAt as number | undefined;
-          const activityTimestamp = activityUpdatedAt || activityStartedAt;
-          const isActivityStale = !activityTimestamp || (now - activityTimestamp) > MAX_STALE_MS;
-          const activityActive = liveActivity?.status === 'active' && !isActivityStale;
+        for (const [showId, showData] of Object.entries(showRecords)) {
+          const meta = showData.meta;
+          const showLive = isShowLive(showData);
 
           console.log(`🧪 Home: Show ${showId} check:`, {
             meta,
-            phase,
-            triviaTimestamp,
-            isTriviaStale,
-            triviaActive,
-            activityActive,
+            showLive,
             hasTitle: Boolean(meta?.title),
           });
 
-          if (meta?.title && (triviaActive || activityActive)) {
+          if (meta?.title && showLive) {
             console.log(`🧪 Home: Found active test show: ${showId} - ${meta.title}`);
             setActiveTestShow({ showId, title: meta.title });
             return;

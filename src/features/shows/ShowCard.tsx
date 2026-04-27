@@ -94,7 +94,9 @@ export default function ShowCard({
       {/* Footer */}
       <div className="mt-6 pt-4 border-t border-gray-800 flex items-center justify-between">
         <div>
-          {isUpcoming ? (
+          {isLive ? (
+            <span className="text-xs text-red-300 font-medium">Live Event</span>
+          ) : isUpcoming ? (
             <span className="text-xs text-green-400 font-medium">Upcoming Event</span>
           ) : (
             <span className="text-xs text-gray-500 font-medium">Past Event</span>

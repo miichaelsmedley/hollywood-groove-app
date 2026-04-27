@@ -20,3 +20,7 @@ coverage/
 .DS_Store
 .vscode/
 .idea/
+
+# Cloudflare Wrangler
+.wrangler/
+.dev.vars

@@ -5,6 +5,7 @@ import { ShowMeta } from '../../types/firebaseContract';
 import ShowCard from './ShowCard';
 import { Calendar, AlertCircle } from 'lucide-react';
 import { getShowBasePath } from '../../lib/mode';
+import { isShowLive, ShowRecordSnapshot } from '../../lib/showStatus';
 
 interface ShowData {
   showId: string;
@@ -36,16 +37,14 @@ export default function ShowsPage({ mode = 'upcoming' }: { mode?: ShowsPageMode 
           return;
         }
 
-        // Convert Firebase object to array
-        const showsArray: ShowData[] = Object.entries(data).map(([showId, showData]: [string, any]) => {
-          // Check if show is live
-          const liveTrivia = showData.live?.trivia;
-          const isLive = liveTrivia && liveTrivia.phase !== 'idle';
+        const showRecords = data as Record<string, ShowRecordSnapshot>;
 
+        // Convert Firebase object to array
+        const showsArray: ShowData[] = Object.entries(showRecords).map(([showId, showData]) => {
           return {
             showId,
             meta: showData.meta as ShowMeta,
-            isLive,
+            isLive: isShowLive(showData),
           };
         });
 
@@ -84,7 +83,7 @@ export default function ShowsPage({ mode = 'upcoming' }: { mode?: ShowsPageMode 
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [mode]);
 
   if (loading) {
     return (
