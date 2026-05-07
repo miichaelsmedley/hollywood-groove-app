@@ -194,6 +194,7 @@ export async function createTeam(
 
   const codeIndex: TeamCodeIndex = {
     team_id: teamId,
+    created_by: ownerId,
   };
 
   // Write all data atomically

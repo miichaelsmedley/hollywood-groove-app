@@ -1,4 +1,5 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import { getAuth, browserLocalPersistence, setPersistence } from "firebase/auth";
 import { getDatabase } from "firebase/database";
 
@@ -49,6 +50,24 @@ console.log('🌐 Current origin:', typeof window !== 'undefined' ? window.locat
 console.log('🔑 Auth domain:', firebaseConfig.authDomain);
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+
+const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_RECAPTCHA_SITE_KEY;
+const appCheckDebugToken = import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN;
+
+if (typeof window !== "undefined" && appCheckSiteKey) {
+  if (appCheckDebugToken) {
+    const debugTarget = self as unknown as {
+      FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean | string;
+    };
+    debugTarget.FIREBASE_APPCHECK_DEBUG_TOKEN =
+      appCheckDebugToken === "true" ? true : appCheckDebugToken;
+  }
+
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(appCheckSiteKey),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
 
 export const db = getDatabase(app);
 export const auth = getAuth(app);

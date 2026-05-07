@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Navigate } from 'react-router-dom';
 import { auth } from '../lib/firebase';
-import { isTransitionAdminUser } from '../lib/mode';
+import { hasPlatformAdminClaim } from '../lib/mode';
 
 interface AdminRouteProps {
   children: React.ReactNode;
@@ -20,7 +20,7 @@ export default function AdminRoute({ children }: AdminRouteProps) {
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       try {
-        const allowed = await isTransitionAdminUser(user);
+        const allowed = await hasPlatformAdminClaim(user);
         if (isActive) {
           setIsAdmin(allowed);
         }

@@ -408,6 +408,7 @@ export interface MemberTeamInfo {
 // Path: /team_codes/{code}
 export interface TeamCodeIndex {
   team_id: string;
+  created_by?: string;
 }
 
 // Path: /shows/{showId}/team_scores/{teamId}

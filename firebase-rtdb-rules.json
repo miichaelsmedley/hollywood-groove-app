@@ -186,7 +186,7 @@
       "team_codes": {
         ".read": "auth != null",
         "$code": {
-          ".write": "auth != null"
+          ".write": "auth != null && ((!data.exists() && newData.exists() && newData.hasChildren(['team_id', 'created_by']) && newData.child('team_id').isString() && newData.child('created_by').val() == auth.uid) || (data.exists() && !newData.exists() && root.child('test/teams').child(data.child('team_id').val()).child('created_by').val() == auth.uid))"
         }
       }
     },
@@ -374,7 +374,7 @@
     "team_codes": {
       ".read": "auth != null",
       "$code": {
-        ".write": "auth != null"
+        ".write": "auth != null && ((!data.exists() && newData.exists() && newData.hasChildren(['team_id', 'created_by']) && newData.child('team_id').isString() && newData.child('created_by').val() == auth.uid) || (data.exists() && !newData.exists() && root.child('teams').child(data.child('team_id').val()).child('created_by').val() == auth.uid))"
       }
     },
 
@@ -390,6 +390,12 @@
         ".read": "auth != null && auth.uid == $uid",
         ".write": "false"
       }
+    },
+
+    "audit_log": {
+      ".read": "auth != null && auth.token.platform_admin == true",
+      ".write": "false",
+      ".indexOn": ["action", "actorUid", "at", "targetUid"]
     }
   }
 }

@@ -8,14 +8,6 @@ export const HAS_TEST_ACCESS = HAS_LOCAL_TEST_ACCESS;
 // Backwards compatibility - now means "can see test content" not "use test paths"
 export const IS_TEST_MODE = HAS_LOCAL_TEST_ACCESS || import.meta.env.DEV;
 
-/** Admin email for accessing diagnostics and dev tools */
-export const ADMIN_EMAIL = 'miichael.smedley@gmail.com';
-
-/** Check if the given email is an admin */
-export const isAdminEmail = (email: string | null | undefined): boolean => {
-  return email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-};
-
 /** Check whether the current Firebase ID token carries the custom admin claim. */
 export const hasPlatformAdminClaim = async (user: User | null | undefined): Promise<boolean> => {
   if (!user) {
@@ -24,27 +16,6 @@ export const hasPlatformAdminClaim = async (user: User | null | undefined): Prom
 
   const tokenResult = await user.getIdTokenResult();
   return tokenResult.claims.platform_admin === true;
-};
-
-/**
- * Transition-only admin check.
- * Phase 0.5 moves admin authority to custom claims. The email fallback is kept
- * until existing admins are migrated and production RTDB rules are tightened.
- */
-export const isTransitionAdminUser = async (user: User | null | undefined): Promise<boolean> => {
-  if (!user) {
-    return false;
-  }
-
-  try {
-    if (await hasPlatformAdminClaim(user)) {
-      return true;
-    }
-  } catch (error) {
-    console.warn('Admin claim check failed', error);
-  }
-
-  return isAdminEmail(user.email);
 };
 
 /**
