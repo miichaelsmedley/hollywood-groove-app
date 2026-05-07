@@ -280,36 +280,8 @@ export default function JoinShow() {
       }
       console.log('[ensureJoinRecords] Attendee setup complete');
 
-      console.log('[ensureJoinRecords] Running score transaction at:', getPath(id, `scores/${uid}`));
-      const scoreRef = ref(db, getPath(id, `scores/${uid}`));
-      await runTransaction(scoreRef, (current) => {
-        const existing = (current ?? {}) as Record<string, any>;
-        const existingBreakdown = (existing.breakdown ?? {}) as Record<string, any>;
-        const hasStartingBonus = typeof existingBreakdown.starting_bonus === 'number';
-
-        if (hasStartingBonus) {
-          return existing;
-        }
-
-        const existingTotal = typeof existing.totalScore === 'number' ? existing.totalScore : 0;
-        const startingBonus = bonus;
-        const nextBreakdown = {
-          trivia: existingBreakdown.trivia ?? 0,
-          dancing: existingBreakdown.dancing ?? 0,
-          participation: existingBreakdown.participation ?? 0,
-          starting_bonus: (existingBreakdown.starting_bonus ?? 0) + startingBonus,
-        };
-
-        return {
-          ...existing,
-          displayName: existing.displayName ?? resolvedDisplayName,
-          tier: existing.tier ?? tier,
-          totalScore: existingTotal + startingBonus,
-          breakdown: nextBreakdown,
-          correctCount: existing.correctCount ?? 0,
-          lastAnsweredAt: existing.lastAnsweredAt ?? 0,
-        };
-      });
+      // Score rows are server-owned. The attendee record keeps the join-time
+      // starting bonus, while Cloud Functions maintain /scores and leaderboards.
 
       const memberShowRef = ref(db, `members/${uid}/shows/${id}`);
       const memberShowSnap = await get(memberShowRef);

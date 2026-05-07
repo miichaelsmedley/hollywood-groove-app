@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
 import { Navigate } from 'react-router-dom';
 import { auth } from '../lib/firebase';
-import { isAdminEmail } from '../lib/mode';
+import { isTransitionAdminUser } from '../lib/mode';
 
 interface AdminRouteProps {
   children: React.ReactNode;
@@ -11,7 +13,34 @@ interface AdminRouteProps {
  * Non-admin users are redirected to the home page.
  */
 export default function AdminRoute({ children }: AdminRouteProps) {
-  const isAdmin = isAdminEmail(auth.currentUser?.email);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      try {
+        const allowed = await isTransitionAdminUser(user);
+        if (isActive) {
+          setIsAdmin(allowed);
+        }
+      } catch (error) {
+        console.warn('Admin claim check failed', error);
+        if (isActive) {
+          setIsAdmin(false);
+        }
+      }
+    });
+
+    return () => {
+      isActive = false;
+      unsubscribe();
+    };
+  }, []);
+
+  if (isAdmin === null) {
+    return null;
+  }
 
   if (!isAdmin) {
     return <Navigate to="/" replace />;

@@ -1,3 +1,4 @@
+import type { User } from 'firebase/auth';
 import { HAS_LOCAL_TEST_ACCESS } from './firebase';
 
 // Whether user can see test shows (via URL code or Firebase /testers/{uid})
@@ -13,6 +14,37 @@ export const ADMIN_EMAIL = 'miichael.smedley@gmail.com';
 /** Check if the given email is an admin */
 export const isAdminEmail = (email: string | null | undefined): boolean => {
   return email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+};
+
+/** Check whether the current Firebase ID token carries the custom admin claim. */
+export const hasPlatformAdminClaim = async (user: User | null | undefined): Promise<boolean> => {
+  if (!user) {
+    return false;
+  }
+
+  const tokenResult = await user.getIdTokenResult();
+  return tokenResult.claims.platform_admin === true;
+};
+
+/**
+ * Transition-only admin check.
+ * Phase 0.5 moves admin authority to custom claims. The email fallback is kept
+ * until existing admins are migrated and production RTDB rules are tightened.
+ */
+export const isTransitionAdminUser = async (user: User | null | undefined): Promise<boolean> => {
+  if (!user) {
+    return false;
+  }
+
+  try {
+    if (await hasPlatformAdminClaim(user)) {
+      return true;
+    }
+  } catch (error) {
+    console.warn('Admin claim check failed', error);
+  }
+
+  return isAdminEmail(user.email);
 };
 
 /**

@@ -3,7 +3,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { onValue, ref, get } from 'firebase/database';
 import { db, auth } from '../lib/firebase';
 import { UserRole, canViewTestShows, canScoreActivities, hasRole } from '../types/roles';
-import { isAdminEmail } from '../lib/mode';
+import { isAdminEmail, hasPlatformAdminClaim } from '../lib/mode';
 
 interface UserRoleState {
   roles: UserRole[];
@@ -61,8 +61,16 @@ export function useUserRole(): UserRoleState {
       const uid = user.uid;
       const email = user.email;
 
-      // Check if user is admin by email (hardcoded admin email)
+      let isClaimAdmin = false;
+      try {
+        isClaimAdmin = await hasPlatformAdminClaim(user);
+      } catch (error) {
+        console.warn('Admin claim check failed', error);
+      }
+
+      // Email fallback remains until existing admins are migrated to custom claims.
       const isEmailAdmin = isAdminEmail(email);
+      const isClaimOrEmailAdmin = isClaimAdmin || isEmailAdmin;
 
       // Listen to member's roles in Firebase
       const memberRef = ref(db, `members/${uid}/roles`);
@@ -78,8 +86,8 @@ export function useUserRole(): UserRoleState {
             userRoles = rolesData as UserRole[];
           }
 
-          // Add admin role if user has admin email but not in roles array
-          if (isEmailAdmin && !userRoles.includes('admin')) {
+          // Add admin role from custom claim, with email fallback during migration.
+          if (isClaimOrEmailAdmin && !userRoles.includes('admin')) {
             userRoles = [...userRoles, 'admin'];
           }
 

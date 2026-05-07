@@ -5,8 +5,8 @@ import {
   Camera, RotateCcw
 } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
-import { IS_TEST_MODE, isAdminEmail } from '../lib/mode';
-import { auth } from '../lib/firebase';
+import { useUserRole } from '../hooks/useUserRole';
+import { IS_TEST_MODE } from '../lib/mode';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { SocialLinks } from '../types/firebaseContract';
 import md5 from 'md5';
@@ -448,7 +448,8 @@ export default function Profile() {
     updateUserProfile,
     checkDisplayNameAvailable,
     getSuggestedDisplayNames,
-  } = useUser();
+	  } = useUser();
+	  const { isAdmin } = useUserRole();
 
   const [signingIn, setSigningIn] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -1164,7 +1165,7 @@ export default function Profile() {
         </div>
       )}
 
-      {IS_TEST_MODE && isAdminEmail(auth.currentUser?.email) && (
+	      {IS_TEST_MODE && isAdmin && (
         <div className="bg-amber-50 border border-amber-300 rounded-2xl p-5 space-y-3">
           <div className="text-sm font-semibold text-amber-900">Admin Testing</div>
           <div className="text-sm text-amber-800">
