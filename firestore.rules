@@ -1,0 +1,165 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function hasClaim(role) {
+      return signedIn() && request.auth.token[role] == true;
+    }
+
+    function isPlatformAdmin() {
+      return hasClaim("platform_admin");
+    }
+
+    function showPath(showId) {
+      return /databases/$(database)/documents/shows/$(showId);
+    }
+
+    function venueStaffPath(venueId) {
+      return /databases/$(database)/documents/venues/$(venueId)/eligibleStaff/$(uid());
+    }
+
+    function showExists(showId) {
+      return exists(showPath(showId));
+    }
+
+    function showData(showId) {
+      return get(showPath(showId)).data;
+    }
+
+    function orderPath(orderId) {
+      return /databases/$(database)/documents/orders/$(orderId);
+    }
+
+    function orderExists(orderId) {
+      return exists(orderPath(orderId));
+    }
+
+    function orderData(orderId) {
+      return get(orderPath(orderId)).data;
+    }
+
+    function isPublicSellingFront(data) {
+      return data.active == true;
+    }
+
+    function isPublicShow(data) {
+      return data.ticketingEnabled == true
+        && (data.status in ["published", "on_sale", "sold_out"]);
+    }
+
+    function isVenueStaffForVenue(venueId) {
+      return signedIn() && exists(venueStaffPath(venueId));
+    }
+
+    function isVenueStaffForShow(showId) {
+      return signedIn()
+        && showExists(showId)
+        && isVenueStaffForVenue(showData(showId).venueId);
+    }
+
+    function isBuyerOfOrder(orderId) {
+      return signedIn()
+        && orderExists(orderId)
+        && orderData(orderId).buyerUid == uid();
+    }
+
+    function canReadOrder(data) {
+      return isPlatformAdmin()
+        || (signedIn() && data.buyerUid == uid())
+        || isVenueStaffForShow(data.showId);
+    }
+
+    function canReadTicket(data) {
+      return isPlatformAdmin()
+        || (signedIn() && data.holderMemberUid == uid())
+        || isBuyerOfOrder(data.orderId)
+        || isVenueStaffForShow(data.showId);
+    }
+
+    function canReadRefund(data) {
+      return isPlatformAdmin()
+        || isBuyerOfOrder(data.orderId);
+    }
+
+    match /sellingFronts/{sellingFrontId} {
+      allow read: if isPlatformAdmin() || isPublicSellingFront(resource.data);
+      allow create, update, delete: if isPlatformAdmin();
+    }
+
+    match /venues/{venueId} {
+      allow read: if isPlatformAdmin()
+        || isVenueStaffForVenue(venueId)
+        || resource.data.public == true;
+      allow create, update, delete: if isPlatformAdmin();
+
+      match /eligibleStaff/{staffUid} {
+        allow read: if isPlatformAdmin()
+          || (signedIn() && staffUid == uid())
+          || isVenueStaffForVenue(venueId);
+        allow create, update, delete: if isPlatformAdmin();
+      }
+    }
+
+    match /shows/{showId} {
+      allow read: if isPlatformAdmin()
+        || isVenueStaffForShow(showId)
+        || isPublicShow(resource.data);
+      allow create, update, delete: if isPlatformAdmin();
+
+      match /ticketTypes/{ticketTypeId} {
+        allow read: if isPlatformAdmin()
+          || isVenueStaffForShow(showId)
+          || (showExists(showId) && isPublicShow(showData(showId)) && resource.data.active == true);
+        allow create, update, delete: if isPlatformAdmin();
+      }
+    }
+
+    match /orders/{orderId} {
+      allow read: if canReadOrder(resource.data);
+      allow create, update, delete: if false;
+
+      match /payments/{paymentId} {
+        allow read: if isPlatformAdmin() || isBuyerOfOrder(orderId);
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /tickets/{ticketId} {
+      allow read: if canReadTicket(resource.data);
+      allow create, update, delete: if false;
+
+      match /scanEvents/{scanId} {
+        allow read: if isPlatformAdmin()
+          || canReadTicket(get(/databases/$(database)/documents/tickets/$(ticketId)).data);
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /refunds/{refundId} {
+      allow read: if canReadRefund(resource.data);
+      allow create, update, delete: if false;
+    }
+
+    match /stripeEvents/{eventId} {
+      allow read: if isPlatformAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /auditLog/{logId} {
+      allow read: if isPlatformAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

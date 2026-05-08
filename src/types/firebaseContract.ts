@@ -433,3 +433,5 @@ export interface TeamLeaderboard {
   top: TeamLeaderboardEntry[];
   updated_at: number;
 }
+
+export * from './ticketingContract';
