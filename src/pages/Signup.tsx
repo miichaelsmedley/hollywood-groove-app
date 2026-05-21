@@ -5,6 +5,7 @@ import { db, auth } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
 import { Music, Mail, Phone, User, Check, Sparkles, AlertCircle, CheckCircle, PartyPopper, ExternalLink } from 'lucide-react';
 import { signInWithGoogle } from '../lib/auth';
+import EmailLinkSignIn from '../features/auth/EmailLinkSignIn';
 
 export default function Signup() {
   const [searchParams] = useSearchParams();
@@ -315,7 +316,18 @@ export default function Signup() {
                     <div className="w-full border-t border-cinema-200"></div>
                   </div>
                   <div className="relative flex justify-center text-xs">
-                    <span className="px-2 bg-white text-cinema-500">or use email</span>
+                    <span className="px-2 bg-white text-cinema-500">or sign in with email</span>
+                  </div>
+                </div>
+
+                <EmailLinkSignIn />
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-cinema-200"></div>
+                  </div>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="px-2 bg-white text-cinema-500">or fill in your details below</span>
                   </div>
                 </div>
               </div>

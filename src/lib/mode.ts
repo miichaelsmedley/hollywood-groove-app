@@ -1,4 +1,3 @@
-import type { User } from 'firebase/auth';
 import { HAS_LOCAL_TEST_ACCESS } from './firebase';
 
 // Whether user can see test shows (via URL code or Firebase /testers/{uid})
@@ -7,16 +6,6 @@ export const HAS_TEST_ACCESS = HAS_LOCAL_TEST_ACCESS;
 
 // Backwards compatibility - now means "can see test content" not "use test paths"
 export const IS_TEST_MODE = HAS_LOCAL_TEST_ACCESS || import.meta.env.DEV;
-
-/** Check whether the current Firebase ID token carries the custom admin claim. */
-export const hasPlatformAdminClaim = async (user: User | null | undefined): Promise<boolean> => {
-  if (!user) {
-    return false;
-  }
-
-  const tokenResult = await user.getIdTokenResult();
-  return tokenResult.claims.platform_admin === true;
-};
 
 /**
  * Get the base path for PRODUCTION show data in Firebase.

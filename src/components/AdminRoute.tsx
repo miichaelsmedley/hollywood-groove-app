@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Navigate } from 'react-router-dom';
 import { auth } from '../lib/firebase';
-import { hasPlatformAdminClaim } from '../lib/mode';
+import { hasPlatformAdminClaim } from '../lib/claims';
 
 interface AdminRouteProps {
   children: React.ReactNode;

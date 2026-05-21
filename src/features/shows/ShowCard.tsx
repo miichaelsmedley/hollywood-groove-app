@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { Calendar, MapPin, ExternalLink, Users } from 'lucide-react';
+import { Calendar, MapPin, ExternalLink, Users, Ticket } from 'lucide-react';
+import { useTicketedShow } from '../../lib/firebaseTicketing';
 
 interface ShowCardProps {
   showId: string;
@@ -24,6 +25,16 @@ export default function ShowCard({
 }: ShowCardProps) {
   const startDateTime = new Date(startDate);
   const isUpcoming = startDateTime > new Date();
+
+  // Subscribe to the Firestore ticketed show doc for this id (named `ticketing`
+  // database). When `ticketingEnabled` is true, the CTA flips from an external
+  // link (legacy Eventbrite-style ticketUrl on the RTDB meta) to an internal
+  // route into the embedded purchase panel on `/shows/:id`.
+  const { show: ticketedShow } = useTicketedShow(showId);
+  const hasInternalTickets =
+    Boolean(ticketedShow?.ticketingEnabled) &&
+    ticketedShow?.status !== 'cancelled' &&
+    ticketedShow?.status !== 'completed';
 
   return (
     <Link
@@ -103,17 +114,27 @@ export default function ShowCard({
           )}
         </div>
 
-        {ticketUrl && isUpcoming && (
-          <a
-            href={ticketUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center space-x-1 text-primary text-sm font-medium hover:text-primary/80 transition"
-          >
-            <ExternalLink className="w-4 h-4" />
-            <span>Buy Tickets</span>
-          </a>
+        {isUpcoming && hasInternalTickets ? (
+          // Internal CTA — same tab, into the show detail page where the
+          // TicketPurchasePanel renders below the show meta.
+          <span className="inline-flex items-center space-x-1 text-primary text-sm font-medium">
+            <Ticket className="w-4 h-4" />
+            <span>Buy tickets</span>
+          </span>
+        ) : (
+          ticketUrl &&
+          isUpcoming && (
+            <a
+              href={ticketUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center space-x-1 text-primary text-sm font-medium hover:text-primary/80 transition"
+            >
+              <ExternalLink className="w-4 h-4" />
+              <span>Buy Tickets</span>
+            </a>
+          )
         )}
       </div>
     </Link>

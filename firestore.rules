@@ -104,7 +104,20 @@ service cloud.firestore {
         allow read: if isPlatformAdmin()
           || (signedIn() && staffUid == uid())
           || isVenueStaffForVenue(venueId);
-        allow create, update, delete: if isPlatformAdmin();
+        // Writes are server-only; admins use the grantVenueStaff /
+        // revokeVenueStaff callables which use the Admin SDK and bypass rules.
+        allow create, update, delete: if false;
+      }
+
+      // Email-keyed pending invites written by the grantVenueStaff callable
+      // when the invitee has no Firebase Auth account yet. Redeemed by the
+      // claimMyPendingVenueStaffInvites callable on first sign-in.
+      match /eligibleStaffInvites/{inviteId} {
+        // Read limited to platform admins managing invites at the venue.
+        // The redemption flow runs server-side via Admin SDK and bypasses
+        // rules; clients never read invites directly during redemption.
+        allow read: if isPlatformAdmin();
+        allow create, update, delete: if false;
       }
     }
 

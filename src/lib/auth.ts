@@ -7,9 +7,123 @@ import {
   getRedirectResult,
   signOut as firebaseSignOut,
   signInWithCredential,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
   User,
 } from 'firebase/auth';
 import { auth } from './firebase';
+
+// Email link (passwordless) sign-in storage key — the email the user entered
+// when they requested the link must be re-presented when completing the
+// sign-in (Firebase requires this to prevent session-fixation attacks).
+const EMAIL_LINK_PENDING_KEY = 'hg_email_link_pending_email';
+
+/**
+ * Resolves the absolute URL where the user lands after they tap the link
+ * in the Firebase-sent sign-in email. Must be a whitelisted domain in
+ * Firebase Console → Authentication → Settings → Authorized domains.
+ * In production this is `https://app.hollywoodgroove.com.au/auth/finish`.
+ *
+ * `returnPath` (e.g. "/event/abc123") is carried through so the buyer
+ * lands back where they started checkout after the email round-trip.
+ */
+function getEmailLinkContinueUrl(returnPath?: string): string {
+  const origin =
+    typeof window === 'undefined'
+      ? 'https://app.hollywoodgroove.com.au'
+      : window.location.origin;
+  const base = `${origin}/auth/finish`;
+  if (returnPath && returnPath.startsWith('/')) {
+    return `${base}?return=${encodeURIComponent(returnPath)}`;
+  }
+  return base;
+}
+
+/**
+ * Sends a "tap to sign in" link to the given email address. Works for any
+ * email provider (Google, Outlook, Yahoo, work, anything). Firebase sends
+ * the email using its built-in template; no SES/Resend wiring required.
+ *
+ * After the user taps the link, they land on /auth/finish which calls
+ * `completeEmailLinkSignIn()` to actually complete the sign-in, then
+ * redirects to `returnPath` if one was supplied (defaults to /tickets).
+ */
+export async function sendEmailLinkSignIn(
+  email: string,
+  returnPath?: string
+): Promise<void> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized || !normalized.includes('@')) {
+    throw new Error('Please enter a valid email address.');
+  }
+  await sendSignInLinkToEmail(auth, normalized, {
+    url: getEmailLinkContinueUrl(returnPath),
+    handleCodeInApp: true,
+  });
+  // Persist the email so we can complete the sign-in after redirect — Firebase
+  // doesn't include the email in the link itself for security reasons.
+  try {
+    window.localStorage.setItem(EMAIL_LINK_PENDING_KEY, normalized);
+  } catch {
+    // Storage write may fail in private mode; the redirect handler falls
+    // back to prompting the user for their email in that case.
+  }
+}
+
+export interface CompleteEmailLinkResult {
+  user: User;
+  isNewUser: boolean;
+}
+
+/**
+ * Called from the /auth/finish handler page. Reads the link from the
+ * current URL, looks up the email the user typed when they requested it
+ * (from localStorage; falls back to a caller-supplied value when the link
+ * was opened in a different browser), and completes Firebase sign-in.
+ */
+export async function completeEmailLinkSignIn(
+  emailFallback?: string
+): Promise<CompleteEmailLinkResult> {
+  if (typeof window === 'undefined') {
+    throw new Error('Email link sign-in can only complete in the browser.');
+  }
+  const currentUrl = window.location.href;
+  if (!isSignInWithEmailLink(auth, currentUrl)) {
+    throw new Error('This link is not a valid sign-in link.');
+  }
+  let email = '';
+  try {
+    email = window.localStorage.getItem(EMAIL_LINK_PENDING_KEY) ?? '';
+  } catch {
+    email = '';
+  }
+  if (!email && emailFallback) {
+    email = emailFallback.trim().toLowerCase();
+  }
+  if (!email) {
+    // Caller needs to prompt the user. The page surfaces a small form when
+    // we throw this, asking them to retype the email they used.
+    throw new Error('MISSING_EMAIL');
+  }
+  const credential = await signInWithEmailLink(auth, email, currentUrl);
+  try {
+    window.localStorage.removeItem(EMAIL_LINK_PENDING_KEY);
+  } catch {
+    // ignore
+  }
+  // Firebase v9 sdk doesn't surface isNewUser at top level — pull it from
+  // the additional user info on the credential.
+  const additional = (credential as unknown as {
+    additionalUserInfo?: { isNewUser?: boolean };
+  }).additionalUserInfo;
+  return {
+    user: credential.user,
+    isNewUser: additional?.isNewUser === true,
+  };
+}
+
+export { isSignInWithEmailLink };
 
 const googleProvider = new GoogleAuthProvider();
 // Request email and profile scopes

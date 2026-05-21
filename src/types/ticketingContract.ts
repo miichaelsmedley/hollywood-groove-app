@@ -70,7 +70,9 @@ export type TicketAuditAction =
   | "force_refund_after_scan"
   | "ticket_type_create"
   | "ticket_type_update"
-  | "ticket_scan";
+  | "ticket_scan"
+  | "ticket_issue"
+  | "reservation_expire";
 
 export interface TicketSellingFront {
   displayName: string;
@@ -80,7 +82,10 @@ export interface TicketSellingFront {
   defaultCurrency: TicketCurrency;
   publicSiteUrl?: string;
   supportEmail?: string;
-  merchantOfRecord: "hollywood_groove";
+  // MVP merchant of record is The Adele Show (ABN + .com.au) for both fronts.
+  // Phase 9 (Stripe Connect) opens this up to per-venue or per-front MoR;
+  // typed loosely so we don't have to churn the contract again then.
+  merchantOfRecord: SellingFrontId;
   createdAt: TicketingTimestamp;
   updatedAt: TicketingTimestamp;
 }
@@ -171,6 +176,14 @@ export interface TicketOrderLineItem {
   totalCents: number;
 }
 
+export interface TicketHolderSnapshot {
+  holderName: string;
+  holderEmail: string;
+  holderPhone?: string | null;
+  holderEmailOptIn: boolean;
+  holderSmsOptIn: boolean;
+}
+
 // Path: /orders/{orderId}
 export interface TicketOrder {
   showId: string;
@@ -179,7 +192,9 @@ export interface TicketOrder {
   buyerSnapshot: TicketBuyerSnapshot;
   status: TicketOrderStatus;
   lineItems: TicketOrderLineItem[];
+  holders?: TicketHolderSnapshot[];
   stripeCheckoutSessionId?: string | null;
+  stripeCheckoutSessionUrl?: string | null;
   stripePaymentIntentId?: string | null;
   subtotalCents: number;
   bookingFeeCents: number;
@@ -217,6 +232,7 @@ export interface IssuedTicket {
   holderConsentAt: TicketingTimestamp | null;
   holderMemberUid?: string | null;
   status: TicketStatus;
+  qrToken?: string;
   qrTokenHash: string;
   issuedAt: TicketingTimestamp;
   usedAt?: TicketingTimestamp | null;

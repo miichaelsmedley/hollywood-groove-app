@@ -1,0 +1,769 @@
+// Standalone desktop-first event ticketing page at /event/:showId.
+//
+// This is the public top-of-funnel: a buyer clicks a Facebook/Instagram/Google
+// ad, lands on the marketing site (adeleshow.com.au), taps "Buy tickets" and
+// arrives here. It deliberately renders OUTSIDE the mobile PWA chrome — no
+// bottom tab bar, no Shows/Tickets/Join nav — so it reads as a real ticketing
+// page, not an in-venue game app.
+//
+// Flow: browse (pick ticket type + quantity) → sign in (required, so the buyer
+// can always manage their tickets later) → holder details + consent → Stripe
+// Checkout. The ticket selection is persisted to sessionStorage so the
+// email-link sign-in round-trip doesn't lose it.
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, onSnapshot } from "firebase/firestore";
+import {
+  Calendar,
+  MapPin,
+  Ticket,
+  Loader2,
+  AlertCircle,
+  ShieldCheck,
+  ArrowRight,
+  Lock,
+  CheckCircle2,
+} from "lucide-react";
+import { auth } from "../lib/firebase";
+import { signInWithGoogle } from "../lib/auth";
+import {
+  createCheckoutSession,
+  firestoreTicketing,
+  formatAud,
+  ticketAvailableCount,
+  ticketTypePricingPreview,
+  useTicketTypes,
+  useTicketedShow,
+} from "../lib/firebaseTicketing";
+import type { TicketType, TicketVenue } from "../types/ticketingContract";
+import HolderConsentRow, { EMPTY_HOLDER, HolderFormState } from "../features/tickets/HolderConsentRow";
+import EmailLinkSignIn from "../features/auth/EmailLinkSignIn";
+
+type TicketTypeWithId = TicketType & { id: string };
+type Step = "browse" | "signin" | "details";
+
+function sellingFrontName(id: string | undefined): string {
+  if (id === "adele_show") return "The Adele Show";
+  if (id === "hollywood_groove") return "Hollywood Groove";
+  return "Hollywood Groove";
+}
+
+function toDate(value: unknown): Date | null {
+  if (value && typeof (value as { toMillis?: () => number }).toMillis === "function") {
+    return new Date((value as { toMillis: () => number }).toMillis());
+  }
+  if (value instanceof Date) return value;
+  if (typeof value === "number") return new Date(value);
+  return null;
+}
+
+export default function EventTicketing() {
+  const { showId } = useParams<{ showId: string }>();
+  const { show, loading: showLoading } = useTicketedShow(showId);
+  const { ticketTypes, loading: typesLoading, error: typesError } = useTicketTypes(showId);
+
+  const [venue, setVenue] = useState<TicketVenue | null>(null);
+  const [signedIn, setSignedIn] = useState<boolean>(() => {
+    const u = auth.currentUser;
+    return Boolean(u && !u.isAnonymous && u.email);
+  });
+
+  const sessionKey = `hg_event_selection_${showId ?? ""}`;
+  const [selectedTicketTypeId, setSelectedTicketTypeId] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [step, setStep] = useState<Step>("browse");
+  const [holders, setHolders] = useState<HolderFormState[]>([{ ...EMPTY_HOLDER }]);
+  const [emailOptIn, setEmailOptIn] = useState(false);
+  const [smsOptIn, setSmsOptIn] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [signingInGoogle, setSigningInGoogle] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Track auth so the page reacts when a Google popup sign-in completes.
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setSignedIn(Boolean(u && !u.isAnonymous && u.email));
+    });
+    return () => unsub();
+  }, []);
+
+  // Best-effort venue fetch. Rules only expose venues flagged public; if the
+  // read is denied we simply omit the venue line rather than erroring.
+  useEffect(() => {
+    if (!show?.venueId) return;
+    const unsub = onSnapshot(
+      doc(firestoreTicketing, "venues", show.venueId),
+      (snap) => setVenue(snap.exists() ? (snap.data() as TicketVenue) : null),
+      () => setVenue(null)
+    );
+    return () => unsub();
+  }, [show?.venueId]);
+
+  // Restore a saved selection (survives the email-link / OAuth round-trip).
+  useEffect(() => {
+    if (typeof window === "undefined" || !showId) return;
+    try {
+      const raw = window.sessionStorage.getItem(sessionKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { ticketTypeId?: string; quantity?: number };
+        if (parsed.ticketTypeId) setSelectedTicketTypeId(parsed.ticketTypeId);
+        if (parsed.quantity && parsed.quantity > 0) setQuantity(parsed.quantity);
+      }
+    } catch {
+      // Corrupt/blocked storage — ignore and start fresh.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showId]);
+
+  // Auto-select the first ticket type once loaded if nothing restored.
+  useEffect(() => {
+    if (!selectedTicketTypeId && ticketTypes.length > 0) {
+      setSelectedTicketTypeId(ticketTypes[0].id);
+    }
+  }, [ticketTypes, selectedTicketTypeId]);
+
+  const selectedTicketType = useMemo<TicketTypeWithId | null>(() => {
+    if (!selectedTicketTypeId) return null;
+    return ticketTypes.find((t) => t.id === selectedTicketTypeId) ?? null;
+  }, [ticketTypes, selectedTicketTypeId]);
+
+  const maxQuantity = selectedTicketType
+    ? Math.max(1, Math.min(selectedTicketType.maxPerOrder, ticketAvailableCount(selectedTicketType)))
+    : 1;
+
+  // Persist selection whenever it changes.
+  const persistSelection = useCallback(
+    (ticketTypeId: string | null, qty: number) => {
+      if (typeof window === "undefined" || !showId) return;
+      try {
+        window.sessionStorage.setItem(
+          sessionKey,
+          JSON.stringify({ ticketTypeId, quantity: qty })
+        );
+      } catch {
+        // ignore
+      }
+    },
+    [sessionKey, showId]
+  );
+
+  // Keep holders array length synced to quantity.
+  useEffect(() => {
+    setHolders((current) => {
+      if (current.length === quantity) return current;
+      if (current.length < quantity) {
+        return [
+          ...current,
+          ...Array.from({ length: quantity - current.length }, () => ({ ...EMPTY_HOLDER })),
+        ];
+      }
+      return current.slice(0, quantity);
+    });
+  }, [quantity]);
+
+  // Once the buyer signs in (Google popup or returning from email link),
+  // advance from the sign-in step into holder details automatically.
+  useEffect(() => {
+    if (step === "signin" && signedIn) {
+      setStep("details");
+    }
+  }, [step, signedIn]);
+
+  // Pre-fill the buyer (holder 0) from the signed-in account, once.
+  useEffect(() => {
+    const u = auth.currentUser;
+    if (!signedIn || !u) return;
+    setHolders((current) => {
+      if (current.length === 0) return current;
+      const [first, ...rest] = current;
+      if (first.holderEmail || first.holderName) return current;
+      return [
+        {
+          ...first,
+          holderEmail: first.holderEmail || u.email || "",
+          holderName: first.holderName || u.displayName || "",
+        },
+        ...rest,
+      ];
+    });
+  }, [signedIn]);
+
+  const startDate = useMemo(() => toDate(show?.startDate), [show?.startDate]);
+  const frontName = sellingFrontName(show?.sellingFrontId);
+
+  // ----- loading / not-found gates -------------------------------------------
+  if (showLoading || typesLoading) {
+    return (
+      <EventShell frontName={frontName} signedIn={signedIn}>
+        <div className="min-h-[50vh] flex items-center justify-center">
+          <Loader2 className="w-7 h-7 animate-spin text-primary" />
+        </div>
+      </EventShell>
+    );
+  }
+
+  if (!show || !show.ticketingEnabled || typesError) {
+    return (
+      <EventShell frontName={frontName} signedIn={signedIn}>
+        <div className="max-w-lg mx-auto py-16 text-center space-y-3">
+          <AlertCircle className="w-10 h-10 text-amber-500 mx-auto" />
+          <h1 className="text-2xl font-bold text-white">Tickets aren't available</h1>
+          <p className="text-cinema-500 text-sm">
+            This event isn't on sale right now. It may have sold out, finished, or the
+            link may be out of date.
+          </p>
+          <Link to="/shows" className="btn-primary inline-block mt-2">
+            Browse other shows
+          </Link>
+        </div>
+      </EventShell>
+    );
+  }
+
+  const pricing = selectedTicketType
+    ? ticketTypePricingPreview(selectedTicketType, quantity)
+    : null;
+
+  const handleGetTickets = () => {
+    setSubmitError(null);
+    setStep(signedIn ? "details" : "signin");
+  };
+
+  const handleGoogle = async () => {
+    setSigningInGoogle(true);
+    try {
+      await signInWithGoogle();
+      // onAuthStateChanged flips `signedIn`; advance once that lands.
+    } finally {
+      setSigningInGoogle(false);
+    }
+  };
+
+  const handlePay = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedTicketType || !showId) return;
+    const buyer = holders[0];
+    const everyHolderValid = holders.every(
+      (h) => h.holderName.trim() && h.holderEmail.trim()
+    );
+    if (!everyHolderValid || !buyer) return;
+
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      const result = await createCheckoutSession({
+        showId,
+        ticketTypeId: selectedTicketType.id,
+        quantity,
+        buyerSnapshot: {
+          email: buyer.holderEmail.trim(),
+          displayName: buyer.holderName.trim(),
+          email_opt_in: emailOptIn,
+          sms_opt_in: smsOptIn,
+          socials: {},
+        },
+        holders: holders.map((h) => ({
+          holderName: h.holderName.trim(),
+          holderEmail: h.holderEmail.trim(),
+          holderPhone: h.holderPhone.trim() || null,
+          holderEmailOptIn: h.holderEmailOptIn,
+          holderSmsOptIn: h.holderSmsOptIn,
+        })),
+      });
+      // Clear the saved selection — checkout has begun.
+      try {
+        window.sessionStorage.removeItem(sessionKey);
+      } catch {
+        // ignore
+      }
+      window.location.assign(result.url);
+    } catch (err) {
+      console.error("createCheckoutSession failed", err);
+      setSubmitError(
+        err instanceof Error && err.message
+          ? err.message
+          : "We couldn't start checkout. Please try again in a moment."
+      );
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <EventShell frontName={frontName} signedIn={signedIn}>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-10">
+          {/* ---- Left: show hero ------------------------------------------- */}
+          <div className="lg:col-span-3 space-y-6">
+            <div className="relative rounded-2xl overflow-hidden border border-cinema-200 bg-gradient-to-br from-cinema-100 via-cinema-50 to-black min-h-[260px] sm:min-h-[340px] flex flex-col justify-end p-6 sm:p-8">
+              <div
+                className="absolute inset-0 opacity-30"
+                style={{
+                  background:
+                    "radial-gradient(ellipse at top right, rgba(245,158,11,0.35), transparent 60%)",
+                }}
+                aria-hidden="true"
+              />
+              <div className="relative space-y-3">
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
+                  <Ticket className="w-3.5 h-3.5" /> {frontName} · Live event
+                </span>
+                <h1 className="font-display text-3xl sm:text-5xl text-white leading-tight">
+                  {show.title}
+                </h1>
+                <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-cinema-700">
+                  {startDate && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4 text-primary" />
+                      {startDate.toLocaleString("en-AU", {
+                        weekday: "long",
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  )}
+                  {venue?.name && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <MapPin className="w-4 h-4 text-primary" />
+                      {venue.name}
+                      {venue.address ? ` · ${venue.address}` : ""}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-cinema-600 text-sm leading-relaxed">
+              <h2 className="text-white font-bold text-lg">About this event</h2>
+              <p>
+                Secure your spot for {show.title}. Tickets are issued instantly — each
+                ticket holder gets their own QR code to scan at the door, plus access to
+                live trivia, dancing and prizes through the Hollywood Groove app on the
+                night.
+              </p>
+              <p className="text-cinema-500 text-xs">
+                {frontName} is the seller for this event. Payments are processed securely
+                by Stripe — your card details never touch our servers.
+              </p>
+            </div>
+          </div>
+
+          {/* ---- Right: purchase card (sticky on desktop) ------------------ */}
+          <div className="lg:col-span-2">
+            <div className="lg:sticky lg:top-6 rounded-2xl border border-cinema-200 bg-cinema-50/80 backdrop-blur p-5 sm:p-6 space-y-5">
+              {step === "browse" && (
+                <BrowseStep
+                  ticketTypes={ticketTypes}
+                  selectedTicketType={selectedTicketType}
+                  quantity={quantity}
+                  maxQuantity={maxQuantity}
+                  pricing={pricing}
+                  onSelectType={(id) => {
+                    setSelectedTicketTypeId(id);
+                    setQuantity(1);
+                    persistSelection(id, 1);
+                  }}
+                  onQuantity={(q) => {
+                    setQuantity(q);
+                    persistSelection(selectedTicketTypeId, q);
+                  }}
+                  onGetTickets={handleGetTickets}
+                />
+              )}
+
+              {step === "signin" && !signedIn && (
+                <SignInStep
+                  showId={showId!}
+                  signingInGoogle={signingInGoogle}
+                  onGoogle={handleGoogle}
+                  onBack={() => setStep("browse")}
+                />
+              )}
+
+              {step === "details" && selectedTicketType && pricing && (
+                <DetailsStep
+                  show={{ title: show.title }}
+                  ticketType={selectedTicketType}
+                  quantity={quantity}
+                  pricing={pricing}
+                  holders={holders}
+                  emailOptIn={emailOptIn}
+                  smsOptIn={smsOptIn}
+                  submitting={submitting}
+                  submitError={submitError}
+                  onHolderChange={(i, next) =>
+                    setHolders((cur) => cur.map((h, idx) => (idx === i ? next : h)))
+                  }
+                  onEmailOptIn={setEmailOptIn}
+                  onSmsOptIn={setSmsOptIn}
+                  onBack={() => setStep("browse")}
+                  onSubmit={handlePay}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </EventShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Standalone shell — minimal header + footer, no PWA nav.
+// ---------------------------------------------------------------------------
+function EventShell({
+  frontName,
+  signedIn,
+  children,
+}: {
+  frontName: string;
+  signedIn: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-h-screen bg-cinema text-white flex flex-col">
+      <header className="border-b border-cinema-200">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          <span className="font-display text-lg sm:text-xl text-primary">
+            {frontName}
+          </span>
+          <Link
+            to="/tickets"
+            className="text-sm font-semibold text-cinema-700 hover:text-white inline-flex items-center gap-1.5 transition-colors"
+          >
+            <Ticket className="w-4 h-4" />
+            {signedIn ? "My tickets" : "Sign in"}
+          </Link>
+        </div>
+      </header>
+      <main className="flex-1">{children}</main>
+      <footer className="border-t border-cinema-200 py-6">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 text-xs text-cinema-500 flex flex-wrap gap-x-4 gap-y-1 justify-between">
+          <span>© {new Date().getFullYear()} {frontName}. Tickets sold by The Adele Show.</span>
+          <span className="inline-flex items-center gap-1">
+            <Lock className="w-3 h-3" /> Secure checkout by Stripe
+          </span>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 1 — browse + select
+// ---------------------------------------------------------------------------
+function BrowseStep({
+  ticketTypes,
+  selectedTicketType,
+  quantity,
+  maxQuantity,
+  pricing,
+  onSelectType,
+  onQuantity,
+  onGetTickets,
+}: {
+  ticketTypes: TicketTypeWithId[];
+  selectedTicketType: TicketTypeWithId | null;
+  quantity: number;
+  maxQuantity: number;
+  pricing: { totalCents: number } | null;
+  onSelectType: (id: string) => void;
+  onQuantity: (q: number) => void;
+  onGetTickets: () => void;
+}) {
+  if (ticketTypes.length === 0) {
+    return (
+      <div className="text-sm text-cinema-600">
+        Tickets for this event aren't on sale yet. Check back soon.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-bold text-white">Get tickets</h2>
+
+      <div className="space-y-2">
+        {ticketTypes.map((tt) => {
+          const available = ticketAvailableCount(tt);
+          const soldOut = available === 0;
+          const selected = selectedTicketType?.id === tt.id;
+          return (
+            <button
+              key={tt.id}
+              type="button"
+              onClick={() => !soldOut && onSelectType(tt.id)}
+              disabled={soldOut}
+              className={`w-full text-left p-3 rounded-xl border-2 transition-colors cursor-pointer ${
+                selected
+                  ? "border-primary bg-primary/10"
+                  : "border-cinema-200 bg-cinema-100/60 hover:border-cinema-300"
+              } ${soldOut ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-semibold text-white">{tt.name}</span>
+                <span className="text-sm font-bold text-primary">
+                  {formatAud(tt.priceCents + tt.bookingFeeCents)}
+                </span>
+              </div>
+              {tt.description && (
+                <p className="text-xs text-cinema-500 mt-1">{tt.description}</p>
+              )}
+              <p className="text-[11px] text-cinema-500 mt-1">
+                {soldOut ? "Sold out" : `${available} available`}
+                {tt.bookingFeeCents > 0 &&
+                  ` · incl. ${formatAud(tt.bookingFeeCents)} booking fee`}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
+      {selectedTicketType && (
+        <>
+          <div className="flex items-center justify-between">
+            <label htmlFor="qty" className="text-sm text-cinema-600 font-medium">
+              Quantity
+            </label>
+            <select
+              id="qty"
+              value={quantity}
+              onChange={(e) => onQuantity(Number(e.target.value))}
+              className="input-cinema py-1.5 pr-8 bg-cinema-100 cursor-pointer"
+            >
+              {Array.from({ length: maxQuantity }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-baseline justify-between border-t border-cinema-200 pt-3">
+            <span className="text-sm text-cinema-600">Total</span>
+            <span className="text-2xl font-bold text-white">
+              {pricing ? formatAud(pricing.totalCents) : "—"}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={onGetTickets}
+            className="btn-primary w-full py-3 text-base font-bold inline-flex items-center justify-center gap-2 cursor-pointer"
+          >
+            Get tickets <ArrowRight className="w-4 h-4" />
+          </button>
+          <p className="text-[11px] text-cinema-500 text-center inline-flex items-center justify-center gap-1 w-full">
+            <ShieldCheck className="w-3 h-3" /> Instant QR tickets · secure Stripe checkout
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 2 — sign in (required so the buyer can manage tickets later)
+// ---------------------------------------------------------------------------
+function SignInStep({
+  showId,
+  signingInGoogle,
+  onGoogle,
+  onBack,
+}: {
+  showId: string;
+  signingInGoogle: boolean;
+  onGoogle: () => void;
+  onBack: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-bold text-white">Create your account</h2>
+        <p className="text-sm text-cinema-500 mt-1">
+          So you can manage, view and re-download your tickets any time. Takes a few
+          seconds.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={onGoogle}
+        disabled={signingInGoogle}
+        className="w-full px-4 py-3 rounded-xl border-2 border-cinema-600 bg-white text-gray-700 font-semibold hover:border-primary/60 transition-colors flex items-center justify-center gap-3 disabled:opacity-50 cursor-pointer"
+      >
+        {signingInGoogle ? (
+          <Loader2 className="w-5 h-5 animate-spin" />
+        ) : (
+          <svg className="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+          </svg>
+        )}
+        {signingInGoogle ? "Signing in…" : "Continue with Google"}
+      </button>
+
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-cinema-200" />
+        </div>
+        <div className="relative flex justify-center text-xs">
+          <span className="px-2 bg-cinema-50 text-cinema-500">or use any email</span>
+        </div>
+      </div>
+
+      {/* returnPath sends the buyer back to this exact event page after the
+          email-link round-trip, with their selection restored from storage. */}
+      <EmailLinkSignIn returnPath={`/event/${showId}`} />
+
+      <button
+        type="button"
+        onClick={onBack}
+        className="text-xs text-cinema-500 hover:text-white w-full text-center cursor-pointer"
+      >
+        ← Back to tickets
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 3 — holder details + consent + pay
+// ---------------------------------------------------------------------------
+function DetailsStep({
+  show,
+  ticketType,
+  quantity,
+  pricing,
+  holders,
+  emailOptIn,
+  smsOptIn,
+  submitting,
+  submitError,
+  onHolderChange,
+  onEmailOptIn,
+  onSmsOptIn,
+  onBack,
+  onSubmit,
+}: {
+  show: { title: string };
+  ticketType: TicketTypeWithId;
+  quantity: number;
+  pricing: { subtotalCents: number; bookingFeeTotalCents: number; totalCents: number };
+  holders: HolderFormState[];
+  emailOptIn: boolean;
+  smsOptIn: boolean;
+  submitting: boolean;
+  submitError: string | null;
+  onHolderChange: (index: number, next: HolderFormState) => void;
+  onEmailOptIn: (v: boolean) => void;
+  onSmsOptIn: (v: boolean) => void;
+  onBack: () => void;
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  const everyHolderValid = holders.every(
+    (h) => h.holderName.trim() && h.holderEmail.trim()
+  );
+  const buyer = holders[0];
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-4">
+      <div className="flex items-center gap-2 text-emerald-400 text-sm font-semibold">
+        <CheckCircle2 className="w-4 h-4" /> Signed in — your tickets will be saved
+      </div>
+
+      <div className="rounded-xl bg-cinema-100/60 border border-cinema-200 p-3 space-y-1">
+        <p className="text-sm font-semibold text-white">
+          {quantity} × {ticketType.name}
+        </p>
+        <p className="text-xs text-cinema-500">{show.title}</p>
+        <div className="flex items-baseline justify-between pt-2 mt-1 border-t border-cinema-200">
+          <span className="text-sm text-cinema-600">Total</span>
+          <span className="text-lg font-bold text-white">
+            {formatAud(pricing.totalCents)}
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {holders.map((holder, index) => (
+          <HolderConsentRow
+            key={index}
+            index={index}
+            isBuyer={index === 0}
+            value={holder}
+            onChange={(next) => onHolderChange(index, next)}
+            disabled={submitting}
+          />
+        ))}
+      </div>
+
+      <div className="card-cinema p-3 space-y-2">
+        <p className="text-xs uppercase tracking-wide text-cinema-600 font-semibold">
+          Your preferences
+        </p>
+        <label className={`flex items-start gap-2 ${buyer?.holderEmail.trim() ? "cursor-pointer" : "opacity-50"}`}>
+          <input
+            type="checkbox"
+            checked={emailOptIn}
+            onChange={(e) => onEmailOptIn(e.target.checked)}
+            disabled={submitting || !buyer?.holderEmail.trim()}
+            className="mt-0.5 h-4 w-4 rounded border-cinema-500 text-primary focus:ring-primary"
+          />
+          <span className="text-xs text-cinema-600">
+            Email me about future shows and offers
+          </span>
+        </label>
+        <label className={`flex items-start gap-2 ${buyer?.holderPhone.trim() ? "cursor-pointer" : "opacity-50"}`}>
+          <input
+            type="checkbox"
+            checked={smsOptIn}
+            onChange={(e) => onSmsOptIn(e.target.checked)}
+            disabled={submitting || !buyer?.holderPhone.trim()}
+            className="mt-0.5 h-4 w-4 rounded border-cinema-500 text-primary focus:ring-primary"
+          />
+          <span className="text-xs text-cinema-600">
+            Text me reminders before shows I've booked
+          </span>
+        </label>
+      </div>
+
+      {submitError && (
+        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-300">
+          {submitError}
+        </div>
+      )}
+
+      <button
+        type="submit"
+        disabled={submitting || !everyHolderValid}
+        className="btn-primary w-full py-3 text-base font-bold inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+      >
+        {submitting ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" /> Taking you to checkout…
+          </>
+        ) : (
+          <>
+            <Lock className="w-4 h-4" /> Pay {formatAud(pricing.totalCents)}
+          </>
+        )}
+      </button>
+
+      <button
+        type="button"
+        onClick={onBack}
+        disabled={submitting}
+        className="text-xs text-cinema-500 hover:text-white w-full text-center cursor-pointer disabled:opacity-50"
+      >
+        ← Change tickets
+      </button>
+    </form>
+  );
+}

@@ -6,6 +6,9 @@ import { db } from '../lib/firebase';
 import { ShowMeta, LiveTriviaState, LiveActivityState } from '../types/firebaseContract';
 import { useUser } from '../contexts/UserContext';
 import { getShowPath, getTestShowPath } from '../lib/mode';
+import TicketPurchasePanel from '../features/tickets/TicketPurchasePanel';
+import ExternalTicketCallout from '../features/tickets/ExternalTicketCallout';
+import AdminShowShortcuts from '../features/tickets/AdminShowShortcuts';
 
 export default function ShowDetail() {
   const { id } = useParams<{ id: string }>();
@@ -196,6 +199,18 @@ export default function ShowDetail() {
           )}
         </div>
       )}
+
+      {/* Internal Stripe-Checkout purchase — renders only when this show has
+          a TicketedShow doc with ticketingEnabled=true. */}
+      {id && <TicketPurchasePanel showId={id} />}
+
+      {/* External-only fallback — surfaces the controller-driven ticketUrl
+          (Eventbrite / Moshtix / venue site) when no internal ticketing
+          exists. The component self-suppresses when both are present. */}
+      {id && <ExternalTicketCallout showId={id} ticketUrl={showMeta.ticketUrl} />}
+
+      {/* Admin shortcuts — only renders when the viewer is platform_admin. */}
+      {id && <AdminShowShortcuts showId={id} />}
     </div>
   );
 }

@@ -1,12 +1,16 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { onAuthStateChanged } from 'firebase/auth';
 import { UserProvider } from './contexts/UserContext';
 
 import Layout from './components/Layout';
 import ShowLayout from './layouts/ShowLayout';
 import AdminRoute from './components/AdminRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 import { clearStoredAuthAttempt, useAuthBootstrap } from './hooks/useAuthBootstrap';
 import { IS_TEST_MODE } from './lib/mode';
+import { auth } from './lib/firebase';
+import { claimMyPendingVenueStaffInvites } from './lib/firebaseTicketing';
 
 const Home = lazy(() => import('./pages/Home'));
 const ShowsPage = lazy(() => import('./features/shows/ShowsPage'));
@@ -30,6 +34,45 @@ const CreateTeam = lazy(() => import('./pages/Teams').then((module) => ({ defaul
 const JoinTeam = lazy(() => import('./pages/Teams').then((module) => ({ default: module.JoinTeam })));
 const TeamDetail = lazy(() => import('./pages/Teams').then((module) => ({ default: module.TeamDetail })));
 const Test = lazy(() => import('./pages/Test'));
+const TicketsSuccess = lazy(() => import('./pages/TicketsSuccess'));
+const TicketsCancelled = lazy(() => import('./pages/TicketsCancelled'));
+const TicketsHub = lazy(() => import('./pages/TicketsHub'));
+const TicketView = lazy(() => import('./pages/TicketView'));
+const AdminVenueStaff = lazy(() => import('./pages/AdminVenueStaff'));
+const AuthFinish = lazy(() => import('./pages/AuthFinish'));
+const EventTicketing = lazy(() => import('./pages/EventTicketing'));
+const TicketScanner = lazy(() => import('./pages/TicketScanner'));
+
+/**
+ * Top-level effect that auto-redeems any pending venue-staff invites
+ * for the signed-in user. Fires once per non-anonymous, email-verified
+ * session. No-op when there are no pending invites.
+ */
+function AutoClaimVenueStaffInvites() {
+  useEffect(() => {
+    const claimedThisSession = new Set<string>();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (
+        !user ||
+        user.isAnonymous ||
+        !user.email ||
+        !user.emailVerified ||
+        claimedThisSession.has(user.uid)
+      ) {
+        return;
+      }
+      claimedThisSession.add(user.uid);
+      claimMyPendingVenueStaffInvites().catch((err) => {
+        // The callable rejects unauthenticated + missing App Check calls,
+        // both of which can happen briefly during sign-in; swallow rather
+        // than surfacing as a user-facing error.
+        console.warn('claimMyPendingVenueStaffInvites silently failed', err);
+      });
+    });
+    return () => unsubscribe();
+  }, []);
+  return null;
+}
 
 function LoadingScreen({ label = 'Loading...' }: { label?: string }) {
   return (
@@ -74,6 +117,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <UserProvider>
+        <AutoClaimVenueStaffInvites />
         {/* Auth error banner */}
         {showErrorBanner && authError && (
           <div className="fixed top-0 left-0 right-0 z-50 bg-red-600 text-white px-4 py-3 flex items-center justify-between shadow-lg">
@@ -95,7 +139,8 @@ export default function App() {
             </button>
           </div>
         )}
-        <Suspense fallback={<LoadingScreen />}>
+        <ErrorBoundary>
+          <Suspense fallback={<LoadingScreen />}>
           <Routes>
             <Route path="/" element={<Layout />}>
               <Route index element={<Home />} />
@@ -114,6 +159,18 @@ export default function App() {
               <Route path="teams/:teamId" element={<TeamDetail />} />
               <Route path="test" element={<Test />} />
               <Route path="shows/:id" element={<ShowDetail />} />
+              <Route path="tickets" element={<TicketsHub />} />
+              <Route path="tickets/success" element={<TicketsSuccess />} />
+              <Route path="tickets/cancelled" element={<TicketsCancelled />} />
+              <Route path="tickets/view/:ticketId" element={<TicketView />} />
+              <Route
+                path="admin/venues/:venueId/staff"
+                element={
+                  <AdminRoute>
+                    <AdminVenueStaff />
+                  </AdminRoute>
+                }
+              />
               {IS_TEST_MODE && (
                 <>
                   <Route path="firebase-test" element={<AdminRoute><FirebaseTest /></AdminRoute>} />
@@ -124,6 +181,12 @@ export default function App() {
             </Route>
             <Route path="shows/:id/join" element={<JoinShow />} />
             <Route path="signup" element={<Signup />} />
+            <Route path="auth/finish" element={<AuthFinish />} />
+            {/* Standalone public ticketing page — linked from the marketing
+                site. Deliberately outside the PWA Layout (no mobile chrome). */}
+            <Route path="event/:showId" element={<EventTicketing />} />
+            {/* Door scanner — standalone, self-gates on door-staff role. */}
+            <Route path="scan" element={<TicketScanner />} />
 
             <Route path="shows/:id" element={<ShowLayout />}>
               <Route path="trivia" element={<Trivia />} />
@@ -132,7 +195,8 @@ export default function App() {
               <Route path="activities/:activityId" element={<ActivityDetail />} />
             </Route>
           </Routes>
-        </Suspense>
+          </Suspense>
+        </ErrorBoundary>
       </UserProvider>
     </BrowserRouter>
   );

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link, NavLink, Outlet, useSearchParams } from 'react-router-dom';
-import { Ticket, Music, Sparkles, BarChart3, Trophy, User, Home, Camera, ClipboardCheck, FlaskConical } from 'lucide-react';
+import { Ticket, Music, Sparkles, BarChart3, Trophy, User, Home, Camera, ClipboardCheck, FlaskConical, ScanLine } from 'lucide-react';
 import { ref, onValue } from 'firebase/database';
 import { db } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
 import { useUserRole } from '../hooks/useUserRole';
+import { useStaffRoles } from '../hooks/useStaffRoles';
 import ShareMoment from './ShareMoment';
 
 interface ActiveTestShow {
@@ -17,6 +18,7 @@ export default function Layout() {
   const isTestMode = searchParams.get('test') === 'true';
   const { canUseTestMode } = useUser();
   const { canScoreActivities } = useUserRole();
+  const { canScanTickets } = useStaffRoles();
   const [showShareModal, setShowShareModal] = useState(false);
   const [activeTestShow, setActiveTestShow] = useState<ActiveTestShow | null>(null);
 
@@ -77,7 +79,8 @@ export default function Layout() {
   const withTestParam = (path: string) => (isTestMode ? `${path}?test=true` : path);
 
   // Show permission row if user has scorer access OR there's an active test show
-  const showPermissionRow = canScoreActivities || (canUseTestMode && activeTestShow);
+  const showPermissionRow =
+    canScoreActivities || (canUseTestMode && activeTestShow) || canScanTickets;
 
   return (
     <div className="min-h-screen bg-cinema text-cinema-900">
@@ -110,7 +113,7 @@ export default function Layout() {
             </NavLink>
 
             <NavLink
-              to={withTestParam('/upcoming')}
+              to={withTestParam('/tickets')}
               className={({ isActive }) =>
                 [
                   'flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold border transition',
@@ -179,6 +182,17 @@ export default function Layout() {
                 >
                   <FlaskConical className="w-3 h-3 shrink-0" />
                   <span className="truncate">Test Show</span>
+                </Link>
+              )}
+
+              {/* Ticket scanner — door staff, venue managers, platform admins */}
+              {canScanTickets && (
+                <Link
+                  to="/scan"
+                  className="flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[9px] font-semibold border transition bg-primary/20 border-primary/50 text-primary hover:bg-primary hover:text-cinema min-w-0"
+                >
+                  <ScanLine className="w-3 h-3 shrink-0" />
+                  <span className="truncate">Scan</span>
                 </Link>
               )}
             </div>

@@ -32,8 +32,16 @@ export default defineConfig({
             return "icons";
           }
 
+          // QR *scanning* (html5-qrcode) is heavy (~330 KB) and only used on
+          // the /scan door-scanner route. Its own chunk keeps it off every
+          // other page — critically the public event page (cold ad traffic).
+          if (id.includes("html5-qrcode")) {
+            return "qr-scan";
+          }
+
+          // QR *generation* (qrcode.react) is small — used by the wallet.
           if (id.includes("@yudiel/react-qr-scanner") || id.includes("qrcode.react")) {
-            return "qr";
+            return "qr-gen";
           }
 
           return "vendor";

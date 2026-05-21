@@ -6,6 +6,7 @@ import { useUser } from '../contexts/UserContext';
 import { MemberProfile, ShowMeta } from '../types/firebaseContract';
 import { Music, Mail, Phone, User, Check, Sparkles, AlertCircle, CheckCircle } from 'lucide-react';
 import { signInWithGoogle } from '../lib/auth';
+import EmailLinkSignIn from '../features/auth/EmailLinkSignIn';
 import { getShowPath, getTestShowPath } from '../lib/mode';
 
 const defaultStarBreakdown = {
@@ -668,6 +669,17 @@ export default function JoinShow() {
                     </div>
                   </div>
                 )}
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-cinema-200"></div>
+                  </div>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="px-2 bg-cinema text-cinema-500">or sign in with any email</span>
+                  </div>
+                </div>
+
+                <EmailLinkSignIn />
 
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">

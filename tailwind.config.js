@@ -21,7 +21,21 @@ export default {
           800: '#92400E',
           900: '#78350F',
         },
-        // Cinematic Dark Background
+        // ============================================================
+        // WARNING: INVERTED SCALE — read before using any `cinema-*`.
+        // This palette runs OPPOSITE to a standard Tailwind scale:
+        // LOW numbers are DARK, HIGH numbers are LIGHT. The app is a
+        // dark theme, so:
+        //   cinema / -50 / -100  ->  dark    ->  BACKGROUNDS
+        //   cinema-200           ->  subtle  ->  BORDERS / dividers
+        //   cinema-500 / -600    ->  mid     ->  MUTED text
+        //   cinema-700.. + white ->  light   ->  PRIMARY text on dark
+        // Correct: bg-cinema (page) · bg-cinema-50 (card) · border-cinema-200
+        //          · text-white or text-cinema-900 · text-cinema-500 (muted)
+        // TRAP: bg-cinema-800/900 are near-WHITE and text-cinema-200/300 are
+        // near-BLACK. Using them shipped white-on-white cards on the door
+        // scanner and /event/:showId pages. Don't repeat it.
+        // ============================================================
         cinema: {
           DEFAULT: '#0B0B0D', // Deep black
           50: '#1C1C1E',      // Card surface

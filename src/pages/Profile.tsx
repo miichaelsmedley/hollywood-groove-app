@@ -5,11 +5,12 @@ import {
   Camera, RotateCcw
 } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
-import { useUserRole } from '../hooks/useUserRole';
-import { IS_TEST_MODE } from '../lib/mode';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import StaffToolsCard from '../components/StaffToolsCard';
 import type { SocialLinks } from '../types/firebaseContract';
 import md5 from 'md5';
+import { Ticket } from 'lucide-react';
+import EmailLinkSignIn from '../features/auth/EmailLinkSignIn';
 
 // TikTok icon component (not in lucide-react)
 function TikTokIcon({ className }: { className?: string }) {
@@ -449,7 +450,6 @@ export default function Profile() {
     checkDisplayNameAvailable,
     getSuggestedDisplayNames,
 	  } = useUser();
-	  const { isAdmin } = useUserRole();
 
   const [signingIn, setSigningIn] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -617,12 +617,13 @@ export default function Profile() {
           </p>
         </div>
 
-        {/* Google Sign-In Section - Show even when not registered */}
+        {/* Sign-in card - shown to anyone not yet signed in with Google */}
         {!isGoogleUser && (
           <div className="bg-cinema-50 border border-cinema-200 rounded-2xl p-5 space-y-4">
-            <div className="text-sm font-semibold text-cinema-800">Sign in with Google</div>
+            <div className="text-sm font-semibold text-cinema-800">Sign in</div>
             <p className="text-sm text-cinema-600">
-              Sign in with Google to save your progress across devices and access leaderboard features.
+              Save your progress across devices and unlock leaderboard features. Use
+              Google or any email — both work.
             </p>
 
             <button
@@ -638,6 +639,17 @@ export default function Profile() {
               </svg>
               {signingIn ? 'Signing in...' : 'Sign in with Google'}
             </button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-cinema-200"></div>
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="px-2 bg-cinema-50 text-cinema-500">or use any email</span>
+              </div>
+            </div>
+
+            <EmailLinkSignIn />
 
             <p className="text-xs text-cinema-500 text-center">
               Sign in now or later when you join a show
@@ -715,6 +727,26 @@ export default function Profile() {
           </div>
         )}
       </div>
+
+      {/* Tickets shortcut — wallet itself lives at /tickets */}
+      <Link
+        to="/tickets"
+        className="flex items-center justify-between p-4 rounded-2xl bg-cinema-50 border border-cinema-200 hover:border-primary/60 transition-colors group"
+      >
+        <div className="flex items-center gap-3">
+          <span className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/15 text-primary">
+            <Ticket className="w-5 h-5" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-cinema-900">My tickets</p>
+            <p className="text-xs text-cinema-600">View, manage, and present your tickets at the door.</p>
+          </div>
+        </div>
+        <span className="text-primary text-sm font-semibold group-hover:translate-x-0.5 transition-transform">→</span>
+      </Link>
+
+      {/* Staff & admin shortcuts — only renders for users with elevated claims */}
+      <StaffToolsCard />
 
       {/* Save Error */}
       {saveError && (
@@ -1140,7 +1172,8 @@ export default function Profile() {
           ) : (
             <div className="space-y-3">
               <p className="text-sm text-cinema-600">
-                Sign in with Google to save your progress across devices and access leaderboard features.
+                Save your progress across devices and unlock leaderboard features. Use
+                Google or any email — both work.
               </p>
 
               <button
@@ -1157,6 +1190,17 @@ export default function Profile() {
                 {signingIn ? 'Signing in...' : 'Sign in with Google'}
               </button>
 
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-cinema-200"></div>
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="px-2 bg-white text-cinema-500">or use any email</span>
+                </div>
+              </div>
+
+              <EmailLinkSignIn />
+
               <p className="text-xs text-cinema-500 text-center">
                 Your anonymous data will be linked to your Google account
               </p>
@@ -1165,20 +1209,6 @@ export default function Profile() {
         </div>
       )}
 
-	      {IS_TEST_MODE && isAdmin && (
-        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-5 space-y-3">
-          <div className="text-sm font-semibold text-amber-900">Admin Testing</div>
-          <div className="text-sm text-amber-800">
-            Mode: <code className="px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 font-mono text-xs">Single path (no prefix)</code>
-          </div>
-          <Link
-            to="/__testing/firebase"
-            className="block w-full px-6 py-3 rounded-xl border border-amber-400 bg-white text-amber-900 font-semibold hover:bg-amber-100 transition text-center"
-          >
-            Open Firebase diagnostics
-          </Link>
-        </div>
-      )}
     </div>
   );
 }

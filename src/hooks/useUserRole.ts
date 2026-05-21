@@ -3,7 +3,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { onValue, ref } from 'firebase/database';
 import { db, auth } from '../lib/firebase';
 import { UserRole, canViewTestShows, canScoreActivities, hasRole } from '../types/roles';
-import { hasPlatformAdminClaim } from '../lib/mode';
+import { hasPlatformAdminClaim } from '../lib/claims';
 
 interface UserRoleState {
   roles: UserRole[];
