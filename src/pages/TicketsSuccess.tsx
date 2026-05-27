@@ -11,6 +11,13 @@ import { CheckCircle2, Loader2, AlertCircle, Ticket } from "lucide-react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { firestoreTicketing, formatAud } from "../lib/firebaseTicketing";
+import {
+  getHomePath,
+  getTicketEventPath,
+  getTicketWalletPath,
+  isWhiteLabelTicketingFront,
+  resolveSellingFrontId,
+} from "../lib/sellingFronts";
 import type { TicketOrder } from "../types/ticketingContract";
 
 export default function TicketsSuccess() {
@@ -131,6 +138,7 @@ export default function TicketsSuccess() {
   }
 
   const ticketCount = order.lineItems.reduce((sum, li) => sum + li.quantity, 0);
+  const frontId = resolveSellingFrontId();
 
   return (
     <CenteredCard>
@@ -172,10 +180,10 @@ export default function TicketsSuccess() {
       </div>
 
       <div className="mt-5 flex flex-col sm:flex-row gap-2">
-        <Link to="/tickets" className="btn-primary flex-1 py-3 text-center inline-flex items-center justify-center gap-2">
+        <Link to={getTicketWalletPath(frontId)} className="btn-primary flex-1 py-3 text-center inline-flex items-center justify-center gap-2">
           <Ticket className="w-4 h-4" /> View my tickets
         </Link>
-        <Link to={`/shows/${order.showId}`} className="flex-1 py-3 text-center rounded-lg border border-cinema-200 text-cinema-800 hover:bg-cinema-50">
+        <Link to={getTicketEventPath(order.showId, frontId)} className="flex-1 py-3 text-center rounded-lg border border-cinema-200 text-cinema-800 hover:bg-cinema-50">
           Back to show
         </Link>
       </div>
@@ -194,12 +202,13 @@ function CenteredCard({ children }: { children: React.ReactNode }) {
 }
 
 function BackLinks() {
+  const frontId = resolveSellingFrontId();
   return (
     <div className="mt-5 flex flex-col sm:flex-row gap-2">
-      <Link to="/shows" className="btn-primary flex-1 py-3 text-center">
-        Browse shows
+      <Link to={isWhiteLabelTicketingFront(frontId) ? "/tickets" : "/shows"} className="btn-primary flex-1 py-3 text-center">
+        {isWhiteLabelTicketingFront(frontId) ? "Browse tickets" : "Browse shows"}
       </Link>
-      <Link to="/" className="flex-1 py-3 text-center rounded-lg border border-cinema-200 text-cinema-800 hover:bg-cinema-50">
+      <Link to={getHomePath(frontId)} className="flex-1 py-3 text-center rounded-lg border border-cinema-200 text-cinema-800 hover:bg-cinema-50">
         Home
       </Link>
     </div>

@@ -123,7 +123,8 @@ export default function Play() {
     setSubmitting(true);
     setSelectedOption(optionIndex);
 
-    const correct = optionIndex === currentQuestion.question.correct_index;
+    const correct = currentQuestion.question.correct_index !== undefined
+      && optionIndex === currentQuestion.question.correct_index;
     setIsCorrect(correct);
 
     try {
@@ -737,7 +738,7 @@ export default function Play() {
 
         {/* Options */}
         <div className="space-y-2">
-          {question.options.map((option) => {
+          {(question.options ?? []).map((option) => {
             const isSelected = selectedOption === option.index;
             const isCorrectOption = option.index === question.correct_index;
             const showResult = gameState === 'answered';

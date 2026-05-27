@@ -51,7 +51,17 @@ console.log('🔑 Auth domain:', firebaseConfig.authDomain);
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_RECAPTCHA_SITE_KEY;
+const appCheckSiteKey = (() => {
+  const defaultKey = import.meta.env.VITE_FIREBASE_APPCHECK_RECAPTCHA_SITE_KEY;
+  const adeleKey = import.meta.env.VITE_FIREBASE_APPCHECK_RECAPTCHA_SITE_KEY_ADELE_SHOW;
+  if (typeof window !== "undefined" && adeleKey) {
+    const host = window.location.hostname.toLowerCase();
+    if (host === "adeleshow.com.au" || host.endsWith(".adeleshow.com.au")) {
+      return adeleKey;
+    }
+  }
+  return defaultKey;
+})();
 const appCheckDebugToken = import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN;
 
 if (typeof window !== "undefined" && appCheckSiteKey) {

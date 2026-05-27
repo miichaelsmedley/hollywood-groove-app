@@ -170,6 +170,16 @@
         }
       },
 
+      "controller": {
+        "heartbeat": {
+          "$uid": {
+            ".read": "auth != null && (auth.uid == $uid || auth.token.platform_admin == true)",
+            ".write": "auth != null && auth.uid == $uid",
+            ".validate": "newData.hasChildren(['lastSeenAt', 'bundleID', 'platform']) && newData.child('lastSeenAt').isNumber() && newData.child('bundleID').isString() && newData.child('platform').isString()"
+          }
+        }
+      },
+
       "teams": {
         ".read": "auth != null",
         ".indexOn": ["name", "code"],
@@ -354,6 +364,16 @@
         "$uid": {
           ".read": "auth != null && auth.uid == $uid",
           ".write": "auth != null && auth.uid == $uid"
+        }
+      }
+    },
+
+    "controller": {
+      "heartbeat": {
+        "$uid": {
+          ".read": "auth != null && (auth.uid == $uid || auth.token.platform_admin == true)",
+          ".write": "auth != null && auth.uid == $uid",
+          ".validate": "newData.hasChildren(['lastSeenAt', 'bundleID', 'platform']) && newData.child('lastSeenAt').isNumber() && newData.child('bundleID').isString() && newData.child('platform').isString()"
         }
       }
     },

@@ -7,10 +7,13 @@
 
 import { Link, useSearchParams } from "react-router-dom";
 import { XCircle, ArrowLeft } from "lucide-react";
+import { getHomePath, isWhiteLabelTicketingFront, resolveSellingFrontId } from "../lib/sellingFronts";
 
 export default function TicketsCancelled() {
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get("orderId");
+  const frontId = resolveSellingFrontId();
+  const browsePath = isWhiteLabelTicketingFront(frontId) ? "/tickets" : "/shows";
 
   return (
     <div className="max-w-xl mx-auto py-10">
@@ -32,10 +35,10 @@ export default function TicketsCancelled() {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2">
-          <Link to="/shows" className="btn-primary flex-1 py-3 text-center inline-flex items-center justify-center gap-2">
-            <ArrowLeft className="w-4 h-4" /> Browse shows
+          <Link to={browsePath} className="btn-primary flex-1 py-3 text-center inline-flex items-center justify-center gap-2">
+            <ArrowLeft className="w-4 h-4" /> {isWhiteLabelTicketingFront(frontId) ? "Browse tickets" : "Browse shows"}
           </Link>
-          <Link to="/" className="flex-1 py-3 text-center rounded-lg border border-cinema-200 text-cinema-800 hover:bg-cinema-50">
+          <Link to={getHomePath(frontId)} className="flex-1 py-3 text-center rounded-lg border border-cinema-200 text-cinema-800 hover:bg-cinema-50">
             Home
           </Link>
         </div>

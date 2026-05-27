@@ -1,0 +1,497 @@
+// Platform admin ticketing portal.
+//
+// This is the cloud transactional/admin surface for ticketing. The Swift
+// controller stays focused on live show operation; ticket sales, scanner
+// readiness, orders and payment-ledger health live here in the PWA.
+
+import { Link } from "react-router-dom";
+import type { ComponentType, ReactNode } from "react";
+import { useState } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  Building2,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  ExternalLink,
+  Loader2,
+  QrCode,
+  ShieldCheck,
+  Ticket,
+  Users,
+} from "lucide-react";
+import {
+  formatAud,
+  refundOrder,
+  useTicketingAdminOverview,
+} from "../lib/firebaseTicketing";
+import type {
+  IssuedTicket,
+  ShowTicketingStatus,
+  TicketOrder,
+  TicketOrderStatus,
+  TicketRefund,
+  TicketRefundStatus,
+  TicketedShow,
+} from "../types/ticketingContract";
+
+function toMillis(value: unknown): number | null {
+  if (value && typeof (value as { toMillis?: () => number }).toMillis === "function") {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (
+    value &&
+    typeof value === "object" &&
+    typeof (value as { seconds?: unknown }).seconds === "number"
+  ) {
+    return (value as { seconds: number }).seconds * 1000;
+  }
+  return null;
+}
+
+function dateLabel(value: unknown): string {
+  const millis = toMillis(value);
+  if (!millis) return "Date TBA";
+  return new Date(millis).toLocaleString("en-AU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function shortId(value: string): string {
+  return value.length > 10 ? `${value.slice(0, 6)}...${value.slice(-4)}` : value;
+}
+
+function showStatusTone(status: ShowTicketingStatus): string {
+  if (status === "on_sale" || status === "published") return "bg-emerald-100 text-emerald-800";
+  if (status === "sold_out") return "bg-amber-100 text-amber-800";
+  if (status === "cancelled" || status === "postponed") return "bg-red-100 text-red-800";
+  return "bg-cinema-200 text-cinema-700";
+}
+
+function orderStatusTone(status: TicketOrderStatus): string {
+  if (status === "paid") return "bg-emerald-100 text-emerald-800";
+  if (status === "pending") return "bg-amber-100 text-amber-800";
+  if (status === "disputed") return "bg-red-100 text-red-800";
+  if (status === "refunded" || status === "partially_refunded") return "bg-sky-100 text-sky-800";
+  return "bg-cinema-200 text-cinema-700";
+}
+
+function refundStatusTone(status: TicketRefundStatus): string {
+  if (status === "succeeded") return "bg-emerald-100 text-emerald-800";
+  if (status === "pending") return "bg-amber-100 text-amber-800";
+  if (status === "failed" || status === "cancelled") return "bg-red-100 text-red-800";
+  return "bg-cinema-200 text-cinema-700";
+}
+
+function Badge({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  Icon,
+}: {
+  label: string;
+  value: string;
+  Icon: ComponentType<{ className?: string }>;
+}) {
+  return (
+    <div className="rounded-xl border border-cinema-200 bg-cinema-50 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs text-cinema-600 font-medium">{label}</p>
+          <p className="text-2xl font-bold text-cinema-900 mt-1">{value}</p>
+        </div>
+        <span className="w-10 h-10 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+          <Icon className="w-5 h-5" />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export default function AdminTicketing() {
+  const { shows, orders, tickets, refunds, stripeEvents, loading, error } = useTicketingAdminOverview();
+  const [busyOrderId, setBusyOrderId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const paidOrders = orders.filter((o) => o.status === "paid");
+  const pendingOrders = orders.filter((o) => o.status === "pending");
+  const grossCents = paidOrders.reduce((sum, order) => sum + Number(order.totalCents ?? 0), 0);
+  const refundedCents = refunds
+    .filter((refund) => refund.status === "succeeded")
+    .reduce((sum, refund) => sum + Number(refund.amountCents ?? 0), 0);
+  const validTickets = tickets.filter((t) => t.status === "valid");
+  const usedTickets = tickets.filter((t) => t.status === "used");
+  const riskTickets = tickets.filter((t) => t.status === "disputed" || t.status === "lost_to_dispute");
+  const activeShows = shows.filter((s) => ["published", "on_sale", "sold_out"].includes(s.status));
+
+  const handleRefund = async (order: TicketOrder & { id: string }) => {
+    const buyer = order.buyerSnapshot?.email || "this buyer";
+    const ok = window.confirm(`Refund ${formatAud(order.totalCents)} for ${buyer}? This will invalidate the order's tickets.`);
+    if (!ok) return;
+
+    const reason = window.prompt("Refund reason", "Customer requested refund");
+    if (reason === null) return;
+
+    setBusyOrderId(order.id);
+    setActionError(null);
+    try {
+      await refundOrder({
+        orderId: order.id,
+        reason: reason.trim() || "Customer requested refund",
+        stripeReason: "requested_by_customer",
+        forceAfterScan: false,
+      });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Refund failed.");
+    } finally {
+      setBusyOrderId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="w-7 h-7 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+          <div>
+            <h1 className="font-bold">Ticketing admin could not load</h1>
+            <p className="text-sm mt-1">{error.message}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-7 h-7 text-primary" />
+            <h1 className="text-3xl font-bold text-cinema-900">Ticketing admin</h1>
+          </div>
+          <p className="text-sm text-cinema-600">
+            Transactional control for Hollywood Groove and The Adele Show ticketing.
+          </p>
+        </div>
+        <Link
+          to="/admin/venues"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-cinema-300 px-4 py-2 text-sm font-bold text-cinema-900 hover:border-primary/70"
+        >
+          <Building2 className="w-4 h-4" />
+          Manage venues
+        </Link>
+      </header>
+
+      <section className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+          <div className="space-y-1">
+            <p className="font-bold">Live payments are not switched on from this screen.</p>
+            <p className="text-sm">
+              The backend is sandbox-proven. Before real money, finish live Stripe
+              webhook/secrets, refund/dispute handling, confirmation email, and a tiny
+              live pilot transaction.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {actionError && (
+        <section className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <p>{actionError}</p>
+          </div>
+        </section>
+      )}
+
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3" aria-label="Ticketing totals">
+        <StatCard label="Active shows" value={String(activeShows.length)} Icon={Calendar} />
+        <StatCard label="Paid orders" value={String(paidOrders.length)} Icon={CreditCard} />
+        <StatCard label="Gross paid" value={formatAud(grossCents)} Icon={Activity} />
+        <StatCard label="Refunded" value={formatAud(refundedCents)} Icon={AlertTriangle} />
+      </section>
+
+      <section className="grid md:grid-cols-3 gap-3">
+        <ReadinessCard
+          ok
+          title="Admin login"
+          description="You are authenticated with the platform_admin claim and can see the ticketing ledger."
+        />
+        <ReadinessCard
+          ok={stripeEvents.some((event) => event.status === "processed")}
+          title="Webhook ledger"
+          description="Stripe event idempotency is visible in the ticketing database."
+        />
+        <ReadinessCard
+          ok
+          title="Refund controls"
+          description="Platform admins can issue full-order refunds and invalidate tickets from this portal."
+        />
+      </section>
+
+      <section className="space-y-3">
+        <SectionHeader Icon={Calendar} title="Shows on the ticketing ledger" />
+        {shows.length === 0 ? (
+          <EmptyState>No ticketed shows exist yet.</EmptyState>
+        ) : (
+          <div className="space-y-2">
+            {shows.slice(0, 12).map((show) => (
+              <ShowRow key={show.id} show={show} tickets={tickets} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <SectionHeader Icon={CreditCard} title="Recent orders" />
+        {orders.length === 0 ? (
+          <EmptyState>No orders yet.</EmptyState>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-cinema-200">
+            {orders.slice(0, 12).map((order) => (
+              <OrderRow
+                key={order.id}
+                order={order}
+                show={shows.find((s) => s.id === order.showId)}
+                refunds={refunds.filter((refund) => refund.orderId === order.id)}
+                busy={busyOrderId === order.id}
+                onRefund={() => handleRefund(order)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <SectionHeader Icon={AlertTriangle} title="Recent refunds" />
+        {refunds.length === 0 ? (
+          <EmptyState>No refunds yet.</EmptyState>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-cinema-200">
+            {refunds.slice(0, 8).map((refund) => (
+              <RefundRow key={refund.id} refund={refund} order={orders.find((order) => order.id === refund.orderId)} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <SectionHeader Icon={QrCode} title="Ticket states" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <StatCard label="Valid" value={String(validTickets.length)} Icon={Ticket} />
+          <StatCard label="Used" value={String(usedTickets.length)} Icon={CheckCircle2} />
+          <StatCard label="Pending orders" value={String(pendingOrders.length)} Icon={Clock} />
+          <StatCard label="Risk/dispute" value={String(riskTickets.length)} Icon={AlertTriangle} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ReadinessCard({
+  ok,
+  title,
+  description,
+}: {
+  ok: boolean;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-xl border border-cinema-200 bg-cinema-50 p-4">
+      <div className="flex items-start gap-3">
+        {ok ? (
+          <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+        ) : (
+          <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+        )}
+        <div>
+          <p className="text-sm font-bold text-cinema-900">{title}</p>
+          <p className="text-xs text-cinema-600 mt-1">{description}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({
+  Icon,
+  title,
+}: {
+  Icon: ComponentType<{ className?: string }>;
+  title: string;
+}) {
+  return (
+    <header className="flex items-center gap-2">
+      <Icon className="w-5 h-5 text-primary" />
+      <h2 className="text-xl font-bold text-cinema-900">{title}</h2>
+    </header>
+  );
+}
+
+function EmptyState({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-xl border border-cinema-200 bg-cinema-50 p-4 text-sm text-cinema-700">
+      {children}
+    </div>
+  );
+}
+
+function ShowRow({
+  show,
+  tickets,
+}: {
+  show: TicketedShow & { id: string };
+  tickets: Array<IssuedTicket & { id: string }>;
+}) {
+  const showTickets = tickets.filter((ticket) => ticket.showId === show.id);
+  const sold = showTickets.filter((ticket) => ticket.status === "valid" || ticket.status === "used").length;
+  const used = showTickets.filter((ticket) => ticket.status === "used").length;
+  const front = show.sellingFrontId === "adele_show" ? "The Adele Show" : "Hollywood Groove";
+
+  return (
+    <div className="rounded-xl border border-cinema-200 bg-cinema-50 p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-sm font-bold text-cinema-900 truncate">{show.title}</h3>
+            <Badge className={showStatusTone(show.status)}>{show.status.replace("_", " ")}</Badge>
+          </div>
+          <p className="text-xs text-cinema-600">{dateLabel(show.startDate)} · {front}</p>
+          <p className="text-xs text-cinema-500">
+            {sold} sold, {used} scanned, capacity {show.capacity || "not set"}
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0">
+          <Link
+            to={`/event/${show.id}`}
+            className="inline-flex items-center justify-center gap-1 rounded-lg border border-cinema-300 px-3 py-1.5 text-xs font-semibold text-cinema-800 hover:border-primary/60"
+          >
+            <ExternalLink className="w-3.5 h-3.5" /> Event page
+          </Link>
+          {show.venueId && (
+            <Link
+              to={`/admin/venues/${show.venueId}/staff`}
+              className="inline-flex items-center justify-center gap-1 rounded-lg bg-primary text-cinema px-3 py-1.5 text-xs font-bold hover:bg-primary/90"
+            >
+              <Users className="w-3.5 h-3.5" /> Staff
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OrderRow({
+  order,
+  show,
+  refunds,
+  busy,
+  onRefund,
+}: {
+  order: TicketOrder & { id: string };
+  show: (TicketedShow & { id: string }) | undefined;
+  refunds: Array<TicketRefund & { id: string }>;
+  busy: boolean;
+  onRefund: () => void;
+}) {
+  const refundedCents = refunds
+    .filter((refund) => refund.status === "succeeded")
+    .reduce((sum, refund) => sum + Number(refund.amountCents ?? 0), 0);
+  const canRefund = order.status === "paid";
+
+  return (
+    <div className="border-b border-cinema-200 last:border-b-0 bg-cinema-50 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-bold text-cinema-900">{show?.title ?? order.showId}</span>
+            <Badge className={orderStatusTone(order.status)}>{order.status}</Badge>
+          </div>
+          <p className="text-xs text-cinema-600">
+            {order.buyerSnapshot?.email || "No buyer email"} · {dateLabel(order.createdAt)}
+          </p>
+          <p className="text-[11px] text-cinema-500 font-mono">
+            {shortId(order.id)}
+            {order.stripePaymentIntentId ? ` · ${shortId(order.stripePaymentIntentId)}` : ""}
+          </p>
+          {refundedCents > 0 && (
+            <p className="text-[11px] text-sky-700">Refunded {formatAud(refundedCents)}</p>
+          )}
+        </div>
+        <div className="text-right flex-shrink-0 space-y-2">
+          <p className="text-sm font-bold text-cinema-900">{formatAud(order.totalCents)}</p>
+          <p className="text-[11px] text-cinema-500">{order.lineItems?.[0]?.quantity ?? 0} ticket(s)</p>
+          {canRefund && (
+            <button
+              type="button"
+              onClick={onRefund}
+              disabled={busy}
+              className="inline-flex items-center justify-center gap-1 rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+            >
+              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+              Refund
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RefundRow({
+  refund,
+  order,
+}: {
+  refund: TicketRefund & { id: string };
+  order: (TicketOrder & { id: string }) | undefined;
+}) {
+  return (
+    <div className="border-b border-cinema-200 last:border-b-0 bg-cinema-50 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-bold text-cinema-900">{order?.buyerSnapshot?.email ?? refund.orderId}</span>
+            <Badge className={refundStatusTone(refund.status)}>{refund.status}</Badge>
+          </div>
+          <p className="text-xs text-cinema-600">{refund.reason || "No reason supplied"} · {dateLabel(refund.createdAt)}</p>
+          <p className="text-[11px] text-cinema-500 font-mono">
+            {shortId(refund.id)}
+            {refund.stripeRefundId ? ` · ${shortId(refund.stripeRefundId)}` : ""}
+          </p>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <p className="text-sm font-bold text-cinema-900">{formatAud(refund.amountCents)}</p>
+          <p className="text-[11px] text-cinema-500">{refund.ticketIds?.length ?? 0} ticket(s)</p>
+        </div>
+      </div>
+    </div>
+  );
+}

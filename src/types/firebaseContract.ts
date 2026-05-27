@@ -1,6 +1,159 @@
+// 0. Platform / franchise organizations
+// Platform-owned member identity stays global under /members/{uid}; org records
+// scope operator access, engagement, controller licensing, and show content.
+export type OrganizationStatus = 'active' | 'paused' | 'suspended';
+export type OrganizationLicenseTier = 'platform' | 'franchise' | 'trial' | 'cost_recovery';
+export type OrgRole =
+  | 'org_owner'
+  | 'show_operator'
+  | 'content_editor'
+  | 'marketer'
+  | 'door_staff';
+
+export interface OrganizationTheme {
+  displayName?: string;
+  primaryColor?: string;
+  accentColor?: string;
+  backgroundColor?: string;
+  logoUrl?: string;
+  showTagline?: string;
+}
+
+// Path: organizations/{orgId}
+export interface Organization {
+  displayName: string;
+  status: OrganizationStatus;
+  licenseTier: OrganizationLicenseTier;
+  theme: OrganizationTheme;
+  allowedFeatures: Record<string, boolean>;
+  controllerLicenseIds: string[];
+  billing?: {
+    billingStatus?: 'included' | 'trial' | 'active' | 'past_due' | 'paused';
+    monthlyCostCapCents?: number;
+    currency?: 'AUD';
+  };
+  usage?: {
+    aiTokens?: number;
+    aiCostCents?: number;
+    emailSends?: number;
+    storageMb?: number;
+    lastCalculatedAt?: number;
+  };
+  createdAt: number;
+  updatedAt: number;
+}
+
+// Path: organizations/{orgId}/controller_licenses/{controllerLicenseId}
+export interface ControllerLicense {
+  orgId: string;
+  controllerLicenseId: string;
+  status: 'active' | 'paused' | 'revoked';
+  deviceName?: string;
+  enabledFeatureFlags: string[];
+  permittedShowIds: string[];
+  theme?: OrganizationTheme;
+  firebasePathPrefixPolicy: 'shows/{showId}';
+  activatedByUid?: string;
+  activatedAt?: number;
+  lastSeenAt?: number;
+}
+
+export interface AiGenerationMetadata {
+  generatorSource: 'manual' | 'ai_show_pack' | 'ai_daily_trivia' | string;
+  modelUsed?: string;
+  promptVersion?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  costCents?: number;
+  generatedAt?: number;
+}
+
+// Path: members/{uid}/org_roles/{orgId}
+export interface OrgMembership {
+  orgId: string;
+  roles: OrgRole[];
+  status: 'active' | 'paused' | 'revoked';
+  grantedBy?: string;
+  grantedAt?: number;
+  updatedAt?: number;
+}
+
+// Path: members/{uid}/org_engagement/{orgId}
+export interface OrgEngagementSummary {
+  orgId: string;
+  sourceShowId?: string;
+  showsAttended: number;
+  triviaPlayed: number;
+  activitiesPlayed: number;
+  ticketsPurchased: number;
+  lastShowId?: string;
+  lastEngagedAt?: number;
+}
+
+export type ReviewStatus = 'draft' | 'needs_review' | 'approved' | 'rejected';
+
+// Path: organizations/{orgId}/show_packs/{showPackId}
+export interface ShowPack {
+  orgId: string;
+  showId?: string;
+  title: string;
+  themeName?: string;
+  status: ReviewStatus;
+  generatedBy?: AiGenerationMetadata;
+  approvedBy?: string;
+  approvedAt?: number;
+  stageTraxxMapping?: {
+    stageTraxxShowId?: string;
+    trackMappings: Record<string, string>;
+    validatedAt?: number;
+  };
+  mediaAssetIds?: string[];
+  activityIds?: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+// Path: organizations/{orgId}/media_assets/{assetId}
+export interface GeneratedMediaAsset {
+  orgId: string;
+  showPackId?: string;
+  kind: 'image' | 'audio' | 'video' | 'map' | 'face_composite';
+  storagePath?: string;
+  publicUrl?: string;
+  status: ReviewStatus;
+  generatedBy?: AiGenerationMetadata;
+  approvedBy?: string;
+  approvedAt?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// Path: campaigns/{campaignId}
+export interface MarketingCampaign {
+  orgId?: string;
+  title: string;
+  channel: 'email' | 'sms' | 'push' | 'social';
+  status: 'draft' | 'requested' | 'approved' | 'scheduled' | 'sent' | 'cancelled';
+  requestedByUid?: string;
+  approvedByUid?: string;
+  approvedAt?: number;
+  audienceRule?: {
+    memberOptInRequired: boolean;
+    orgEngagementOrgId?: string;
+    sourceShowId?: string;
+  };
+  resendBroadcastId?: string;
+  scheduledAt?: number;
+  sentAt?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 // 1. Show Metadata (Public read)
 // Path: shows/{showId}/meta
 export interface ShowMeta {
+  orgId?: string;
+  platformOwner?: 'hollywood-groove';
   title: string;
   startDate: string; // ISO 8601 string
   venueName: string;
@@ -24,6 +177,7 @@ export type ActivityType =
   | 'raffle';
 
 export interface BaseActivity {
+  orgId?: string;
   type: ActivityType;
   title: string;
   sequence?: number;
@@ -209,6 +363,8 @@ export interface MemberProfile {
 
   // Role-based permissions
   roles?: string[];
+  org_roles?: Record<string, OrgMembership>;
+  org_engagement?: Record<string, OrgEngagementSummary>;
   role_assigned_by?: string;
   role_assigned_at?: number;
 }
@@ -252,6 +408,7 @@ export interface TriviaLibrarySettings {
 
 // Path: trivia_library/categories/{categoryId}
 export interface TriviaLibraryCategory {
+  orgId?: string;                    // Optional org theme; omitted means global HG
   name: string;
   description: string;
   icon: string;                    // Lucide icon name
@@ -271,17 +428,50 @@ export interface TriviaQuestionOption {
 
 // Path: trivia_library/questions/{questionId}
 export type TriviaQuestionDifficulty = 'easy' | 'medium' | 'hard';
+export type TriviaQuestionType =
+  | 'multiple_choice'
+  | 'multi_select'
+  | 'image_choice'
+  | 'image_reveal'
+  | 'mixed_image_faces'
+  | 'guess_person'
+  | 'map_guess_place'
+  | 'pin_on_image'
+  | 'type_answer'
+  | 'closest_number'
+  | 'ordering'
+  | 'lyric_completion'
+  | 'audio_clip'
+  | 'true_false';
 
 export interface TriviaLibraryQuestion {
   // Core fields
+  orgId?: string;                    // Optional org/show-pack scope; omitted means global HG
   category_id: string;
   subcategory?: string;
-  type: 'multiple_choice';
+  type: TriviaQuestionType;
 
   // Question content
   question: string;
-  options: TriviaQuestionOption[];
-  correct_index: number;
+  options?: TriviaQuestionOption[];
+  correct_index?: number;
+  correct_indices?: number[];
+  correct_text?: string | string[];
+  correct_order?: number[];
+  numeric_answer?: number;
+  numeric_tolerance?: number;
+  map_target?: {
+    lat: number;
+    lng: number;
+    radiusMeters?: number;
+    label?: string;
+  };
+  image_hotspot?: {
+    x: number;
+    y: number;
+    radius?: number;
+    label?: string;
+  };
 
   // Metadata
   difficulty: TriviaQuestionDifficulty;
@@ -294,6 +484,11 @@ export interface TriviaLibraryQuestion {
   created_by: string;              // "manual" or "ai_generator"
   model_used?: string;
   prompt_version?: string;
+  generator_source?: 'manual' | 'ai_show_pack' | 'ai_daily_trivia' | string;
+  review_status?: 'draft' | 'needs_review' | 'approved' | 'rejected';
+  approved_by?: string;
+  approved_at?: number;
+  ai_cost_cents?: number;
 
   // Usage stats
   times_served: number;
@@ -310,6 +505,7 @@ export type TriviaActivityType = 'yes_no' | 'rating' | 'poll' | 'opinion';
 
 export interface TriviaLibraryActivity {
   // Core fields
+  orgId?: string;
   category_id: string;
   subcategory?: string;
   type: TriviaActivityType;
@@ -335,6 +531,7 @@ export interface TriviaLibraryActivity {
 
 // Path: trivia_library/schedule/{date} (key format: "YYYY-MM-DD")
 export interface TriviaLibrarySchedule {
+  orgId?: string;                    // Optional org theme; omitted means global daily HG
   category_id: string;
   subcategory?: string;
   theme_name: string;

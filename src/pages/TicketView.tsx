@@ -11,6 +11,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { ArrowLeft, Loader2, AlertCircle, Calendar, MapPin } from "lucide-react";
 import { firestoreTicketing } from "../lib/firebaseTicketing";
+import { getTicketWalletPath, resolveSellingFrontId } from "../lib/sellingFronts";
 import type {
   IssuedTicket,
   TicketStatus,
@@ -121,10 +122,11 @@ export default function TicketView() {
 }
 
 function TicketShell({ children }: { children: React.ReactNode }) {
+  const frontId = resolveSellingFrontId();
   return (
     <div className="max-w-xl mx-auto py-2 space-y-4">
       <Link
-        to="/tickets"
+        to={getTicketWalletPath(frontId)}
         className="inline-flex items-center gap-1.5 text-cinema-500 hover:text-cinema-900 text-sm font-medium"
       >
         <ArrowLeft className="w-4 h-4" />

@@ -1,10 +1,13 @@
 // Role definitions for Hollywood Groove
+import type { OrgMembership, OrgRole } from './firebaseContract';
+
 export type UserRole = 'public' | 'band_member' | 'scorer' | 'admin';
 
 export interface RoleInfo {
   roles: UserRole[];
   roleAssignedBy?: string;
   roleAssignedAt?: number;
+  orgMemberships?: Record<string, OrgMembership>;
 }
 
 /**
@@ -26,6 +29,50 @@ export function canViewTestShows(roles: UserRole[]): boolean {
  */
 export function canScoreActivities(roles: UserRole[]): boolean {
   return hasRole(roles, 'admin') || hasRole(roles, 'scorer');
+}
+
+/**
+ * Check whether a user has a scoped organization role.
+ */
+export function hasOrgRole(
+  orgMemberships: Record<string, OrgMembership> | undefined,
+  orgId: string | undefined,
+  role: OrgRole
+): boolean {
+  if (!orgId || !orgMemberships?.[orgId] || orgMemberships[orgId].status !== 'active') {
+    return false;
+  }
+  return orgMemberships[orgId].roles.includes(role);
+}
+
+export function canRunOrgShow(
+  orgMemberships: Record<string, OrgMembership> | undefined,
+  orgId: string | undefined,
+  isPlatformAdmin = false
+): boolean {
+  return isPlatformAdmin
+    || hasOrgRole(orgMemberships, orgId, 'org_owner')
+    || hasOrgRole(orgMemberships, orgId, 'show_operator');
+}
+
+export function canEditOrgContent(
+  orgMemberships: Record<string, OrgMembership> | undefined,
+  orgId: string | undefined,
+  isPlatformAdmin = false
+): boolean {
+  return isPlatformAdmin
+    || hasOrgRole(orgMemberships, orgId, 'org_owner')
+    || hasOrgRole(orgMemberships, orgId, 'content_editor');
+}
+
+export function canRequestOrgCampaign(
+  orgMemberships: Record<string, OrgMembership> | undefined,
+  orgId: string | undefined,
+  isPlatformAdmin = false
+): boolean {
+  return isPlatformAdmin
+    || hasOrgRole(orgMemberships, orgId, 'org_owner')
+    || hasOrgRole(orgMemberships, orgId, 'marketer');
 }
 
 /**

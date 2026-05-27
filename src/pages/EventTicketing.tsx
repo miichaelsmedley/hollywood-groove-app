@@ -12,7 +12,7 @@
 // email-link sign-in round-trip doesn't lose it.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import {
@@ -37,18 +37,19 @@ import {
   useTicketTypes,
   useTicketedShow,
 } from "../lib/firebaseTicketing";
-import type { TicketType, TicketVenue } from "../types/ticketingContract";
+import type { SellingFrontId, TicketType, TicketVenue } from "../types/ticketingContract";
 import HolderConsentRow, { EMPTY_HOLDER, HolderFormState } from "../features/tickets/HolderConsentRow";
 import EmailLinkSignIn from "../features/auth/EmailLinkSignIn";
+import {
+  getTicketCancelUrl,
+  getTicketSuccessUrl,
+  getTicketWalletPath,
+  resolveSellingFrontId,
+  useSellingFrontBrand,
+} from "../lib/sellingFronts";
 
 type TicketTypeWithId = TicketType & { id: string };
 type Step = "browse" | "signin" | "details";
-
-function sellingFrontName(id: string | undefined): string {
-  if (id === "adele_show") return "The Adele Show";
-  if (id === "hollywood_groove") return "Hollywood Groove";
-  return "Hollywood Groove";
-}
 
 function toDate(value: unknown): Date | null {
   if (value && typeof (value as { toMillis?: () => number }).toMillis === "function") {
@@ -61,6 +62,7 @@ function toDate(value: unknown): Date | null {
 
 export default function EventTicketing() {
   const { showId } = useParams<{ showId: string }>();
+  const location = useLocation();
   const { show, loading: showLoading } = useTicketedShow(showId);
   const { ticketTypes, loading: typesLoading, error: typesError } = useTicketTypes(showId);
 
@@ -80,6 +82,12 @@ export default function EventTicketing() {
   const [submitting, setSubmitting] = useState(false);
   const [signingInGoogle, setSigningInGoogle] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const routeFrontId = resolveSellingFrontId();
+  const activeFrontId = show?.sellingFrontId ?? routeFrontId;
+  const brand = useSellingFrontBrand(activeFrontId);
+  const frontName = brand.displayName;
+  const returnPath = `${location.pathname}${location.search}`;
 
   // Track auth so the page reacts when a Google popup sign-in completes.
   useEffect(() => {
@@ -191,12 +199,11 @@ export default function EventTicketing() {
   }, [signedIn]);
 
   const startDate = useMemo(() => toDate(show?.startDate), [show?.startDate]);
-  const frontName = sellingFrontName(show?.sellingFrontId);
 
   // ----- loading / not-found gates -------------------------------------------
   if (showLoading || typesLoading) {
     return (
-      <EventShell frontName={frontName} signedIn={signedIn}>
+      <EventShell frontName={frontName} frontId={brand.id} signedIn={signedIn}>
         <div className="min-h-[50vh] flex items-center justify-center">
           <Loader2 className="w-7 h-7 animate-spin text-primary" />
         </div>
@@ -206,7 +213,7 @@ export default function EventTicketing() {
 
   if (!show || !show.ticketingEnabled || typesError) {
     return (
-      <EventShell frontName={frontName} signedIn={signedIn}>
+      <EventShell frontName={frontName} frontId={brand.id} signedIn={signedIn}>
         <div className="max-w-lg mx-auto py-16 text-center space-y-3">
           <AlertCircle className="w-10 h-10 text-amber-500 mx-auto" />
           <h1 className="text-2xl font-bold text-white">Tickets aren't available</h1>
@@ -257,6 +264,9 @@ export default function EventTicketing() {
         showId,
         ticketTypeId: selectedTicketType.id,
         quantity,
+        sellingFrontId: brand.id,
+        successUrl: getTicketSuccessUrl(brand.id),
+        cancelUrl: getTicketCancelUrl(brand.id),
         buyerSnapshot: {
           email: buyer.holderEmail.trim(),
           displayName: buyer.holderName.trim(),
@@ -291,7 +301,7 @@ export default function EventTicketing() {
   };
 
   return (
-    <EventShell frontName={frontName} signedIn={signedIn}>
+    <EventShell frontName={frontName} frontId={brand.id} signedIn={signedIn}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-10">
           {/* ---- Left: show hero ------------------------------------------- */}
@@ -378,6 +388,7 @@ export default function EventTicketing() {
               {step === "signin" && !signedIn && (
                 <SignInStep
                   showId={showId!}
+                  returnPath={returnPath}
                   signingInGoogle={signingInGoogle}
                   onGoogle={handleGoogle}
                   onBack={() => setStep("browse")}
@@ -417,10 +428,12 @@ export default function EventTicketing() {
 // ---------------------------------------------------------------------------
 function EventShell({
   frontName,
+  frontId,
   signedIn,
   children,
 }: {
   frontName: string;
+  frontId: SellingFrontId;
   signedIn: boolean;
   children: React.ReactNode;
 }) {
@@ -432,7 +445,7 @@ function EventShell({
             {frontName}
           </span>
           <Link
-            to="/tickets"
+            to={getTicketWalletPath(frontId)}
             className="text-sm font-semibold text-cinema-700 hover:text-white inline-flex items-center gap-1.5 transition-colors"
           >
             <Ticket className="w-4 h-4" />
@@ -571,11 +584,13 @@ function BrowseStep({
 // ---------------------------------------------------------------------------
 function SignInStep({
   showId,
+  returnPath,
   signingInGoogle,
   onGoogle,
   onBack,
 }: {
   showId: string;
+  returnPath: string;
   signingInGoogle: boolean;
   onGoogle: () => void;
   onBack: () => void;
@@ -620,7 +635,7 @@ function SignInStep({
 
       {/* returnPath sends the buyer back to this exact event page after the
           email-link round-trip, with their selection restored from storage. */}
-      <EmailLinkSignIn returnPath={`/event/${showId}`} />
+      <EmailLinkSignIn returnPath={returnPath || `/event/${showId}`} />
 
       <button
         type="button"

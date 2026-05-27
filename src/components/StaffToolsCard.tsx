@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import { Link } from 'react-router-dom';
-import { ScanLine, ShieldCheck, FlaskConical, ChevronRight } from 'lucide-react';
+import { ScanLine, ShieldCheck, FlaskConical, ChevronRight, CreditCard } from 'lucide-react';
 import { useStaffRoles } from '../hooks/useStaffRoles';
 import { IS_TEST_MODE } from '../lib/mode';
 
@@ -40,6 +40,15 @@ export default function StaffToolsCard() {
       title: 'Door scanner',
       description: 'Scan ticket QR codes and admit guests at the door.',
       Icon: ScanLine,
+    });
+  }
+
+  if (isPlatformAdmin) {
+    tools.push({
+      to: '/admin/ticketing',
+      title: 'Ticketing admin',
+      description: 'Review shows, orders, ticket states and live-readiness.',
+      Icon: CreditCard,
     });
   }
 

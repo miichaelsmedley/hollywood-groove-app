@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Link, NavLink, Outlet, useSearchParams } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import { Ticket, Music, Sparkles, BarChart3, Trophy, User, Home, Camera, ClipboardCheck, FlaskConical, ScanLine } from 'lucide-react';
 import { ref, onValue } from 'firebase/database';
 import { db } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
 import { useUserRole } from '../hooks/useUserRole';
 import { useStaffRoles } from '../hooks/useStaffRoles';
+import { isWhiteLabelTicketingFront, resolveSellingFrontId } from '../lib/sellingFronts';
 import ShareMoment from './ShareMoment';
 
 interface ActiveTestShow {
@@ -15,7 +16,11 @@ interface ActiveTestShow {
 
 export default function Layout() {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const isTestMode = searchParams.get('test') === 'true';
+  const whiteLabelTicketing =
+    isWhiteLabelTicketingFront(resolveSellingFrontId()) &&
+    location.pathname.startsWith('/tickets');
   const { canUseTestMode } = useUser();
   const { canScoreActivities } = useUserRole();
   const { canScanTickets } = useStaffRoles();
@@ -24,7 +29,7 @@ export default function Layout() {
 
   // Listen for active test shows
   useEffect(() => {
-    if (!canUseTestMode) {
+    if (whiteLabelTicketing || !canUseTestMode) {
       setActiveTestShow(null);
       return;
     }
@@ -73,10 +78,20 @@ export default function Layout() {
     });
 
     return () => unsubscribe();
-  }, [canUseTestMode]);
+  }, [canUseTestMode, whiteLabelTicketing]);
 
   // Helper to append test param to navigation paths
   const withTestParam = (path: string) => (isTestMode ? `${path}?test=true` : path);
+
+  if (whiteLabelTicketing) {
+    return (
+      <div className="min-h-screen bg-cinema text-cinema-900">
+        <main className="max-w-3xl mx-auto px-4 py-4">
+          <Outlet />
+        </main>
+      </div>
+    );
+  }
 
   // Show permission row if user has scorer access OR there's an active test show
   const showPermissionRow =

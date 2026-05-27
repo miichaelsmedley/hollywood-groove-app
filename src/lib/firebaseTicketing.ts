@@ -11,6 +11,7 @@
 // is present, so callable invocations work in production.
 
 import {
+  addDoc,
   collection,
   doc,
   getFirestore,
@@ -18,6 +19,9 @@ import {
   query,
   where,
   orderBy,
+  limit,
+  serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useEffect, useState } from "react";
@@ -27,7 +31,9 @@ import type {
   TicketBuyerSnapshot,
   TicketHolderSnapshot,
   TicketOrder,
+  TicketRefund,
   TicketType,
+  TicketVenue,
   TicketedShow,
 } from "../types/ticketingContract";
 
@@ -53,6 +59,7 @@ export interface CreateCheckoutSessionInput {
   showId: string;
   ticketTypeId: string;
   quantity: number;
+  sellingFrontId?: string;
   buyerSnapshot?: TicketBuyerSnapshot;
   holders?: CheckoutHolderInput[];
   successUrl?: string;
@@ -75,6 +82,38 @@ export async function createCheckoutSession(
   input: CreateCheckoutSessionInput
 ): Promise<CreateCheckoutSessionResult> {
   const response = await createCheckoutSessionCallable(input);
+  return response.data;
+}
+
+// ---------------------------------------------------------------------------
+// refundOrder callable wrapper (platform-admin only)
+// ---------------------------------------------------------------------------
+
+export interface RefundOrderInput {
+  orderId: string;
+  reason: string;
+  stripeReason?: "duplicate" | "fraudulent" | "requested_by_customer";
+  forceAfterScan?: boolean;
+}
+
+export interface RefundOrderResult {
+  ok: true;
+  refundId: string;
+  stripeRefundId: string;
+  orderId: string;
+  status: "pending" | "succeeded" | "failed" | "cancelled";
+  amountCents: number;
+  ticketIds: string[];
+  note: string;
+}
+
+const refundOrderCallable = httpsCallable<RefundOrderInput, RefundOrderResult>(
+  functions,
+  "refundOrder"
+);
+
+export async function refundOrder(input: RefundOrderInput): Promise<RefundOrderResult> {
+  const response = await refundOrderCallable(input);
   return response.data;
 }
 
@@ -287,6 +326,90 @@ export function useVenueStaff(venueId: string | undefined): UseVenueStaffResult 
 }
 
 // ---------------------------------------------------------------------------
+// Venue admin helpers
+// ---------------------------------------------------------------------------
+
+export interface UseAdminVenuesResult {
+  venues: Array<TicketVenue & { id: string }>;
+  loading: boolean;
+  error: Error | null;
+}
+
+export interface SaveVenueInput {
+  name: string;
+  address?: string;
+  contact?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+  };
+  capacity?: number;
+  public: boolean;
+  stripeConnectAccountId?: string | null;
+}
+
+export function useAdminVenues(): UseAdminVenuesResult {
+  const [state, setState] = useState<UseAdminVenuesResult>({
+    venues: [],
+    loading: true,
+    error: null,
+  });
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(collection(firestoreTicketing, "venues"), orderBy("name", "asc"), limit(100)),
+      (snap) => {
+        setState({
+          venues: snap.docs.map((d) => ({ id: d.id, ...(d.data() as TicketVenue) })),
+          loading: false,
+          error: null,
+        });
+      },
+      (err) => setState({ venues: [], loading: false, error: err })
+    );
+    return () => unsub();
+  }, []);
+
+  return state;
+}
+
+function cleanVenuePayload(input: SaveVenueInput): Record<string, unknown> {
+  const contact = {
+    name: input.contact?.name?.trim() || undefined,
+    email: input.contact?.email?.trim() || undefined,
+    phone: input.contact?.phone?.trim() || undefined,
+  };
+  const hasContact = Boolean(contact.name || contact.email || contact.phone);
+
+  return {
+    name: input.name.trim(),
+    address: input.address?.trim() || "",
+    public: input.public,
+    capacity:
+      typeof input.capacity === "number" && Number.isFinite(input.capacity)
+        ? Math.max(0, Math.floor(input.capacity))
+        : null,
+    contact: hasContact ? contact : {},
+    stripeConnectAccountId: input.stripeConnectAccountId?.trim() || null,
+    updatedAt: serverTimestamp(),
+  };
+}
+
+export async function saveVenue(input: SaveVenueInput, venueId?: string): Promise<string> {
+  const payload = cleanVenuePayload(input);
+  if (venueId) {
+    await updateDoc(doc(firestoreTicketing, "venues", venueId), payload);
+    return venueId;
+  }
+
+  const created = await addDoc(collection(firestoreTicketing, "venues"), {
+    ...payload,
+    createdAt: serverTimestamp(),
+  });
+  return created.id;
+}
+
+// ---------------------------------------------------------------------------
 // Hooks: live Firestore reads with Firestore real-time listeners
 // ---------------------------------------------------------------------------
 
@@ -474,4 +597,124 @@ export function ticketAvailableCount(ticket: TicketType): number {
   return Math.max(0, ticket.quantityTotal - ticket.quantitySold - ticket.quantityReserved);
 }
 
-export type { TicketType, TicketedShow, TicketOrder, IssuedTicket, TicketHolderSnapshot };
+export type { TicketType, TicketVenue, TicketedShow, TicketOrder, IssuedTicket, TicketHolderSnapshot };
+
+// ---------------------------------------------------------------------------
+// Platform admin overview hooks
+// ---------------------------------------------------------------------------
+
+export interface UseTicketingAdminOverviewResult {
+  shows: Array<TicketedShow & { id: string }>;
+  orders: Array<TicketOrder & { id: string }>;
+  tickets: Array<IssuedTicket & { id: string }>;
+  refunds: Array<TicketRefund & { id: string }>;
+  stripeEvents: Array<{ id: string; type?: string; status?: string; relatedOrderId?: string | null; processedAt?: unknown }>;
+  loading: boolean;
+  error: Error | null;
+}
+
+/**
+ * Platform-admin operational snapshot for the ticketing admin portal.
+ *
+ * Firestore rules allow these reads only for `platform_admin`; ordinary users
+ * will receive permission-denied and the route itself is wrapped in AdminRoute.
+ */
+export function useTicketingAdminOverview(): UseTicketingAdminOverviewResult {
+  const [state, setState] = useState<UseTicketingAdminOverviewResult>({
+    shows: [],
+    orders: [],
+    tickets: [],
+    refunds: [],
+    stripeEvents: [],
+    loading: true,
+    error: null,
+  });
+
+  useEffect(() => {
+    let pendingLoads = 5;
+    const markLoaded = () => {
+      pendingLoads -= 1;
+      if (pendingLoads <= 0) {
+        setState((prev) => ({ ...prev, loading: false }));
+      }
+    };
+    const setError = (error: Error) => {
+      setState((prev) => ({ ...prev, loading: false, error }));
+    };
+
+    const unsubShows = onSnapshot(
+      query(collection(firestoreTicketing, "shows"), orderBy("startDate", "desc"), limit(50)),
+      (snap) => {
+        setState((prev) => ({
+          ...prev,
+          shows: snap.docs.map((d) => ({ id: d.id, ...(d.data() as TicketedShow) })),
+          error: null,
+        }));
+        markLoaded();
+      },
+      setError
+    );
+
+    const unsubOrders = onSnapshot(
+      query(collection(firestoreTicketing, "orders"), orderBy("createdAt", "desc"), limit(50)),
+      (snap) => {
+        setState((prev) => ({
+          ...prev,
+          orders: snap.docs.map((d) => ({ id: d.id, ...(d.data() as TicketOrder) })),
+          error: null,
+        }));
+        markLoaded();
+      },
+      setError
+    );
+
+    const unsubTickets = onSnapshot(
+      query(collection(firestoreTicketing, "tickets"), orderBy("issuedAt", "desc"), limit(200)),
+      (snap) => {
+        setState((prev) => ({
+          ...prev,
+          tickets: snap.docs.map((d) => ({ id: d.id, ...(d.data() as IssuedTicket) })),
+          error: null,
+        }));
+        markLoaded();
+      },
+      setError
+    );
+
+    const unsubRefunds = onSnapshot(
+      query(collection(firestoreTicketing, "refunds"), orderBy("createdAt", "desc"), limit(50)),
+      (snap) => {
+        setState((prev) => ({
+          ...prev,
+          refunds: snap.docs.map((d) => ({ id: d.id, ...(d.data() as TicketRefund) })),
+          error: null,
+        }));
+        markLoaded();
+      },
+      setError
+    );
+
+    const unsubStripeEvents = onSnapshot(
+      query(collection(firestoreTicketing, "stripeEvents"), orderBy("processedAt", "desc"), limit(20)),
+      (snap) => {
+        setState((prev) => ({
+          ...prev,
+          stripeEvents: snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+          error: null,
+        }));
+        markLoaded();
+      },
+      setError
+    );
+
+    return () => {
+      unsubShows();
+      unsubOrders();
+      unsubTickets();
+      unsubRefunds();
+      unsubStripeEvents();
+    };
+  }, []);
+
+  return state;
+}

@@ -42,6 +42,8 @@ const AdminVenueStaff = lazy(() => import('./pages/AdminVenueStaff'));
 const AuthFinish = lazy(() => import('./pages/AuthFinish'));
 const EventTicketing = lazy(() => import('./pages/EventTicketing'));
 const TicketScanner = lazy(() => import('./pages/TicketScanner'));
+const AdminTicketing = lazy(() => import('./pages/AdminTicketing'));
+const AdminVenues = lazy(() => import('./pages/AdminVenues'));
 
 /**
  * Top-level effect that auto-redeems any pending venue-staff invites
@@ -164,6 +166,22 @@ export default function App() {
               <Route path="tickets/cancelled" element={<TicketsCancelled />} />
               <Route path="tickets/view/:ticketId" element={<TicketView />} />
               <Route
+                path="admin/ticketing"
+                element={
+                  <AdminRoute>
+                    <AdminTicketing />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="admin/venues"
+                element={
+                  <AdminRoute>
+                    <AdminVenues />
+                  </AdminRoute>
+                }
+              />
+              <Route
                 path="admin/venues/:venueId/staff"
                 element={
                   <AdminRoute>
@@ -185,6 +203,8 @@ export default function App() {
             {/* Standalone public ticketing page — linked from the marketing
                 site. Deliberately outside the PWA Layout (no mobile chrome). */}
             <Route path="event/:showId" element={<EventTicketing />} />
+            <Route path="tickets/event/:showId" element={<EventTicketing />} />
+            <Route path="tickets/my" element={<TicketsHub />} />
             {/* Door scanner — standalone, self-gates on door-staff role. */}
             <Route path="scan" element={<TicketScanner />} />
 

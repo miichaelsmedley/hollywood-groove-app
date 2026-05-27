@@ -13,6 +13,8 @@ export interface StaffClaims {
   isVenueManager: boolean;
   isDoorStaff: boolean;
   isEventAdmin: boolean;
+  isOrgOwner: boolean;
+  isOrgOperator: boolean;
   /** Can open the door scanner at /scan. */
   canScanTickets: boolean;
   /** Holds any elevated staff/admin claim. */
@@ -24,6 +26,8 @@ export const EMPTY_STAFF_CLAIMS: StaffClaims = {
   isVenueManager: false,
   isDoorStaff: false,
   isEventAdmin: false,
+  isOrgOwner: false,
+  isOrgOperator: false,
   canScanTickets: false,
   hasStaffAccess: false,
 };
@@ -40,14 +44,18 @@ export function parseStaffClaims(
   const isVenueManager = claims.venue_manager === true;
   const isDoorStaff = claims.door_staff === true;
   const isEventAdmin = claims.event_admin === true;
+  const isOrgOwner = claims.org_owner === true;
+  const isOrgOperator = claims.org_operator === true;
   return {
     isPlatformAdmin,
     isVenueManager,
     isDoorStaff,
     isEventAdmin,
+    isOrgOwner,
+    isOrgOperator,
     canScanTickets: isPlatformAdmin || isVenueManager || isDoorStaff,
     hasStaffAccess:
-      isPlatformAdmin || isVenueManager || isDoorStaff || isEventAdmin,
+      isPlatformAdmin || isVenueManager || isDoorStaff || isEventAdmin || isOrgOperator,
   };
 }
 

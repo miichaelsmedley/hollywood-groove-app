@@ -82,6 +82,22 @@ export interface TicketSellingFront {
   defaultCurrency: TicketCurrency;
   publicSiteUrl?: string;
   supportEmail?: string;
+  domain?: string;
+  ticketBasePath?: string;
+  brandTagline?: string;
+  merchantDisplayName?: string;
+  theme?: {
+    primaryColor?: string;
+    accentColor?: string;
+    backgroundColor?: string;
+    surfaceColor?: string;
+    textColor?: string;
+  };
+  logo?: {
+    light?: string;
+    dark?: string;
+    icon?: string;
+  };
   // MVP merchant of record is The Adele Show (ABN + .com.au) for both fronts.
   // Phase 9 (Stripe Connect) opens this up to per-venue or per-front MoR;
   // typed loosely so we don't have to churn the contract again then.
@@ -120,6 +136,7 @@ export interface TicketRefundPolicy {
 
 // Path: /shows/{showId}
 export interface TicketedShow {
+  orgId?: string;
   title: string;
   sellingFrontId: SellingFrontId;
   startDate: TicketingTimestamp;
