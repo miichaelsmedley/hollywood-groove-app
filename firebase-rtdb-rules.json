@@ -46,7 +46,6 @@
       },
 
       "shows": {
-        ".read": "auth != null",
         "$showId": {
           "meta": {
             ".read": true,
@@ -91,8 +90,13 @@
             ".read": true,
             ".write": "false"
           },
+          "scoring_diagnostics": {
+            ".read": "auth != null && auth.token.platform_admin == true",
+            ".write": "false"
+          },
           "scores": {
             ".read": true,
+            ".indexOn": ["totalScore"],
             "$odience": {
               ".write": "false"
             }
@@ -243,7 +247,6 @@
     },
 
     "shows": {
-      ".read": "auth != null",
       "$showId": {
         "meta": {
           ".read": true,
@@ -288,8 +291,13 @@
           ".read": true,
           ".write": "false"
         },
+        "scoring_diagnostics": {
+          ".read": "auth != null && auth.token.platform_admin == true",
+          ".write": "false"
+        },
         "scores": {
           ".read": true,
+          ".indexOn": ["totalScore"],
           "$odience": {
             ".write": "false"
           }
