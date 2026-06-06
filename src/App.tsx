@@ -45,6 +45,8 @@ const TicketScanner = lazy(() => import('./pages/TicketScanner'));
 const AdminTicketing = lazy(() => import('./pages/AdminTicketing'));
 const AdminVenues = lazy(() => import('./pages/AdminVenues'));
 
+const TICKETING_ADMIN_ROLES = ['platform_admin', 'event_admin'] as const;
+
 /**
  * Top-level effect that auto-redeems any pending venue-staff invites
  * for the signed-in user. Fires once per non-anonymous, email-verified
@@ -168,7 +170,7 @@ export default function App() {
               <Route
                 path="admin/ticketing"
                 element={
-                  <AdminRoute>
+                  <AdminRoute allowedRoles={TICKETING_ADMIN_ROLES}>
                     <AdminTicketing />
                   </AdminRoute>
                 }

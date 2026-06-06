@@ -292,7 +292,7 @@ export async function savePromoCode(
 }
 
 // ---------------------------------------------------------------------------
-// refundOrder callable wrapper (platform-admin only)
+// refundOrder callable wrapper (platform-admin or event-admin)
 // ---------------------------------------------------------------------------
 
 export interface RefundOrderInput {
@@ -1115,8 +1115,12 @@ export type {
 };
 
 // ---------------------------------------------------------------------------
-// Platform admin overview hooks
+// Ticketing admin overview hooks
 // ---------------------------------------------------------------------------
+
+export interface UseTicketingAdminOverviewOptions {
+  includePlatformDiagnostics?: boolean;
+}
 
 export interface UseTicketingAdminOverviewResult {
   shows: Array<TicketedShow & { id: string }>;
@@ -1135,12 +1139,16 @@ export interface UseTicketingAdminOverviewResult {
 }
 
 /**
- * Platform-admin operational snapshot for the ticketing admin portal.
+ * Ticketing-admin operational snapshot for the ticketing admin portal.
  *
- * Firestore rules allow these reads only for `platform_admin`; ordinary users
- * will receive permission-denied and the route itself is wrapped in AdminRoute.
+ * Firestore rules allow ticketing ledger reads for `platform_admin` and
+ * `event_admin`. Platform diagnostics such as Stripe event idempotency stay
+ * platform-admin-only and are opt-in.
  */
-export function useTicketingAdminOverview(): UseTicketingAdminOverviewResult {
+export function useTicketingAdminOverview(
+  options: UseTicketingAdminOverviewOptions = {},
+): UseTicketingAdminOverviewResult {
+  const includePlatformDiagnostics = options.includePlatformDiagnostics === true;
   const [state, setState] = useState<UseTicketingAdminOverviewResult>({
     shows: [],
     orders: [],
@@ -1152,7 +1160,13 @@ export function useTicketingAdminOverview(): UseTicketingAdminOverviewResult {
   });
 
   useEffect(() => {
-    let pendingLoads = 5;
+    let pendingLoads = includePlatformDiagnostics ? 5 : 4;
+    setState((prev) => ({
+      ...prev,
+      stripeEvents: includePlatformDiagnostics ? prev.stripeEvents : [],
+      loading: true,
+      error: null,
+    }));
     const markLoaded = () => {
       pendingLoads -= 1;
       if (pendingLoads <= 0) {
@@ -1243,31 +1257,33 @@ export function useTicketingAdminOverview(): UseTicketingAdminOverviewResult {
       setError,
     );
 
-    const unsubStripeEvents = onSnapshot(
-      query(
-        collection(firestoreTicketing, "stripeEvents"),
-        orderBy("processedAt", "desc"),
-        limit(20),
-      ),
-      (snap) => {
-        setState((prev) => ({
-          ...prev,
-          stripeEvents: snap.docs.map((d) => ({ id: d.id, ...d.data() })),
-          error: null,
-        }));
-        markLoaded();
-      },
-      setError,
-    );
+    const unsubStripeEvents = includePlatformDiagnostics
+      ? onSnapshot(
+          query(
+            collection(firestoreTicketing, "stripeEvents"),
+            orderBy("processedAt", "desc"),
+            limit(20),
+          ),
+          (snap) => {
+            setState((prev) => ({
+              ...prev,
+              stripeEvents: snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+              error: null,
+            }));
+            markLoaded();
+          },
+          setError,
+        )
+      : undefined;
 
     return () => {
       unsubShows();
       unsubOrders();
       unsubTickets();
       unsubRefunds();
-      unsubStripeEvents();
+      unsubStripeEvents?.();
     };
-  }, []);
+  }, [includePlatformDiagnostics]);
 
   return state;
 }

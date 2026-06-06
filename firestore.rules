@@ -18,6 +18,14 @@ service cloud.firestore {
       return hasClaim("platform_admin");
     }
 
+    function isEventAdmin() {
+      return hasClaim("event_admin");
+    }
+
+    function isTicketingAdmin() {
+      return isPlatformAdmin() || isEventAdmin();
+    }
+
     function showPath(showId) {
       return /databases/$(database)/documents/shows/$(showId);
     }
@@ -72,20 +80,20 @@ service cloud.firestore {
     }
 
     function canReadOrder(data) {
-      return isPlatformAdmin()
+      return isTicketingAdmin()
         || (signedIn() && data.buyerUid == uid())
         || isVenueStaffForShow(data.showId);
     }
 
     function canReadTicket(data) {
-      return isPlatformAdmin()
+      return isTicketingAdmin()
         || (signedIn() && data.holderMemberUid == uid())
         || isBuyerOfOrder(data.orderId)
         || isVenueStaffForShow(data.showId);
     }
 
     function canReadRefund(data) {
-      return isPlatformAdmin()
+      return isTicketingAdmin()
         || isBuyerOfOrder(data.orderId);
     }
 
@@ -127,7 +135,7 @@ service cloud.firestore {
     }
 
     match /shows/{showId} {
-      allow read: if isPlatformAdmin()
+      allow read: if isTicketingAdmin()
         || isVenueStaffForShow(showId)
         || isPublicShow(resource.data);
       allow create, update, delete: if isPlatformAdmin();
@@ -140,11 +148,13 @@ service cloud.firestore {
       }
 
       match /promoCodes/{promoCodeId} {
-        allow get: if isPlatformAdmin()
+        allow get: if isTicketingAdmin()
           || isVenueStaffForShow(showId)
           || (showExists(showId) && isPublicShow(showData(showId)));
-        allow list: if isPlatformAdmin() || isVenueStaffForShow(showId);
-        allow create, update, delete: if isPlatformAdmin();
+        allow list: if isTicketingAdmin() || isVenueStaffForShow(showId);
+        allow create, update: if isPlatformAdmin()
+          || (isEventAdmin() && showExists(showId));
+        allow delete: if isPlatformAdmin();
       }
     }
 

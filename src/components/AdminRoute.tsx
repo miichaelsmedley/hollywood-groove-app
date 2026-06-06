@@ -4,22 +4,40 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { Link } from 'react-router-dom';
 import { Loader2, ShieldCheck } from 'lucide-react';
 import { auth } from '../lib/firebase';
-import { hasPlatformAdminClaim } from '../lib/claims';
+import { readStaffClaims, type StaffClaims } from '../lib/claims';
 import { signInWithGoogle } from '../lib/auth';
+
+export type AdminRouteRole = 'platform_admin' | 'event_admin';
 
 interface AdminRouteProps {
   children: React.ReactNode;
+  allowedRoles?: readonly AdminRouteRole[];
+}
+
+const DEFAULT_ALLOWED_ROLES: readonly AdminRouteRole[] = ['platform_admin'];
+
+function roleAllowed(claims: StaffClaims, role: AdminRouteRole): boolean {
+  if (role === 'platform_admin') return claims.isPlatformAdmin;
+  return claims.isEventAdmin;
+}
+
+function roleLabel(roles: readonly AdminRouteRole[]): string {
+  return roles.join(' or ');
 }
 
 /**
- * Route guard that only allows admin users to access the wrapped content.
- * Non-admin users are redirected to the home page.
+ * Route guard that only allows users with the requested admin claims to access
+ * the wrapped content. Platform-admin remains the default for every route.
  */
-export default function AdminRoute({ children }: AdminRouteProps) {
+export default function AdminRoute({
+  children,
+  allowedRoles = DEFAULT_ALLOWED_ROLES,
+}: AdminRouteProps) {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [needsSignIn, setNeedsSignIn] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requiredClaimLabel = roleLabel(allowedRoles);
 
   useEffect(() => {
     let isActive = true;
@@ -34,7 +52,8 @@ export default function AdminRoute({ children }: AdminRouteProps) {
           return;
         }
         setNeedsSignIn(false);
-        const allowed = await hasPlatformAdminClaim(user);
+        const claims = await readStaffClaims(user);
+        const allowed = allowedRoles.some((role) => roleAllowed(claims, role));
         if (isActive) {
           setIsAdmin(allowed);
         }
@@ -50,7 +69,7 @@ export default function AdminRoute({ children }: AdminRouteProps) {
       isActive = false;
       unsubscribe();
     };
-  }, []);
+  }, [allowedRoles]);
 
   if (isAdmin === null) {
     return (
@@ -67,7 +86,7 @@ export default function AdminRoute({ children }: AdminRouteProps) {
         <h1 className="text-xl font-bold text-cinema-900 text-center">Admin sign-in</h1>
         <p className="text-sm text-cinema-600 text-center">
           Sign in with the Google account that has the Hollywood Groove
-          platform_admin claim.
+          {requiredClaimLabel} claim.
         </p>
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -106,7 +125,7 @@ export default function AdminRoute({ children }: AdminRouteProps) {
         <ShieldCheck className="w-10 h-10 text-amber-500 mx-auto" />
         <h1 className="text-xl font-bold text-cinema-900 text-center">No admin access</h1>
         <p className="text-sm text-cinema-600 text-center">
-          This account is signed in, but it does not have the platform_admin claim.
+          This account is signed in, but it does not have the {requiredClaimLabel} claim.
         </p>
         <Link to="/" className="btn-primary w-full py-3 text-center text-sm font-bold">
           Back to app

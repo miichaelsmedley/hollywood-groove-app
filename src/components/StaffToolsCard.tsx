@@ -25,6 +25,7 @@ export default function StaffToolsCard() {
   const {
     loading,
     isPlatformAdmin,
+    isEventAdmin,
     isVenueManager,
     isDoorStaff,
     canScanTickets,
@@ -43,11 +44,11 @@ export default function StaffToolsCard() {
     });
   }
 
-  if (isPlatformAdmin) {
+  if (isPlatformAdmin || isEventAdmin) {
     tools.push({
       to: '/admin/ticketing',
       title: 'Ticketing admin',
-      description: 'Review shows, orders, ticket states and live-readiness.',
+      description: 'Review orders and refunds, and manage promo codes.',
       Icon: CreditCard,
     });
   }
@@ -65,6 +66,7 @@ export default function StaffToolsCard() {
 
   const roleLabels = [
     isPlatformAdmin && 'Admin',
+    isEventAdmin && 'Ticketing co-admin',
     isVenueManager && 'Venue manager',
     isDoorStaff && 'Door staff',
   ].filter((label): label is string => Boolean(label));

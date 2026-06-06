@@ -1,4 +1,4 @@
-// Platform admin ticketing portal.
+// Ticketing admin portal.
 //
 // This is the cloud transactional/admin surface for ticketing. The Swift
 // controller stays focused on live show operation; ticket sales, scanner
@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import type { ComponentType, FormEvent, ReactNode } from "react";
 import { useState } from "react";
 import SelfTicketGigsPanel from "../features/tickets/SelfTicketGigsPanel";
+import { useStaffRoles } from "../hooks/useStaffRoles";
 import {
   Activity,
   AlertTriangle,
@@ -148,10 +149,14 @@ function StatCard({
 }
 
 export default function AdminTicketing() {
+  const { isPlatformAdmin, isEventAdmin } = useStaffRoles();
   const { shows, orders, tickets, refunds, stripeEvents, loading, error } =
-    useTicketingAdminOverview();
+    useTicketingAdminOverview({
+      includePlatformDiagnostics: isPlatformAdmin,
+    });
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const hasTicketingAdminClaim = isPlatformAdmin || isEventAdmin;
 
   const paidOrders = orders.filter((o) => o.status === "paid");
   const pendingOrders = orders.filter((o) => o.status === "pending");
@@ -234,13 +239,15 @@ export default function AdminTicketing() {
             ticketing.
           </p>
         </div>
-        <Link
-          to="/admin/venues"
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-cinema-300 px-4 py-2 text-sm font-bold text-cinema-900 hover:border-primary/70"
-        >
-          <Building2 className="w-4 h-4" />
-          Manage venues
-        </Link>
+        {isPlatformAdmin && (
+          <Link
+            to="/admin/venues"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-cinema-300 px-4 py-2 text-sm font-bold text-cinema-900 hover:border-primary/70"
+          >
+            <Building2 className="w-4 h-4" />
+            Manage venues
+          </Link>
+        )}
       </header>
 
       <section className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
@@ -259,7 +266,7 @@ export default function AdminTicketing() {
         </div>
       </section>
 
-      <SelfTicketGigsPanel />
+      {isPlatformAdmin && <SelfTicketGigsPanel />}
 
       {actionError && (
         <section className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
@@ -296,21 +303,23 @@ export default function AdminTicketing() {
         />
       </section>
 
-      <section className="grid md:grid-cols-3 gap-3">
+      <section className={`grid gap-3 ${isPlatformAdmin ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
         <ReadinessCard
-          ok
+          ok={hasTicketingAdminClaim}
           title="Admin login"
-          description="You are authenticated with the platform_admin claim and can see the ticketing ledger."
+          description="You are authenticated with a ticketing admin claim and can see the ticketing ledger."
         />
-        <ReadinessCard
-          ok={stripeEvents.some((event) => event.status === "processed")}
-          title="Webhook ledger"
-          description="Stripe event idempotency is visible in the ticketing database."
-        />
+        {isPlatformAdmin && (
+          <ReadinessCard
+            ok={stripeEvents.some((event) => event.status === "processed")}
+            title="Webhook ledger"
+            description="Stripe event idempotency is visible in the ticketing database."
+          />
+        )}
         <ReadinessCard
           ok
           title="Refund controls"
-          description="Platform admins can issue full-order refunds and invalidate tickets from this portal."
+          description="Ticketing admins can issue full-order refunds and invalidate tickets from this portal."
         />
       </section>
 
@@ -321,7 +330,12 @@ export default function AdminTicketing() {
         ) : (
           <div className="space-y-2">
             {shows.slice(0, 12).map((show) => (
-              <ShowRow key={show.id} show={show} tickets={tickets} />
+              <ShowRow
+                key={show.id}
+                show={show}
+                tickets={tickets}
+                canManageStaff={isPlatformAdmin}
+              />
             ))}
           </div>
         )}
@@ -447,9 +461,11 @@ function EmptyState({ children }: { children: ReactNode }) {
 function ShowRow({
   show,
   tickets,
+  canManageStaff,
 }: {
   show: TicketedShow & { id: string };
   tickets: Array<IssuedTicket & { id: string }>;
+  canManageStaff: boolean;
 }) {
   const showTickets = tickets.filter((ticket) => ticket.showId === show.id);
   const sold = showTickets.filter(
@@ -487,7 +503,7 @@ function ShowRow({
           >
             <ExternalLink className="w-3.5 h-3.5" /> Event page
           </Link>
-          {show.venueId && (
+          {canManageStaff && show.venueId && (
             <Link
               to={`/admin/venues/${show.venueId}/staff`}
               className="inline-flex items-center justify-center gap-1 rounded-lg bg-primary text-cinema px-3 py-1.5 text-xs font-bold hover:bg-primary/90"
