@@ -10,6 +10,7 @@ import { Link } from "react-router-dom";
 import { doc, onSnapshot } from "firebase/firestore";
 import { Loader2, Ticket, AlertCircle, ChevronRight } from "lucide-react";
 import { firestoreTicketing, useMyTickets } from "../../lib/firebaseTicketing";
+import { toTicketingDate } from "../../lib/useUpcomingShows";
 import type {
   IssuedTicket,
   TicketedShow,
@@ -96,36 +97,37 @@ export default function MyTicketsSection({
   );
 }
 
-// Single row: holder name, show title (live-fetched), date, status, chevron.
-// Clicking goes to /tickets/view/:ticketId for the full-screen scan view.
+// Single row: holder name, show title, date, status, chevron. The title is
+// fetched live; if the show doc is gone we fall back to a title snapshotted onto
+// the ticket (if present) or a clear "no longer available" — never an indefinite
+// "Loading…". Clicking goes to /tickets/view/:ticketId for the scan view.
 function TicketRow({ ticket }: { ticket: IssuedTicket & { id: string } }) {
   const [show, setShow] = useState<(TicketedShow & { id: string }) | null>(null);
+  const [resolved, setResolved] = useState(false);
 
   useEffect(() => {
+    setResolved(false);
+    setShow(null);
     const unsub = onSnapshot(
       doc(firestoreTicketing, "shows", ticket.showId),
       (snap) => {
-        if (snap.exists()) {
-          setShow({ id: snap.id, ...(snap.data() as TicketedShow) });
-        } else {
-          setShow(null);
-        }
+        setShow(snap.exists() ? { id: snap.id, ...(snap.data() as TicketedShow) } : null);
+        setResolved(true);
       },
-      () => setShow(null)
+      () => setResolved(true)
     );
     return () => unsub();
   }, [ticket.showId]);
 
-  const startDate = useMemo(() => {
-    if (!show) return null;
-    const ts: unknown = show.startDate;
-    if (ts && typeof (ts as { toMillis?: () => number }).toMillis === "function") {
-      return new Date((ts as { toMillis: () => number }).toMillis());
-    }
-    if (ts instanceof Date) return ts;
-    if (typeof ts === "number") return new Date(ts);
-    return null;
-  }, [show]);
+  const displayTitle =
+    show?.title ??
+    ticket.showTitle ??
+    (resolved ? "Show no longer available" : "Loading show…");
+
+  const startDate = useMemo(
+    () => toTicketingDate(show?.startDate ?? ticket.showStartDate ?? null),
+    [show, ticket.showStartDate]
+  );
 
   return (
     <li>
@@ -135,7 +137,7 @@ function TicketRow({ ticket }: { ticket: IssuedTicket & { id: string } }) {
       >
         <div className="flex-1 min-w-0 space-y-0.5">
           <p className="text-sm font-semibold text-cinema-900 truncate">
-            {show?.title ?? "Loading show…"}
+            {displayTitle}
           </p>
           {startDate && (
             <p className="text-xs text-cinema-600">

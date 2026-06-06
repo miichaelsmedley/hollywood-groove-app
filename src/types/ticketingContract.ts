@@ -317,6 +317,11 @@ export interface TicketPayment {
 export interface IssuedTicket {
   orderId: string;
   showId: string;
+  // Denormalized show snapshot captured at mint time (optional). Lets the buyer
+  // wallet render a ticket even if the show doc is later removed/unavailable,
+  // instead of resolving the title live on every view.
+  showTitle?: string | null;
+  showStartDate?: TicketingTimestamp | string | null;
   sellingFrontId: SellingFrontId;
   ticketTypeId: string;
   holderName: string;

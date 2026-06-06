@@ -7,150 +7,33 @@
 //
 // "Upcoming shows" intentionally lives on this page (not just /shows) because
 // some buyers think of "the place I buy tickets" and "the place I view tickets"
-// as the same surface. Surfacing both keeps the mental model tight.
+// as the same surface. Surfacing both keeps the mental model tight. The merged
+// RTDB + ticketing feed is shared with the /upcoming + /shows pages via
+// useUpcomingShows so the same gig appears consistently everywhere.
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { onValue, ref } from "firebase/database";
 import { Ticket, Calendar, MapPin, ArrowRight, ExternalLink } from "lucide-react";
-import { auth, db } from "../lib/firebase";
-import { useUser } from "../contexts/UserContext";
-import type { ShowMeta } from "../types/firebaseContract";
-import { getShowBasePath } from "../lib/mode";
-import { isShowLive, ShowRecordSnapshot } from "../lib/showStatus";
+import { auth } from "../lib/firebase";
 import MyTicketsSection from "../features/tickets/MyTicketsSection";
-import { useOnSaleTicketedShows, useTicketedShow } from "../lib/firebaseTicketing";
-import type { TicketedShow, TicketingTimestamp } from "../types/ticketingContract";
-
-interface ShowListEntry {
-  showId: string;
-  meta: ShowMeta;
-  isLive: boolean;
-}
-
-type TicketedShowWithId = TicketedShow & { id: string };
-
-interface UpcomingShowListEntry extends ShowListEntry {
-  startDate: Date | null;
-  ticketedShow?: TicketedShowWithId;
-}
-
-function toTicketingDate(value: TicketingTimestamp | string | null | undefined): Date | null {
-  let date: Date | null = null;
-
-  if (value && typeof (value as { toMillis?: () => number }).toMillis === "function") {
-    date = new Date((value as { toMillis: () => number }).toMillis());
-  } else if (value instanceof Date) {
-    date = value;
-  } else if (typeof value === "number") {
-    date = new Date(value);
-  } else if (typeof value === "string") {
-    date = new Date(value);
-  } else if (
-    value &&
-    typeof value === "object" &&
-    typeof (value as { seconds?: unknown }).seconds === "number"
-  ) {
-    date = new Date((value as { seconds: number }).seconds * 1000);
-  }
-
-  if (!date || !Number.isFinite(date.getTime())) return null;
-  return date;
-}
-
-function sortableTime(date: Date | null): number {
-  return date ? date.getTime() : Number.POSITIVE_INFINITY;
-}
+import { useTicketedShow } from "../lib/firebaseTicketing";
+import { useUpcomingShows } from "../lib/useUpcomingShows";
+import type { UpcomingShowListEntry } from "../lib/useUpcomingShows";
 
 export default function TicketsHub() {
-  const { canUseTestMode } = useUser();
   const uid = auth.currentUser?.uid;
-  const [shows, setShows] = useState<ShowListEntry[]>([]);
-  const { shows: ledgerShows } = useOnSaleTicketedShows();
+  const { rows } = useUpcomingShows();
 
-  // Subscribe to RTDB shows so the existing upcoming list stays live. The
-  // Firestore ticketing ledger is merged below without changing this feed.
-  useEffect(() => {
-    const unsub = onValue(
-      ref(db, getShowBasePath()),
-      (snap) => {
-        const data = snap.val() as Record<string, ShowRecordSnapshot> | null;
-        if (!data) {
-          setShows([]);
-          return;
-        }
-        const rows: ShowListEntry[] = Object.entries(data)
-          .map(([showId, record]) => ({
-            showId,
-            meta: record.meta as ShowMeta,
-            isLive: isShowLive(record),
-          }))
-          .filter((row) => row.meta && row.meta.title)
-          .filter((row) => canUseTestMode || !row.meta.isTestShow);
-
-        const now = Date.now();
-        const upcoming = rows.filter((row) => {
-          const start = new Date(row.meta.startDate).getTime();
-          if (!Number.isFinite(start)) return false;
-          return row.isLive || start >= now;
-        });
-        upcoming.sort((a, b) => {
-          if (a.isLive && !b.isLive) return -1;
-          if (!a.isLive && b.isLive) return 1;
-          return new Date(a.meta.startDate).getTime() - new Date(b.meta.startDate).getTime();
-        });
-        setShows(upcoming);
-      },
-      () => setShows([])
-    );
-    return () => unsub();
-  }, [canUseTestMode]);
-
+  // Surface live shows, anything still upcoming, and any ticketed (on-sale) gig.
   const upcomingShows = useMemo<UpcomingShowListEntry[]>(() => {
-    const rowsByShowId = new Map<string, UpcomingShowListEntry>();
-
-    shows.forEach((row) => {
-      rowsByShowId.set(row.showId, {
-        ...row,
-        startDate: toTicketingDate(row.meta.startDate),
-      });
-    });
-
-    ledgerShows.forEach((show) => {
-      const effectiveShowId = show.rtdbShowId || show.id;
-      const startDate = toTicketingDate(show.startDate);
-      const existing = rowsByShowId.get(effectiveShowId);
-
-      if (existing) {
-        rowsByShowId.set(effectiveShowId, {
-          ...existing,
-          ticketedShow: show,
-        });
-        return;
-      }
-
-      rowsByShowId.set(effectiveShowId, {
-        showId: effectiveShowId,
-        meta: {
-          orgId: show.orgId,
-          title: show.title,
-          startDate: startDate?.toISOString() ?? "",
-          venueName: show.venueName ?? "",
-          schemaVersion: 1,
-          publishedAt: 0,
-        },
-        isLive: false,
-        startDate,
-        ticketedShow: show,
-      });
-    });
-
-    return Array.from(rowsByShowId.values()).sort((a, b) => {
-      if (a.isLive && !b.isLive) return -1;
-      if (!a.isLive && b.isLive) return 1;
-      return sortableTime(a.startDate) - sortableTime(b.startDate);
-    });
-  }, [shows, ledgerShows]);
+    const now = Date.now();
+    return rows.filter(
+      (row) =>
+        row.isLive ||
+        (row.startDate ? row.startDate.getTime() >= now : false) ||
+        Boolean(row.ticketedShow),
+    );
+  }, [rows]);
 
   return (
     <div className="space-y-8">

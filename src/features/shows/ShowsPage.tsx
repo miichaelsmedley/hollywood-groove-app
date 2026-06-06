@@ -1,114 +1,45 @@
-import { useState, useEffect } from 'react';
-import { onValue, ref } from 'firebase/database';
-import { db } from '../../lib/firebase';
-import { ShowMeta } from '../../types/firebaseContract';
+import { useMemo } from 'react';
+import { Calendar } from 'lucide-react';
 import ShowCard from './ShowCard';
-import { Calendar, AlertCircle } from 'lucide-react';
-import { getShowBasePath } from '../../lib/mode';
-import { isShowLive, ShowRecordSnapshot } from '../../lib/showStatus';
-
-interface ShowData {
-  showId: string;
-  meta: ShowMeta;
-  isLive: boolean;
-}
+import { useUpcomingShows } from '../../lib/useUpcomingShows';
 
 type ShowsPageMode = 'all' | 'upcoming';
 
+// Events list. Backed by the unified feed (useUpcomingShows) so ticketed gigs
+// that live only in the Firestore ticketing ledger appear here too — not just
+// shows published to RTDB from the Mac Controller.
 export default function ShowsPage({ mode = 'upcoming' }: { mode?: ShowsPageMode }) {
-  const [shows, setShows] = useState<ShowData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { rows, loading } = useUpcomingShows();
 
-  useEffect(() => {
-    // Listen to all shows in Firebase
-    const showsRef = ref(db, getShowBasePath());
+  const shows = useMemo(() => {
+    const now = Date.now();
+    const filtered =
+      mode === 'upcoming'
+        ? rows.filter(
+            (row) => row.isLive || (row.startDate ? row.startDate.getTime() >= now : false),
+          )
+        : rows;
 
-    const unsubscribe = onValue(
-      showsRef,
-      (snapshot) => {
-        setLoading(false);
-        setError(null);
-
-        const data = snapshot.val();
-
-        if (!data) {
-          setShows([]);
-          return;
-        }
-
-        const showRecords = data as Record<string, ShowRecordSnapshot>;
-
-        // Convert Firebase object to array
-        const showsArray: ShowData[] = Object.entries(showRecords).map(([showId, showData]) => {
-          return {
-            showId,
-            meta: showData.meta as ShowMeta,
-            isLive: isShowLive(showData),
-          };
-        });
-
-        // Filter shows that have meta data
-        const validShows = showsArray.filter((show) => show.meta && show.meta.title);
-
-        const now = Date.now();
-        const filteredShows =
-          mode === 'upcoming'
-            ? validShows.filter((show) => {
-                const startTime = new Date(show.meta.startDate).getTime();
-                const isUpcoming = Number.isFinite(startTime) ? startTime >= now : false;
-                return show.isLive || isUpcoming;
-              })
-            : validShows;
-
-        // Sort by start date; keep live show(s) first
-        filteredShows.sort((a, b) => {
-          if (a.isLive && !b.isLive) return -1;
-          if (!a.isLive && b.isLive) return 1;
-
-          const dateA = new Date(a.meta.startDate).getTime();
-          const dateB = new Date(b.meta.startDate).getTime();
-          if (!Number.isFinite(dateA) || !Number.isFinite(dateB)) return 0;
-
-          return mode === 'upcoming' ? dateA - dateB : dateB - dateA;
-        });
-
-        setShows(filteredShows);
-      },
-      (err) => {
-        setLoading(false);
-        setError(err.message);
-        console.error('Firebase read error:', err);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [mode]);
+    if (mode === 'all') {
+      // Most-recent first for the full archive view.
+      return [...filtered].sort((a, b) => {
+        if (a.isLive && !b.isLive) return -1;
+        if (!a.isLive && b.isLive) return 1;
+        const aT = a.startDate ? a.startDate.getTime() : 0;
+        const bT = b.startDate ? b.startDate.getTime() : 0;
+        return bT - aT;
+      });
+    }
+    // 'upcoming' is already live-first then soonest-first from the hook.
+    return filtered;
+  }, [rows, mode]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="text-gray-400">Loading shows from Firebase...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-4 max-w-md">
-          <AlertCircle className="w-16 h-16 text-red-500 mx-auto" />
-          <h3 className="text-xl font-semibold text-red-400">Firebase Error</h3>
-          <p className="text-gray-400">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-primary text-gray-900 font-semibold rounded-lg hover:bg-primary-600 transition-colors"
-          >
-            Retry
-          </button>
+          <p className="text-gray-400">Loading shows…</p>
         </div>
       </div>
     );
