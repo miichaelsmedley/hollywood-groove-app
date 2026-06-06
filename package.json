@@ -1,7 +1,7 @@
 {
   "name": "hollywood-groove-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "deploy:cf": "npm run build && wrangler deploy",
     "deploy:cf:dry": "npm run build && wrangler deploy --dry-run",
-    "test:e2e": "npm run build && playwright test"
+    "test:e2e": "VITE_ENABLE_E2E_FIXTURES=true npm run build && playwright test"
   },
   "dependencies": {
     "@yudiel/react-qr-scanner": "^2.5.1",

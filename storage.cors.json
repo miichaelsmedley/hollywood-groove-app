@@ -1,0 +1,13 @@
+[
+  {
+    "origin": [
+      "https://app.hollywoodgroove.com.au",
+      "https://adeleshow.com.au",
+      "https://hollywoodgroove.com.au",
+      "http://localhost:5173"
+    ],
+    "method": ["GET", "HEAD", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Range", "Accept-Ranges", "Content-Length", "Content-Range"],
+    "maxAgeSeconds": 3600
+  }
+]

@@ -93,6 +93,7 @@
           },
           "scores": {
             ".read": true,
+            ".indexOn": ["totalScore"],
             "$odience": {
               ".write": "false"
             }
@@ -290,6 +291,7 @@
         },
         "scores": {
           ".read": true,
+          ".indexOn": ["totalScore"],
           "$odience": {
             ".write": "false"
           }

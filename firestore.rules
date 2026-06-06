@@ -94,6 +94,11 @@ service cloud.firestore {
       allow create, update, delete: if isPlatformAdmin();
     }
 
+    match /eventSlugs/{slug} {
+      allow read: if isPlatformAdmin() || resource.data.active == true;
+      allow create, update, delete: if isPlatformAdmin();
+    }
+
     match /venues/{venueId} {
       allow read: if isPlatformAdmin()
         || isVenueStaffForVenue(venueId)
@@ -130,7 +135,15 @@ service cloud.firestore {
       match /ticketTypes/{ticketTypeId} {
         allow read: if isPlatformAdmin()
           || isVenueStaffForShow(showId)
-          || (showExists(showId) && isPublicShow(showData(showId)) && resource.data.active == true);
+          || (showExists(showId) && isPublicShow(showData(showId)));
+        allow create, update, delete: if isPlatformAdmin();
+      }
+
+      match /promoCodes/{promoCodeId} {
+        allow get: if isPlatformAdmin()
+          || isVenueStaffForShow(showId)
+          || (showExists(showId) && isPublicShow(showData(showId)));
+        allow list: if isPlatformAdmin() || isVenueStaffForShow(showId);
         allow create, update, delete: if isPlatformAdmin();
       }
     }
