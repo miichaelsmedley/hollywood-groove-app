@@ -477,6 +477,9 @@ function EmptyState({ children }: { children: ReactNode }) {
   );
 }
 
+const COMPACT_FIELD_CLASS =
+  "input-cinema min-h-9 rounded-md px-2 py-1.5 text-[13px] leading-tight";
+
 function TicketingCoAdminsPanel() {
   const [email, setEmail] = useState("");
   const [busyAction, setBusyAction] = useState<"grant" | "revoke" | null>(null);
@@ -544,7 +547,8 @@ function TicketingCoAdminsPanel() {
           <p className="text-sm text-cinema-600">
             Grant or revoke the event_admin ticketing claim for band members.
             They must have signed in to Hollywood Groove at least once with this
-            email so an Auth account exists.
+            email so an Auth account exists. The matching PRIS user is synced
+            when that CRM account exists.
           </p>
         </div>
       </div>
@@ -717,7 +721,7 @@ function IssueCompTicketPanel({
     <section className="rounded-xl border border-cinema-200 bg-cinema-50 p-4">
       <details open>
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-          <span className="inline-flex items-center gap-2 text-xl font-bold text-cinema-900">
+          <span className="inline-flex items-center gap-2 text-lg font-bold text-cinema-900">
             <Gift className="w-5 h-5 text-primary" />
             Issue comp ticket
           </span>
@@ -726,8 +730,11 @@ function IssueCompTicketPanel({
           </span>
         </summary>
 
-        <form onSubmit={handleSubmit} className="mt-4 grid gap-3 lg:grid-cols-6">
-          <label className="space-y-1 lg:col-span-2">
+        <form
+          onSubmit={handleSubmit}
+          className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1.4fr)_72px_92px]"
+        >
+          <label className="min-w-0 space-y-1">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
               Show
             </span>
@@ -737,7 +744,7 @@ function IssueCompTicketPanel({
                 setShowId(event.target.value);
                 setTicketTypeId("");
               }}
-              className="input-cinema"
+              className={COMPACT_FIELD_CLASS}
               disabled={submitting || issuableShows.length === 0}
             >
               {issuableShows.length === 0 ? (
@@ -752,14 +759,14 @@ function IssueCompTicketPanel({
             </select>
           </label>
 
-          <label className="space-y-1 lg:col-span-2">
+          <label className="min-w-0 space-y-1">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
               Ticket type
             </span>
             <select
               value={ticketTypeId}
               onChange={(event) => setTicketTypeId(event.target.value)}
-              className="input-cinema"
+              className={COMPACT_FIELD_CLASS}
               disabled={submitting || ticketTypesLoading || ticketTypes.length === 0}
             >
               {ticketTypesLoading ? (
@@ -783,7 +790,7 @@ function IssueCompTicketPanel({
             <input
               value={quantity}
               onChange={(event) => setQuantity(event.target.value)}
-              className="input-cinema"
+              className={`${COMPACT_FIELD_CLASS} text-center`}
               inputMode="numeric"
               disabled={submitting}
             />
@@ -793,51 +800,51 @@ function IssueCompTicketPanel({
             <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
               Available
             </span>
-            <div className="min-h-11 rounded-lg border border-cinema-200 bg-white px-3 py-2 text-sm font-bold text-cinema-900">
+            <div className="flex min-h-9 items-center rounded-md border border-cinema-200 bg-cinema px-2 py-1.5 text-[13px] font-bold leading-tight text-cinema-900">
               {selectedTicketType ? available : "-"}
             </div>
           </div>
 
-          <label className="space-y-1 lg:col-span-2">
+          <label className="min-w-0 space-y-1 xl:col-span-2">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
               Recipient name
             </span>
             <input
               value={recipientName}
               onChange={(event) => setRecipientName(event.target.value)}
-              className="input-cinema"
+              className={COMPACT_FIELD_CLASS}
               disabled={submitting}
               autoComplete="name"
             />
           </label>
 
-          <label className="space-y-1 lg:col-span-2">
+          <label className="min-w-0 space-y-1 xl:col-span-2">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
               Recipient email
             </span>
             <input
               value={recipientEmail}
               onChange={(event) => setRecipientEmail(event.target.value)}
-              className="input-cinema"
+              className={COMPACT_FIELD_CLASS}
               disabled={submitting}
               autoComplete="email"
               inputMode="email"
             />
           </label>
 
-          <label className="space-y-1 lg:col-span-2">
+          <label className="min-w-0 space-y-1 xl:col-span-3">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
               Note
             </span>
             <input
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              className="input-cinema"
+              className={COMPACT_FIELD_CLASS}
               disabled={submitting}
             />
           </label>
 
-          <div className="flex flex-col gap-2 lg:col-span-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 md:col-span-2 sm:flex-row sm:items-center sm:justify-between xl:col-span-4">
             <div className="min-h-5 text-xs">
               {ticketTypesError && (
                 <span className="text-red-700">{ticketTypesError.message}</span>
