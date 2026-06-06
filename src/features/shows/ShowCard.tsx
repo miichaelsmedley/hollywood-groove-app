@@ -36,9 +36,17 @@ export default function ShowCard({
     ticketedShow?.status !== 'cancelled' &&
     ticketedShow?.status !== 'completed';
 
+  // Where a click on the card lands:
+  //  - live engagement show → the live/join detail page
+  //  - ticketed (not yet live) → straight to the dedicated purchase page
+  //  - otherwise → the show detail page
+  const ticketingShowId = ticketedShow?.id ?? showId;
+  const cardHref =
+    !isLive && hasInternalTickets ? `/event/${ticketingShowId}` : `/shows/${showId}`;
+
   return (
     <Link
-      to={`/shows/${showId}`}
+      to={cardHref}
       className="block bg-gray-900 rounded-lg p-6 border-2 border-gray-800 hover:border-primary transition-all transform hover:scale-[1.02] relative overflow-hidden"
     >
       {/* Live Badge */}
