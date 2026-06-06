@@ -12,7 +12,7 @@
 // email-link sign-in round-trip doesn't lose it.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import {
@@ -22,6 +22,7 @@ import {
   Loader2,
   AlertCircle,
   ShieldCheck,
+  ArrowLeft,
   ArrowRight,
   Lock,
   CheckCircle2,
@@ -565,16 +566,38 @@ function EventShell({
   signedIn: boolean;
   children: React.ReactNode;
 }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  // Browser-back when we have in-app history (returns the buyer to the show
+  // detail or marketing-site ad they came from); otherwise fall back to Shows.
+  const handleBack = () => {
+    if (location.key !== "default") navigate(-1);
+    else navigate("/shows");
+  };
+
   return (
     <div className="min-h-screen bg-cinema text-white flex flex-col">
       <header className="border-b border-cinema-200">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <span className="font-display text-lg sm:text-xl text-primary">
-            {frontName}
-          </span>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <button
+              type="button"
+              onClick={handleBack}
+              aria-label="Go back"
+              className="inline-flex h-9 w-9 -ml-1.5 flex-shrink-0 items-center justify-center rounded-lg text-cinema-700 hover:text-white hover:bg-cinema-100 transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <Link
+              to="/"
+              className="font-display text-lg sm:text-xl text-primary hover:opacity-80 transition-opacity truncate"
+            >
+              {frontName}
+            </Link>
+          </div>
           <Link
             to={getTicketWalletPath(frontId)}
-            className="text-sm font-semibold text-cinema-700 hover:text-white inline-flex items-center gap-1.5 transition-colors"
+            className="flex-shrink-0 text-sm font-semibold text-cinema-700 hover:text-white inline-flex items-center gap-1.5 transition-colors"
           >
             <Ticket className="w-4 h-4" />
             {signedIn ? "My tickets" : "Sign in"}
