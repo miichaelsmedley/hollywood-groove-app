@@ -1,26 +1,33 @@
-// Ticket-claim landing page at /tickets/claim.
+// Ticket-claim landing page at /tickets/claim?show=<showId>.
 //
-// This is the target of the "you've been sent a ticket" invite email. The
-// recipient MUST sign in with the email the ticket was sent to, so the server
-// can match their verified email to the pending share claim and move the
-// ticket into their wallet. Plain /tickets never prompted a sign-in, so a
-// shared ticket could silently go unclaimed — this page closes that gap and
-// handles the "you're signed in as the wrong account" case.
+// Target of the "you've been sent a ticket" invite email. Shows the event the
+// recipient is being given a ticket to, then has them sign in / sign up with
+// the invited email so the server can match their verified email to the
+// pending share claim and move the ticket into their wallet. Handles the
+// "signed in as the wrong account" case explicitly.
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { onAuthStateChanged, signOut } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 import {
   Loader2,
   Ticket,
   CheckCircle2,
   AlertCircle,
   LogOut,
+  Calendar,
+  MapPin,
+  Gift,
 } from "lucide-react";
 import { auth } from "../lib/firebase";
 import { signInWithGoogle } from "../lib/auth";
-import { claimMyPendingTickets } from "../lib/firebaseTicketing";
+import {
+  claimMyPendingTickets,
+  firestoreTicketing,
+} from "../lib/firebaseTicketing";
 import EmailLinkSignIn from "../features/auth/EmailLinkSignIn";
+import type { TicketedShow, TicketVenue } from "../types/ticketingContract";
 
 type ClaimState =
   | "checking"
@@ -30,13 +37,58 @@ type ClaimState =
   | "none_found"
   | "error";
 
+function toDate(value: unknown): Date | null {
+  if (
+    value &&
+    typeof (value as { toMillis?: () => number }).toMillis === "function"
+  ) {
+    return new Date((value as { toMillis: () => number }).toMillis());
+  }
+  if (value instanceof Date) return value;
+  if (typeof value === "number") return new Date(value);
+  return null;
+}
+
 export default function ClaimTicket() {
+  const [params] = useSearchParams();
+  const showId = params.get("show");
+  const [show, setShow] = useState<(TicketedShow & { id: string }) | null>(null);
+  const [venue, setVenue] = useState<TicketVenue | null>(null);
   const [state, setState] = useState<ClaimState>("checking");
   const [signedInEmail, setSignedInEmail] = useState<string | null>(null);
   const [claimedCount, setClaimedCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [signingInGoogle, setSigningInGoogle] = useState(false);
   const processedUid = useRef<string | null>(null);
+
+  // Public show details for context (a published show is readable pre-sign-in).
+  useEffect(() => {
+    if (!showId) return;
+    let active = true;
+    getDoc(doc(firestoreTicketing, "shows", showId))
+      .then((snap) => {
+        if (active && snap.exists())
+          setShow({ id: snap.id, ...(snap.data() as TicketedShow) });
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [showId]);
+
+  useEffect(() => {
+    const venueId = show?.venueId;
+    if (!venueId) return;
+    let active = true;
+    getDoc(doc(firestoreTicketing, "venues", venueId))
+      .then((snap) => {
+        if (active && snap.exists()) setVenue(snap.data() as TicketVenue);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [show?.venueId]);
 
   const runClaim = useCallback(async () => {
     setState("claiming");
@@ -48,7 +100,7 @@ export default function ClaimTicket() {
       setState(n > 0 ? "claimed" : "none_found");
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "We couldn't claim your ticket.",
+        err instanceof Error ? err.message : "We couldn't accept your ticket.",
       );
       setState("error");
     }
@@ -74,9 +126,8 @@ export default function ClaimTicket() {
     setSigningInGoogle(true);
     try {
       await signInWithGoogle();
-      // onAuthStateChanged drives the next state once sign-in lands.
     } catch {
-      // Swallow popup-cancel / transient errors; the listener handles success.
+      // Listener drives the next state; ignore popup-cancel/transient errors.
     } finally {
       setSigningInGoogle(false);
     }
@@ -88,17 +139,44 @@ export default function ClaimTicket() {
     setState("need_signin");
   };
 
+  const startDate = useMemo(() => toDate(show?.startDate), [show]);
+
+  const eventCard = show ? (
+    <div className="rounded-xl border border-cinema-200 bg-cinema-100/50 p-3 text-left space-y-1.5">
+      <p className="font-bold text-cinema-900">{show.title}</p>
+      {startDate && (
+        <p className="text-xs text-cinema-700 flex items-center gap-1.5">
+          <Calendar className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+          {startDate.toLocaleString("en-AU", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </p>
+      )}
+      {venue?.name && (
+        <p className="text-xs text-cinema-700 flex items-center gap-1.5">
+          <MapPin className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+          {venue.name}
+        </p>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="max-w-md mx-auto py-6">
       <div className="card-cinema p-6 text-center space-y-4">
-        <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center mx-auto">
-          <Ticket className="w-6 h-6 text-primary" />
-        </div>
-
         {(state === "checking" || state === "claiming") && (
           <>
+            <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center mx-auto">
+              <Ticket className="w-6 h-6 text-primary" />
+            </div>
             <h1 className="text-xl font-bold text-cinema-900">
-              {state === "claiming" ? "Adding your ticket…" : "Just a moment…"}
+              {state === "claiming"
+                ? "Adding your ticket…"
+                : "Just a moment…"}
             </h1>
             <Loader2 className="w-6 h-6 animate-spin text-primary mx-auto" />
           </>
@@ -106,12 +184,17 @@ export default function ClaimTicket() {
 
         {state === "need_signin" && (
           <>
+            <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center mx-auto">
+              <Gift className="w-6 h-6 text-primary" />
+            </div>
             <h1 className="text-xl font-bold text-cinema-900">
-              You've been sent a ticket
+              You've been given a ticket
             </h1>
+            {eventCard}
             <p className="text-sm text-cinema-600">
-              Sign in with the email address this invite was sent to, and the
-              ticket will be added to your wallet.
+              To accept it, sign in or create a free account with the email this
+              invite was sent to. Your ticket — with its own QR code — then
+              appears in your wallet.
             </p>
             <button
               type="button"
@@ -122,7 +205,7 @@ export default function ClaimTicket() {
               {signingInGoogle ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
-                "Continue with Google"
+                "Accept with Google"
               )}
             </button>
             <div className="relative">
@@ -131,24 +214,25 @@ export default function ClaimTicket() {
               </div>
               <div className="relative flex justify-center text-xs">
                 <span className="px-2 bg-cinema-50 text-cinema-500">
-                  or use any email
+                  or accept with any email
                 </span>
               </div>
             </div>
-            <EmailLinkSignIn returnPath="/tickets/claim" />
+            <EmailLinkSignIn returnPath={`/tickets/claim${showId ? `?show=${encodeURIComponent(showId)}` : ""}`} />
           </>
         )}
 
         {state === "claimed" && (
           <>
-            <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
+            <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
             <h1 className="text-xl font-bold text-cinema-900">
-              Ticket added to your wallet!
+              Ticket accepted! 🎟
             </h1>
+            {eventCard}
             <p className="text-sm text-cinema-600">
               {claimedCount > 1
                 ? `${claimedCount} tickets are now in your wallet.`
-                : "Your ticket is ready — show its QR code at the door."}
+                : "It's in your wallet — show its QR code at the door."}
             </p>
             <Link
               to="/tickets"
@@ -163,7 +247,7 @@ export default function ClaimTicket() {
           <>
             <AlertCircle className="w-10 h-10 text-amber-500 mx-auto" />
             <h1 className="text-xl font-bold text-cinema-900">
-              No ticket to claim
+              No ticket to accept
             </h1>
             <p className="text-sm text-cinema-600">
               We couldn't find a ticket waiting for{" "}
