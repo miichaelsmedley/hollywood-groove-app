@@ -26,6 +26,8 @@ import {
   Send,
   ShieldCheck,
   Ticket,
+  UserMinus,
+  UserPlus,
   Users,
 } from "lucide-react";
 import {
@@ -33,6 +35,7 @@ import {
   issueCompTicket,
   refundOrder,
   savePromoCode,
+  setAdminClaim,
   ticketAvailableCount,
   usePromoCodes,
   useTicketTypes,
@@ -280,6 +283,8 @@ export default function AdminTicketing() {
 
       {isPlatformAdmin && <SelfTicketGigsPanel />}
 
+      {isPlatformAdmin && <TicketingCoAdminsPanel />}
+
       {hasTicketingAdminClaim && <IssueCompTicketPanel shows={shows} />}
 
       {actionError && (
@@ -469,6 +474,142 @@ function EmptyState({ children }: { children: ReactNode }) {
     <div className="rounded-xl border border-cinema-200 bg-cinema-50 p-4 text-sm text-cinema-700">
       {children}
     </div>
+  );
+}
+
+function TicketingCoAdminsPanel() {
+  const [email, setEmail] = useState("");
+  const [busyAction, setBusyAction] = useState<"grant" | "revoke" | null>(null);
+  const [feedback, setFeedback] = useState<{
+    tone: "ok" | "error";
+    message: string;
+  } | null>(null);
+
+  const targetEmail = email.trim().toLowerCase();
+  const canSubmit = targetEmail.includes("@") && busyAction === null;
+
+  const updateCoAdmin = async (grant: boolean) => {
+    if (!canSubmit) return;
+    if (
+      !grant &&
+      !window.confirm(`Revoke ticketing co-admin access for ${targetEmail}?`)
+    ) {
+      return;
+    }
+
+    const action = grant ? "grant" : "revoke";
+    setBusyAction(action);
+    setFeedback(null);
+    try {
+      const result = await setAdminClaim({
+        email: targetEmail,
+        role: "event_admin",
+        grant,
+      });
+      setFeedback({
+        tone: "ok",
+        message: grant
+          ? `Granted ticketing co-admin access to ${targetEmail}. ${result.note}`
+          : `Revoked ticketing co-admin access for ${targetEmail}. ${result.note}`,
+      });
+      setEmail("");
+    } catch (err) {
+      setFeedback({
+        tone: "error",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Could not update ticketing co-admin access.",
+      });
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleGrant = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await updateCoAdmin(true);
+  };
+
+  return (
+    <section className="rounded-xl border border-cinema-200 bg-cinema-50 p-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-primary" />
+            <h2 className="text-xl font-bold text-cinema-900">
+              Ticketing co-admins
+            </h2>
+          </div>
+          <p className="text-sm text-cinema-600">
+            Grant or revoke the event_admin ticketing claim for band members.
+            They must have signed in to Hollywood Groove at least once with this
+            email so an Auth account exists.
+          </p>
+        </div>
+      </div>
+
+      <form onSubmit={handleGrant} className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
+        <label className="space-y-1">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
+            Band member email
+          </span>
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            className="input-cinema"
+            disabled={busyAction !== null}
+            autoComplete="email"
+            inputMode="email"
+            placeholder="bandmate@example.com"
+          />
+        </label>
+
+        <div className="flex items-end">
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-cinema hover:bg-primary/90 disabled:opacity-60 lg:w-auto"
+          >
+            {busyAction === "grant" ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <UserPlus className="w-4 h-4" />
+            )}
+            Grant co-admin
+          </button>
+        </div>
+
+        <div className="flex items-end">
+          <button
+            type="button"
+            onClick={() => updateCoAdmin(false)}
+            disabled={!canSubmit}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-red-300 px-4 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-60 lg:w-auto"
+          >
+            {busyAction === "revoke" ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <UserMinus className="w-4 h-4" />
+            )}
+            Revoke co-admin
+          </button>
+        </div>
+      </form>
+
+      {feedback && (
+        <div
+          className={`mt-3 rounded-lg border p-3 text-sm ${
+            feedback.tone === "ok"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-red-200 bg-red-50 text-red-800"
+          }`}
+        >
+          {feedback.message}
+        </div>
+      )}
+    </section>
   );
 }
 

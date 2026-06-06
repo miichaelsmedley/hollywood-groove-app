@@ -365,6 +365,40 @@ export async function issueCompTicket(
 }
 
 // ---------------------------------------------------------------------------
+// setAdminClaim callable wrapper (platform-admin only)
+// ---------------------------------------------------------------------------
+
+export type AdminClaimRole =
+  | "platform_admin"
+  | "event_admin"
+  | "venue_manager"
+  | "door_staff";
+
+export interface SetAdminClaimInput {
+  targetUid?: string;
+  email?: string;
+  role: AdminClaimRole;
+  grant: boolean;
+}
+
+export interface SetAdminClaimResult {
+  ok: true;
+  note: string;
+}
+
+const setAdminClaimCallable = httpsCallable<
+  SetAdminClaimInput,
+  SetAdminClaimResult
+>(functions, "setAdminClaim");
+
+export async function setAdminClaim(
+  input: SetAdminClaimInput,
+): Promise<SetAdminClaimResult> {
+  const response = await setAdminClaimCallable(input);
+  return response.data;
+}
+
+// ---------------------------------------------------------------------------
 // Venue staff management callables (Phase 4a)
 // ---------------------------------------------------------------------------
 
