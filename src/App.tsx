@@ -41,6 +41,7 @@ const TicketsSuccess = lazy(() => import('./pages/TicketsSuccess'));
 const TicketsCancelled = lazy(() => import('./pages/TicketsCancelled'));
 const TicketsHub = lazy(() => import('./pages/TicketsHub'));
 const TicketView = lazy(() => import('./pages/TicketView'));
+const ClaimTicket = lazy(() => import('./pages/ClaimTicket'));
 const AdminVenueStaff = lazy(() => import('./pages/AdminVenueStaff'));
 const AuthFinish = lazy(() => import('./pages/AuthFinish'));
 const EventTicketing = lazy(() => import('./pages/EventTicketing'));
@@ -173,6 +174,7 @@ export default function App() {
               <Route path="tickets/success" element={<TicketsSuccess />} />
               <Route path="tickets/cancelled" element={<TicketsCancelled />} />
               <Route path="tickets/view/:ticketId" element={<TicketView />} />
+              <Route path="tickets/claim" element={<ClaimTicket />} />
               <Route
                 path="admin/ticketing"
                 element={
