@@ -10,15 +10,25 @@ import {
   ArrowLeft,
   Building2,
   CheckCircle2,
+  Cloud,
+  Download,
   Eye,
   EyeOff,
   Loader2,
   MapPin,
   Pencil,
   Plus,
+  RefreshCw,
+  Search,
   Users,
 } from "lucide-react";
-import { saveVenue, useAdminVenues } from "../lib/firebaseTicketing";
+import {
+  importPrisVenue,
+  saveVenue,
+  searchPrisVenues,
+  useAdminVenues,
+} from "../lib/firebaseTicketing";
+import type { PrisVenueSearchItem } from "../lib/firebaseTicketing";
 import type { TicketVenue } from "../types/ticketingContract";
 
 interface VenueFormState {
@@ -70,9 +80,19 @@ export default function AdminVenues() {
   const [editingVenueId, setEditingVenueId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: "ok" | "error"; message: string } | null>(null);
+  const [prisSearch, setPrisSearch] = useState("");
+  const [prisType, setPrisType] = useState<"venue" | "all">("venue");
+  const [prisResults, setPrisResults] = useState<PrisVenueSearchItem[]>([]);
+  const [prisSearching, setPrisSearching] = useState(false);
+  const [prisImportingId, setPrisImportingId] = useState<number | null>(null);
+  const [prisHasSearched, setPrisHasSearched] = useState(false);
 
   const sortedVenues = useMemo(
     () => [...venues].sort((a, b) => a.name.localeCompare(b.name)),
+    [venues]
+  );
+  const linkedPrisCompanyIds = useMemo(
+    () => new Set(venues.map((venue) => venue.pris?.companyId).filter(Boolean)),
     [venues]
   );
 
@@ -91,6 +111,52 @@ export default function AdminVenues() {
     setForm(venueToForm(venue));
     setFeedback(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const runPrisSearch = async (event?: React.FormEvent) => {
+    event?.preventDefault();
+    setPrisSearching(true);
+    setPrisHasSearched(true);
+    setFeedback(null);
+    try {
+      const result = await searchPrisVenues({
+        search: prisSearch,
+        type: prisType,
+        limit: 12,
+      });
+      setPrisResults(result.venues);
+    } catch (err) {
+      console.error("searchPrisVenues failed", err);
+      setPrisResults([]);
+      setFeedback({
+        tone: "error",
+        message: err instanceof Error ? err.message : "Could not search PRIS venues.",
+      });
+    } finally {
+      setPrisSearching(false);
+    }
+  };
+
+  const handleImportPrisVenue = async (venue: PrisVenueSearchItem) => {
+    setPrisImportingId(venue.id);
+    setFeedback(null);
+    try {
+      const result = await importPrisVenue({ prisCompanyId: venue.id });
+      setFeedback({
+        tone: "ok",
+        message: result.imported
+          ? `${result.name} imported from PRIS.`
+          : `${result.name} synced from PRIS.`,
+      });
+    } catch (err) {
+      console.error("importPrisVenue failed", err);
+      setFeedback({
+        tone: "error",
+        message: err instanceof Error ? err.message : "Could not import this PRIS venue.",
+      });
+    } finally {
+      setPrisImportingId(null);
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -194,6 +260,123 @@ export default function AdminVenues() {
           </div>
         </section>
       )}
+
+      <section className="card-cinema space-y-4 p-4">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <Cloud className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-bold text-cinema-900">Import from PRIS</h2>
+          </div>
+          <span className="rounded-full bg-cinema-100 px-2.5 py-1 text-xs font-semibold text-cinema-600">
+            Cloud CRM
+          </span>
+        </header>
+
+        <form onSubmit={runPrisSearch} className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_auto]">
+          <label className="block">
+            <span className="text-xs font-medium text-cinema-700">Search</span>
+            <div className="relative mt-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cinema-400" />
+              <input
+                className="input-cinema pl-9 pr-3 py-2"
+                value={prisSearch}
+                onChange={(event) => setPrisSearch(event.target.value)}
+                placeholder="Venue, agent, suburb, domain"
+                disabled={prisSearching}
+              />
+            </div>
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-medium text-cinema-700">Records</span>
+            <select
+              className="input-cinema mt-1 px-3 py-2"
+              value={prisType}
+              onChange={(event) => setPrisType(event.target.value as "venue" | "all")}
+              disabled={prisSearching}
+            >
+              <option value="venue">Venues</option>
+              <option value="all">Venues + agents</option>
+            </select>
+          </label>
+
+          <button
+            type="submit"
+            disabled={prisSearching}
+            className="btn-primary mt-5 inline-flex min-h-11 items-center justify-center gap-2 px-4 py-2 text-sm font-bold disabled:opacity-50"
+          >
+            {prisSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            Search
+          </button>
+        </form>
+
+        {prisHasSearched && (
+          <div className="space-y-2">
+            {prisSearching ? (
+              <div className="flex min-h-24 items-center justify-center rounded-xl border border-cinema-200 bg-cinema-50">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              </div>
+            ) : prisResults.length === 0 ? (
+              <div className="rounded-xl border border-cinema-200 bg-cinema-50 p-4 text-sm text-cinema-700">
+                No PRIS records found.
+              </div>
+            ) : (
+              prisResults.map((venue) => {
+                const isLinked = linkedPrisCompanyIds.has(venue.id);
+                const canImport = (venue.companyType || "").toLowerCase() === "venue";
+                return (
+                  <article
+                    key={venue.id}
+                    className="rounded-xl border border-cinema-200 bg-cinema-50 p-4"
+                  >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="truncate text-sm font-bold text-cinema-900">{venue.name}</h3>
+                          <span className="rounded-full bg-cinema-200 px-2 py-0.5 text-[11px] font-bold text-cinema-700">
+                            {venue.companyType || "PRIS"}
+                          </span>
+                          {isLinked && (
+                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+                              Linked
+                            </span>
+                          )}
+                        </div>
+                        {venue.address && (
+                          <p className="flex items-center gap-1 text-xs text-cinema-600">
+                            <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+                            <span className="truncate">{venue.address}</span>
+                          </p>
+                        )}
+                        <p className="text-[11px] text-cinema-500">
+                          {venue.peopleCount} people
+                          {typeof venue.capacity === "number" ? ` · Capacity ${venue.capacity}` : ""}
+                          {venue.contact?.email ? ` · ${venue.contact.email}` : ""}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleImportPrisVenue(venue)}
+                        disabled={!canImport || prisImportingId === venue.id}
+                        className="inline-flex min-h-10 flex-shrink-0 items-center justify-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-cinema hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-cinema-200 disabled:text-cinema-500"
+                      >
+                        {prisImportingId === venue.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : isLinked ? (
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        ) : (
+                          <Download className="h-3.5 w-3.5" />
+                        )}
+                        {canImport ? (isLinked ? "Sync" : "Import") : "Venue only"}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
+        )}
+      </section>
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <form onSubmit={handleSubmit} className="card-cinema space-y-4 p-4">
@@ -367,6 +550,11 @@ export default function AdminVenues() {
                           {venue.public ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
                           {venue.public ? "Public" : "Private"}
                         </span>
+                        {venue.pris?.companyId && (
+                          <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-bold text-sky-800">
+                            PRIS #{venue.pris.companyId}
+                          </span>
+                        )}
                       </div>
                       {venue.address && (
                         <p className="flex items-center gap-1 text-xs text-cinema-600">
@@ -383,6 +571,11 @@ export default function AdminVenues() {
                         <p className="truncate text-[11px] text-cinema-500">
                           {venue.contact.name ? `${venue.contact.name} · ` : ""}
                           {venue.contact.email}
+                        </p>
+                      )}
+                      {venue.pris?.peopleCount !== undefined && (
+                        <p className="text-[11px] text-cinema-500">
+                          {venue.pris.peopleCount} linked PRIS people
                         </p>
                       )}
                     </div>

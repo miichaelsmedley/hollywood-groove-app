@@ -13,7 +13,11 @@ export type TicketingTimestamp =
 export type SellingFrontId = "hollywood_groove" | "adele_show" | (string & {});
 export type TicketCurrency = "AUD";
 
-export type TicketingRole = "platform_admin" | "event_admin" | "venue_manager" | "door_staff";
+export type TicketingRole =
+  | "platform_admin"
+  | "event_admin"
+  | "venue_manager"
+  | "door_staff";
 
 export type ShowTicketingStatus =
   | "draft"
@@ -40,10 +44,25 @@ export type TicketStatus =
   | "disputed"
   | "lost_to_dispute";
 
-export type TicketPaymentType = "charge" | "refund" | "dispute" | "comp" | "cash";
-export type TicketPaymentStatus = "pending" | "succeeded" | "failed" | "refunded" | "disputed";
+export type TicketPaymentType =
+  | "charge"
+  | "refund"
+  | "dispute"
+  | "comp"
+  | "cash";
+export type TicketPaymentStatus =
+  | "pending"
+  | "succeeded"
+  | "failed"
+  | "refunded"
+  | "disputed";
 
-export type TicketRefundStatus = "pending" | "succeeded" | "failed" | "cancelled";
+export type TicketRefundStatus =
+  | "pending"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+export type PromoDiscountType = "percent" | "amount";
 
 export type TicketScanResult =
   | "valid"
@@ -72,7 +91,8 @@ export type TicketAuditAction =
   | "ticket_type_update"
   | "ticket_scan"
   | "ticket_issue"
-  | "reservation_expire";
+  | "reservation_expire"
+  | "pris_venue_import";
 
 export interface TicketSellingFront {
   displayName: string;
@@ -117,6 +137,21 @@ export interface TicketVenue {
   capacity?: number;
   public: boolean;
   stripeConnectAccountId?: string | null;
+  pris?: {
+    companyId: number;
+    source: "pris-cloud-crm";
+    companyType?: string | null;
+    companyArea?: string | null;
+    workspaceId?: number | null;
+    companyUpdatedAt?: string | null;
+    lastSyncedAt?: TicketingTimestamp;
+    lastSyncedByUid?: string;
+    syncStatus?: "synced" | "error";
+    peopleCount?: number;
+    primaryContactId?: string | number | null;
+    website?: string | null;
+    domain?: string | null;
+  };
   createdAt: TicketingTimestamp;
   updatedAt: TicketingTimestamp;
 }
@@ -141,10 +176,12 @@ export interface TicketedShow {
   sellingFrontId: SellingFrontId;
   startDate: TicketingTimestamp;
   venueId: string;
+  venueName?: string;
   status: ShowTicketingStatus;
   capacity: number;
   ticketingEnabled: boolean;
   currency: TicketCurrency;
+  publicSlug?: string;
   refundPolicy: TicketRefundPolicy;
   rtdbShowId?: string;
   eventAdminUids?: string[];
@@ -190,6 +227,7 @@ export interface TicketOrderLineItem {
   bookingFeeCents: number;
   subtotalCents: number;
   bookingFeeTotalCents: number;
+  discountCents?: number;
   totalCents: number;
 }
 
@@ -215,12 +253,39 @@ export interface TicketOrder {
   stripePaymentIntentId?: string | null;
   subtotalCents: number;
   bookingFeeCents: number;
+  discountCents?: number;
+  promoCode?: {
+    id: string;
+    code: string;
+    discountType: PromoDiscountType;
+    percentOff?: number | null;
+    amountOffCents?: number | null;
+    discountCents: number;
+  } | null;
   stripeFeeCents?: number | null;
   totalCents: number;
   currency: TicketCurrency;
   createdAt: TicketingTimestamp;
   reservationExpiresAt?: TicketingTimestamp | null;
   paidAt?: TicketingTimestamp | null;
+}
+
+// Path: /shows/{showId}/promoCodes/{promoCodeId}
+export interface TicketPromoCode {
+  code: string;
+  active: boolean;
+  discountType: PromoDiscountType;
+  percentOff?: number | null;
+  amountOffCents?: number | null;
+  validFrom?: TicketingTimestamp | null;
+  validUntil?: TicketingTimestamp | null;
+  maxRedemptions?: number | null;
+  redemptionCount?: number;
+  reservationCount?: number;
+  ticketTypeIds?: string[];
+  minQuantity?: number | null;
+  createdAt?: TicketingTimestamp;
+  updatedAt?: TicketingTimestamp;
 }
 
 // Path: /orders/{orderId}/payments/{paymentId}
@@ -292,7 +357,15 @@ export interface TicketRefund {
 export interface TicketAuditLogEntry {
   actorUid: string;
   action: TicketAuditAction;
-  targetType: "sellingFront" | "venue" | "show" | "ticketType" | "order" | "ticket" | "refund" | "role";
+  targetType:
+    | "sellingFront"
+    | "venue"
+    | "show"
+    | "ticketType"
+    | "order"
+    | "ticket"
+    | "refund"
+    | "role";
   targetId: string;
   before?: Record<string, unknown> | null;
   after?: Record<string, unknown> | null;
@@ -300,7 +373,10 @@ export interface TicketAuditLogEntry {
   serverTimestamp: TicketingTimestamp;
 }
 
-export const TICKETING_SELLING_FRONTS: Record<"hollywoodGroove" | "adeleShow", SellingFrontId> = {
+export const TICKETING_SELLING_FRONTS: Record<
+  "hollywoodGroove" | "adeleShow",
+  SellingFrontId
+> = {
   hollywoodGroove: "hollywood_groove",
   adeleShow: "adele_show",
 };

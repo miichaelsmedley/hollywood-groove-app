@@ -14,6 +14,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getFirestore,
   onSnapshot,
   query,
@@ -21,6 +22,8 @@ import {
   orderBy,
   limit,
   serverTimestamp,
+  setDoc,
+  Timestamp,
   updateDoc,
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -31,6 +34,7 @@ import type {
   TicketBuyerSnapshot,
   TicketHolderSnapshot,
   TicketOrder,
+  TicketPromoCode,
   TicketRefund,
   TicketType,
   TicketVenue,
@@ -59,6 +63,7 @@ export interface CreateCheckoutSessionInput {
   showId: string;
   ticketTypeId: string;
   quantity: number;
+  promoCode?: string;
   sellingFrontId?: string;
   buyerSnapshot?: TicketBuyerSnapshot;
   holders?: CheckoutHolderInput[];
@@ -79,10 +84,211 @@ const createCheckoutSessionCallable = httpsCallable<
 >(functions, "createCheckoutSession");
 
 export async function createCheckoutSession(
-  input: CreateCheckoutSessionInput
+  input: CreateCheckoutSessionInput,
 ): Promise<CreateCheckoutSessionResult> {
   const response = await createCheckoutSessionCallable(input);
   return response.data;
+}
+
+// ---------------------------------------------------------------------------
+// Promo-code helpers
+// ---------------------------------------------------------------------------
+
+export interface PromoCodePreview {
+  id: string;
+  code: string;
+  discountCents: number;
+  subtotalAfterDiscountCents: number;
+  totalCents: number;
+  discountType: TicketPromoCode["discountType"];
+  percentOff?: number | null;
+  amountOffCents?: number | null;
+}
+
+export interface SavePromoCodeInput {
+  code: string;
+  active: boolean;
+  discountType: TicketPromoCode["discountType"];
+  percentOff?: number | null;
+  amountOffCents?: number | null;
+  validUntil?: Date | null;
+  maxRedemptions?: number | null;
+}
+
+function timestampToMillis(value: unknown): number {
+  if (
+    value &&
+    typeof (value as { toMillis?: () => number }).toMillis === "function"
+  ) {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (
+    value &&
+    typeof value === "object" &&
+    typeof (value as { seconds?: unknown }).seconds === "number"
+  ) {
+    return (value as { seconds: number }).seconds * 1000;
+  }
+  return 0;
+}
+
+export function normalizePromoCodeInput(value: string): string | null {
+  const code = value.trim().toUpperCase().replace(/\s+/g, "");
+  return /^[A-Z0-9][A-Z0-9_-]{1,31}$/.test(code) ? code : null;
+}
+
+function buildPromoPreview(params: {
+  id: string;
+  promo: TicketPromoCode;
+  quantity: number;
+  ticketTypeId: string;
+  subtotalCents: number;
+  bookingFeeCents: number;
+}): PromoCodePreview {
+  const now = Date.now();
+  if (!params.promo.active) {
+    throw new Error("That code is not active.");
+  }
+  if (timestampToMillis(params.promo.validFrom) > now) {
+    throw new Error("That code is not valid yet.");
+  }
+  const validUntilMillis = timestampToMillis(params.promo.validUntil);
+  if (validUntilMillis > 0 && validUntilMillis < now) {
+    throw new Error("That code has expired.");
+  }
+  const ticketTypeIds = Array.isArray(params.promo.ticketTypeIds)
+    ? params.promo.ticketTypeIds
+    : [];
+  if (
+    ticketTypeIds.length > 0 &&
+    !ticketTypeIds.includes(params.ticketTypeId)
+  ) {
+    throw new Error("That code is not valid for this ticket.");
+  }
+  const minQuantity = Number(params.promo.minQuantity ?? 0);
+  if (
+    Number.isFinite(minQuantity) &&
+    minQuantity > 0 &&
+    params.quantity < minQuantity
+  ) {
+    throw new Error(`That code needs at least ${minQuantity} tickets.`);
+  }
+  const maxRedemptions = Number(params.promo.maxRedemptions ?? 0);
+  if (Number.isFinite(maxRedemptions) && maxRedemptions > 0) {
+    const committed =
+      Number(params.promo.redemptionCount ?? 0) +
+      Number(params.promo.reservationCount ?? 0);
+    if (committed >= maxRedemptions) {
+      throw new Error("That code has reached its limit.");
+    }
+  }
+
+  const rawDiscountCents =
+    params.promo.discountType === "percent"
+      ? Math.round(
+          params.subtotalCents * (Number(params.promo.percentOff ?? 0) / 100),
+        )
+      : Math.round(Number(params.promo.amountOffCents ?? 0));
+  const discountCents = Math.min(
+    params.subtotalCents,
+    Math.max(0, rawDiscountCents),
+  );
+  if (discountCents <= 0) {
+    throw new Error("That code does not discount this order.");
+  }
+  return {
+    id: params.id,
+    code: params.promo.code || params.id,
+    discountType: params.promo.discountType,
+    percentOff: params.promo.percentOff ?? null,
+    amountOffCents: params.promo.amountOffCents ?? null,
+    discountCents,
+    subtotalAfterDiscountCents: params.subtotalCents - discountCents,
+    totalCents: params.subtotalCents - discountCents + params.bookingFeeCents,
+  };
+}
+
+export async function getPromoCodePreview(input: {
+  showId: string;
+  ticketTypeId: string;
+  quantity: number;
+  subtotalCents: number;
+  bookingFeeCents: number;
+  promoCode: string;
+}): Promise<PromoCodePreview> {
+  const code = normalizePromoCodeInput(input.promoCode);
+  if (!code) {
+    throw new Error("Enter a valid promo code.");
+  }
+  let snap;
+  try {
+    snap = await getDoc(
+      doc(firestoreTicketing, "shows", input.showId, "promoCodes", code),
+    );
+  } catch {
+    throw new Error("That promo code was not found.");
+  }
+  if (!snap.exists()) {
+    throw new Error("That promo code was not found.");
+  }
+  return buildPromoPreview({
+    id: snap.id,
+    promo: snap.data() as TicketPromoCode,
+    quantity: input.quantity,
+    ticketTypeId: input.ticketTypeId,
+    subtotalCents: input.subtotalCents,
+    bookingFeeCents: input.bookingFeeCents,
+  });
+}
+
+export async function savePromoCode(
+  showId: string,
+  input: SavePromoCodeInput,
+): Promise<string> {
+  const code = normalizePromoCodeInput(input.code);
+  if (!code) {
+    throw new Error("Enter a valid promo code.");
+  }
+  const percentOff = Number(input.percentOff ?? 0);
+  const amountOffCents = Number(input.amountOffCents ?? 0);
+  if (
+    input.discountType === "percent" &&
+    (!Number.isFinite(percentOff) || percentOff <= 0 || percentOff > 100)
+  ) {
+    throw new Error("Percentage discount must be between 1 and 100.");
+  }
+  if (
+    input.discountType === "amount" &&
+    (!Number.isFinite(amountOffCents) || amountOffCents <= 0)
+  ) {
+    throw new Error("Amount discount must be greater than zero.");
+  }
+
+  await setDoc(
+    doc(firestoreTicketing, "shows", showId, "promoCodes", code),
+    {
+      code,
+      active: input.active,
+      discountType: input.discountType,
+      percentOff: input.discountType === "percent" ? percentOff : null,
+      amountOffCents: input.discountType === "amount" ? amountOffCents : null,
+      validUntil: input.validUntil
+        ? Timestamp.fromDate(input.validUntil)
+        : null,
+      maxRedemptions:
+        typeof input.maxRedemptions === "number" &&
+        Number.isFinite(input.maxRedemptions) &&
+        input.maxRedemptions > 0
+          ? Math.floor(input.maxRedemptions)
+          : null,
+      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+  return code;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,10 +315,12 @@ export interface RefundOrderResult {
 
 const refundOrderCallable = httpsCallable<RefundOrderInput, RefundOrderResult>(
   functions,
-  "refundOrder"
+  "refundOrder",
 );
 
-export async function refundOrder(input: RefundOrderInput): Promise<RefundOrderResult> {
+export async function refundOrder(
+  input: RefundOrderInput,
+): Promise<RefundOrderResult> {
   const response = await refundOrderCallable(input);
   return response.data;
 }
@@ -145,25 +353,37 @@ export type RevokeVenueStaffResult =
   | { ok: true; outcome: "revoked" }
   | { ok: true; outcome: "invite_cancelled"; count: number };
 
-const grantVenueStaffCallable = httpsCallable<GrantVenueStaffInput, GrantVenueStaffResult>(
-  functions,
-  "grantVenueStaff"
-);
-const revokeVenueStaffCallable = httpsCallable<RevokeVenueStaffInput, RevokeVenueStaffResult>(
-  functions,
-  "revokeVenueStaff"
-);
+const grantVenueStaffCallable = httpsCallable<
+  GrantVenueStaffInput,
+  GrantVenueStaffResult
+>(functions, "grantVenueStaff");
+const revokeVenueStaffCallable = httpsCallable<
+  RevokeVenueStaffInput,
+  RevokeVenueStaffResult
+>(functions, "revokeVenueStaff");
 const claimMyPendingVenueStaffInvitesCallable = httpsCallable<
   Record<string, never>,
-  { ok: true; redeemed: Array<{ venueId: string; inviteId: string; role: VenueStaffRole }>; note?: string }
+  {
+    ok: true;
+    redeemed: Array<{
+      venueId: string;
+      inviteId: string;
+      role: VenueStaffRole;
+    }>;
+    note?: string;
+  }
 >(functions, "claimMyPendingVenueStaffInvites");
 
-export async function grantVenueStaff(input: GrantVenueStaffInput): Promise<GrantVenueStaffResult> {
+export async function grantVenueStaff(
+  input: GrantVenueStaffInput,
+): Promise<GrantVenueStaffResult> {
   const response = await grantVenueStaffCallable(input);
   return response.data;
 }
 
-export async function revokeVenueStaff(input: RevokeVenueStaffInput): Promise<RevokeVenueStaffResult> {
+export async function revokeVenueStaff(
+  input: RevokeVenueStaffInput,
+): Promise<RevokeVenueStaffResult> {
   const response = await revokeVenueStaffCallable(input);
   return response.data;
 }
@@ -207,9 +427,145 @@ const validateTicketScanCallable = httpsCallable<
 >(functions, "validateTicketScan");
 
 export async function validateTicketScan(
-  input: ValidateTicketScanInput
+  input: ValidateTicketScanInput,
 ): Promise<ValidateTicketScanResult> {
   const response = await validateTicketScanCallable(input);
+  return response.data;
+}
+
+// ---------------------------------------------------------------------------
+// PRIS venue import bridge (platform-admin only)
+// ---------------------------------------------------------------------------
+
+export interface PrisVenuePerson {
+  id: string;
+  name: string;
+  email: string | null;
+  role: string | null;
+  phone: string | null;
+  location: string | null;
+  updatedAt: string | null;
+}
+
+export interface PrisVenueSearchItem {
+  id: number;
+  name: string;
+  companyType: string | null;
+  companyArea: string | null;
+  workspaceId: number | null;
+  website: string | null;
+  domain: string | null;
+  address: string | null;
+  capacity: number | null;
+  contact: {
+    id?: string | number | null;
+    name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  };
+  people: PrisVenuePerson[];
+  peopleCount: number;
+  updatedAt: string | null;
+  source: "pris-cloud-crm";
+}
+
+export interface SearchPrisVenuesInput {
+  search?: string;
+  type?: "venue" | "agency" | "agent" | "all";
+  limit?: number;
+}
+
+export interface SearchPrisVenuesResult {
+  venues: PrisVenueSearchItem[];
+  count: number;
+}
+
+export interface ImportPrisVenueInput {
+  prisCompanyId: number;
+  public?: boolean;
+}
+
+export interface ImportPrisVenueResult {
+  ok: true;
+  venueId: string;
+  prisCompanyId: number;
+  imported: boolean;
+  name: string;
+}
+
+const searchPrisVenuesCallable = httpsCallable<
+  SearchPrisVenuesInput,
+  SearchPrisVenuesResult
+>(functions, "searchPrisVenues");
+const importPrisVenueCallable = httpsCallable<
+  ImportPrisVenueInput,
+  ImportPrisVenueResult
+>(functions, "importPrisVenue");
+
+export async function searchPrisVenues(
+  input: SearchPrisVenuesInput,
+): Promise<SearchPrisVenuesResult> {
+  const response = await searchPrisVenuesCallable(input);
+  return response.data;
+}
+
+export async function importPrisVenue(
+  input: ImportPrisVenueInput,
+): Promise<ImportPrisVenueResult> {
+  const response = await importPrisVenueCallable(input);
+  return response.data;
+}
+
+// ---------------------------------------------------------------------------
+// PRIS gig → ticketed-show bridge (platform-admin only)
+// ---------------------------------------------------------------------------
+
+export interface SelfTicketGig {
+  id: number;
+  title: string | null;
+  gigDate: string | null;
+  venueName: string | null;
+  sellingFrontId: string | null;
+  ticketingShowId: string | null;
+  ticketingStatus: string | null;
+}
+
+export interface ListSelfTicketGigsResult {
+  gigs: SelfTicketGig[];
+  count: number;
+}
+
+export interface CreateTicketedShowFromGigInput {
+  prisGigId: number;
+}
+
+export interface CreateTicketedShowFromGigResult {
+  ok: true;
+  showId: string;
+  ticketUrl: string;
+  sellingFrontId: string;
+  created: boolean;
+}
+
+const listSelfTicketGigsCallable = httpsCallable<
+  Record<string, never>,
+  ListSelfTicketGigsResult
+>(functions, "listSelfTicketGigs");
+
+const createTicketedShowFromGigCallable = httpsCallable<
+  CreateTicketedShowFromGigInput,
+  CreateTicketedShowFromGigResult
+>(functions, "createTicketedShowFromGig");
+
+export async function listSelfTicketGigs(): Promise<ListSelfTicketGigsResult> {
+  const response = await listSelfTicketGigsCallable({});
+  return response.data;
+}
+
+export async function createTicketedShowFromGig(
+  input: CreateTicketedShowFromGigInput,
+): Promise<CreateTicketedShowFromGigResult> {
+  const response = await createTicketedShowFromGigCallable(input);
   return response.data;
 }
 
@@ -234,7 +590,7 @@ export function useScannableShows(): UseScannableShowsResult {
       collection(firestoreTicketing, "shows"),
       where("ticketingEnabled", "==", true),
       where("status", "in", ["published", "on_sale", "sold_out"]),
-      orderBy("startDate", "desc")
+      orderBy("startDate", "desc"),
     );
     const unsub = onSnapshot(
       q,
@@ -245,12 +601,24 @@ export function useScannableShows(): UseScannableShowsResult {
         }));
         setState({ shows, loading: false, error: null });
       },
-      (err) => setState({ shows: [], loading: false, error: err })
+      (err) => setState({ shows: [], loading: false, error: err }),
     );
     return () => unsub();
   }, []);
 
   return state;
+}
+
+export type UseOnSaleTicketedShowsResult = UseScannableShowsResult;
+
+export function useOnSaleTicketedShows(): UseOnSaleTicketedShowsResult {
+  const state = useScannableShows();
+  return {
+    ...state,
+    shows: state.shows.filter(
+      (show) => show.status === "on_sale" || show.status === "sold_out",
+    ),
+  };
 }
 
 export interface VenueEligibleStaff {
@@ -278,7 +646,9 @@ export interface UseVenueStaffResult {
   error: Error | null;
 }
 
-export function useVenueStaff(venueId: string | undefined): UseVenueStaffResult {
+export function useVenueStaff(
+  venueId: string | undefined,
+): UseVenueStaffResult {
   const [state, setState] = useState<UseVenueStaffResult>({
     staff: [],
     invites: [],
@@ -301,7 +671,7 @@ export function useVenueStaff(venueId: string | undefined): UseVenueStaffResult 
         }));
         setState((prev) => ({ ...prev, staff, loading: false, error: null }));
       },
-      (err) => setState((prev) => ({ ...prev, error: err, loading: false }))
+      (err) => setState((prev) => ({ ...prev, error: err, loading: false })),
     );
     const invitesUnsub = onSnapshot(
       collection(venueRef, "eligibleStaffInvites"),
@@ -314,7 +684,7 @@ export function useVenueStaff(venueId: string | undefined): UseVenueStaffResult 
       },
       // Non-admins can't read invites; swallow rather than surfacing as an
       // error so the staff list still renders.
-      () => {}
+      () => {},
     );
     return () => {
       staffUnsub();
@@ -357,15 +727,22 @@ export function useAdminVenues(): UseAdminVenuesResult {
 
   useEffect(() => {
     const unsub = onSnapshot(
-      query(collection(firestoreTicketing, "venues"), orderBy("name", "asc"), limit(100)),
+      query(
+        collection(firestoreTicketing, "venues"),
+        orderBy("name", "asc"),
+        limit(100),
+      ),
       (snap) => {
         setState({
-          venues: snap.docs.map((d) => ({ id: d.id, ...(d.data() as TicketVenue) })),
+          venues: snap.docs.map((d) => ({
+            id: d.id,
+            ...(d.data() as TicketVenue),
+          })),
           loading: false,
           error: null,
         });
       },
-      (err) => setState({ venues: [], loading: false, error: err })
+      (err) => setState({ venues: [], loading: false, error: err }),
     );
     return () => unsub();
   }, []);
@@ -395,7 +772,10 @@ function cleanVenuePayload(input: SaveVenueInput): Record<string, unknown> {
   };
 }
 
-export async function saveVenue(input: SaveVenueInput, venueId?: string): Promise<string> {
+export async function saveVenue(
+  input: SaveVenueInput,
+  venueId?: string,
+): Promise<string> {
   const payload = cleanVenuePayload(input);
   if (venueId) {
     await updateDoc(doc(firestoreTicketing, "venues", venueId), payload);
@@ -419,7 +799,82 @@ export interface UseTicketedShowResult {
   error: Error | null;
 }
 
-export function useTicketedShow(showId: string | undefined): UseTicketedShowResult {
+export interface UseEventShowIdResult {
+  showId: string | null;
+  loading: boolean;
+  error: Error | null;
+}
+
+export function useEventShowId(
+  identifier: string | undefined,
+): UseEventShowIdResult {
+  const [state, setState] = useState<UseEventShowIdResult>({
+    showId: null,
+    loading: true,
+    error: null,
+  });
+
+  useEffect(() => {
+    if (!identifier) {
+      setState({ showId: null, loading: false, error: null });
+      return;
+    }
+    const currentIdentifier = identifier;
+    let cancelled = false;
+    setState({ showId: null, loading: true, error: null });
+
+    async function resolve() {
+      const normalizedSlug = currentIdentifier.trim().toLowerCase();
+      try {
+        const directSnap = await getDoc(
+          doc(firestoreTicketing, "shows", currentIdentifier),
+        );
+        if (!cancelled && directSnap.exists()) {
+          setState({ showId: directSnap.id, loading: false, error: null });
+          return;
+        }
+      } catch {
+        // The direct doc can be denied for non-public shows. Try the public slug alias.
+      }
+
+      try {
+        const slugSnap = await getDoc(
+          doc(firestoreTicketing, "eventSlugs", normalizedSlug),
+        );
+        if (!cancelled && slugSnap.exists()) {
+          const data = slugSnap.data() as {
+            showId?: unknown;
+            active?: unknown;
+          };
+          const resolvedShowId =
+            typeof data.showId === "string" && data.active !== false
+              ? data.showId
+              : null;
+          setState({ showId: resolvedShowId, loading: false, error: null });
+          return;
+        }
+        if (!cancelled) {
+          setState({ showId: null, loading: false, error: null });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setState({ showId: null, loading: false, error: err as Error });
+        }
+      }
+    }
+
+    resolve();
+    return () => {
+      cancelled = true;
+    };
+  }, [identifier]);
+
+  return state;
+}
+
+export function useTicketedShow(
+  showId: string | undefined,
+): UseTicketedShowResult {
   const [state, setState] = useState<UseTicketedShowResult>({
     show: null,
     loading: true,
@@ -445,7 +900,48 @@ export function useTicketedShow(showId: string | undefined): UseTicketedShowResu
           error: null,
         });
       },
-      (err) => setState({ show: null, loading: false, error: err })
+      (err) => setState({ show: null, loading: false, error: err }),
+    );
+    return () => unsub();
+  }, [showId]);
+
+  return state;
+}
+
+export interface UsePromoCodesResult {
+  promoCodes: Array<TicketPromoCode & { id: string }>;
+  loading: boolean;
+  error: Error | null;
+}
+
+export function usePromoCodes(showId: string | undefined): UsePromoCodesResult {
+  const [state, setState] = useState<UsePromoCodesResult>({
+    promoCodes: [],
+    loading: true,
+    error: null,
+  });
+
+  useEffect(() => {
+    if (!showId) {
+      setState({ promoCodes: [], loading: false, error: null });
+      return;
+    }
+    const unsub = onSnapshot(
+      query(
+        collection(firestoreTicketing, "shows", showId, "promoCodes"),
+        orderBy("code", "asc"),
+      ),
+      (snap) => {
+        setState({
+          promoCodes: snap.docs.map((d) => ({
+            id: d.id,
+            ...(d.data() as TicketPromoCode),
+          })),
+          loading: false,
+          error: null,
+        });
+      },
+      (err) => setState({ promoCodes: [], loading: false, error: err }),
     );
     return () => unsub();
   }, [showId]);
@@ -459,7 +955,9 @@ export interface UseTicketTypesResult {
   error: Error | null;
 }
 
-export function useTicketTypes(showId: string | undefined): UseTicketTypesResult {
+export function useTicketTypes(
+  showId: string | undefined,
+): UseTicketTypesResult {
   const [state, setState] = useState<UseTicketTypesResult>({
     ticketTypes: [],
     loading: true,
@@ -471,7 +969,12 @@ export function useTicketTypes(showId: string | undefined): UseTicketTypesResult
       setState({ ticketTypes: [], loading: false, error: null });
       return;
     }
-    const colRef = collection(firestoreTicketing, "shows", showId, "ticketTypes");
+    const colRef = collection(
+      firestoreTicketing,
+      "shows",
+      showId,
+      "ticketTypes",
+    );
     // Firestore rules grant public read on ticketTypes; client filters to active.
     const unsub = onSnapshot(
       query(colRef, orderBy("displayOrder", "asc")),
@@ -481,7 +984,7 @@ export function useTicketTypes(showId: string | undefined): UseTicketTypesResult
           .filter((t) => t.active);
         setState({ ticketTypes, loading: false, error: null });
       },
-      (err) => setState({ ticketTypes: [], loading: false, error: err })
+      (err) => setState({ ticketTypes: [], loading: false, error: err }),
     );
     return () => unsub();
   }, [showId]);
@@ -510,7 +1013,7 @@ export function useMyOrders(buyerUid: string | undefined): UseMyOrdersResult {
     }
     const q = query(
       collection(firestoreTicketing, "orders"),
-      where("buyerUid", "==", buyerUid)
+      where("buyerUid", "==", buyerUid),
     );
     const unsub = onSnapshot(
       q,
@@ -521,7 +1024,7 @@ export function useMyOrders(buyerUid: string | undefined): UseMyOrdersResult {
         }));
         setState({ orders, loading: false, error: null });
       },
-      (err) => setState({ orders: [], loading: false, error: err })
+      (err) => setState({ orders: [], loading: false, error: err }),
     );
     return () => unsub();
   }, [buyerUid]);
@@ -541,7 +1044,9 @@ export interface UseMyTicketsResult {
   error: Error | null;
 }
 
-export function useMyTickets(memberUid: string | undefined): UseMyTicketsResult {
+export function useMyTickets(
+  memberUid: string | undefined,
+): UseMyTicketsResult {
   const [state, setState] = useState<UseMyTicketsResult>({
     tickets: [],
     loading: true,
@@ -555,7 +1060,7 @@ export function useMyTickets(memberUid: string | undefined): UseMyTicketsResult 
     }
     const q = query(
       collection(firestoreTicketing, "tickets"),
-      where("holderMemberUid", "==", memberUid)
+      where("holderMemberUid", "==", memberUid),
     );
     const unsub = onSnapshot(
       q,
@@ -566,7 +1071,7 @@ export function useMyTickets(memberUid: string | undefined): UseMyTicketsResult 
         }));
         setState({ tickets, loading: false, error: null });
       },
-      (err) => setState({ tickets: [], loading: false, error: err })
+      (err) => setState({ tickets: [], loading: false, error: err }),
     );
     return () => unsub();
   }, [memberUid]);
@@ -594,10 +1099,20 @@ export function ticketTypePricingPreview(ticket: TicketType, quantity: number) {
 }
 
 export function ticketAvailableCount(ticket: TicketType): number {
-  return Math.max(0, ticket.quantityTotal - ticket.quantitySold - ticket.quantityReserved);
+  return Math.max(
+    0,
+    ticket.quantityTotal - ticket.quantitySold - ticket.quantityReserved,
+  );
 }
 
-export type { TicketType, TicketVenue, TicketedShow, TicketOrder, IssuedTicket, TicketHolderSnapshot };
+export type {
+  TicketType,
+  TicketVenue,
+  TicketedShow,
+  TicketOrder,
+  IssuedTicket,
+  TicketHolderSnapshot,
+};
 
 // ---------------------------------------------------------------------------
 // Platform admin overview hooks
@@ -608,7 +1123,13 @@ export interface UseTicketingAdminOverviewResult {
   orders: Array<TicketOrder & { id: string }>;
   tickets: Array<IssuedTicket & { id: string }>;
   refunds: Array<TicketRefund & { id: string }>;
-  stripeEvents: Array<{ id: string; type?: string; status?: string; relatedOrderId?: string | null; processedAt?: unknown }>;
+  stripeEvents: Array<{
+    id: string;
+    type?: string;
+    status?: string;
+    relatedOrderId?: string | null;
+    processedAt?: unknown;
+  }>;
   loading: boolean;
   error: Error | null;
 }
@@ -643,59 +1164,91 @@ export function useTicketingAdminOverview(): UseTicketingAdminOverviewResult {
     };
 
     const unsubShows = onSnapshot(
-      query(collection(firestoreTicketing, "shows"), orderBy("startDate", "desc"), limit(50)),
+      query(
+        collection(firestoreTicketing, "shows"),
+        orderBy("startDate", "desc"),
+        limit(50),
+      ),
       (snap) => {
         setState((prev) => ({
           ...prev,
-          shows: snap.docs.map((d) => ({ id: d.id, ...(d.data() as TicketedShow) })),
+          shows: snap.docs.map((d) => ({
+            id: d.id,
+            ...(d.data() as TicketedShow),
+          })),
           error: null,
         }));
         markLoaded();
       },
-      setError
+      setError,
     );
 
     const unsubOrders = onSnapshot(
-      query(collection(firestoreTicketing, "orders"), orderBy("createdAt", "desc"), limit(50)),
+      query(
+        collection(firestoreTicketing, "orders"),
+        orderBy("createdAt", "desc"),
+        limit(50),
+      ),
       (snap) => {
         setState((prev) => ({
           ...prev,
-          orders: snap.docs.map((d) => ({ id: d.id, ...(d.data() as TicketOrder) })),
+          orders: snap.docs.map((d) => ({
+            id: d.id,
+            ...(d.data() as TicketOrder),
+          })),
           error: null,
         }));
         markLoaded();
       },
-      setError
+      setError,
     );
 
     const unsubTickets = onSnapshot(
-      query(collection(firestoreTicketing, "tickets"), orderBy("issuedAt", "desc"), limit(200)),
+      query(
+        collection(firestoreTicketing, "tickets"),
+        orderBy("issuedAt", "desc"),
+        limit(200),
+      ),
       (snap) => {
         setState((prev) => ({
           ...prev,
-          tickets: snap.docs.map((d) => ({ id: d.id, ...(d.data() as IssuedTicket) })),
+          tickets: snap.docs.map((d) => ({
+            id: d.id,
+            ...(d.data() as IssuedTicket),
+          })),
           error: null,
         }));
         markLoaded();
       },
-      setError
+      setError,
     );
 
     const unsubRefunds = onSnapshot(
-      query(collection(firestoreTicketing, "refunds"), orderBy("createdAt", "desc"), limit(50)),
+      query(
+        collection(firestoreTicketing, "refunds"),
+        orderBy("createdAt", "desc"),
+        limit(50),
+      ),
       (snap) => {
         setState((prev) => ({
           ...prev,
-          refunds: snap.docs.map((d) => ({ id: d.id, ...(d.data() as TicketRefund) })),
+          refunds: snap.docs.map((d) => ({
+            id: d.id,
+            ...(d.data() as TicketRefund),
+          })),
           error: null,
         }));
         markLoaded();
       },
-      setError
+      setError,
     );
 
     const unsubStripeEvents = onSnapshot(
-      query(collection(firestoreTicketing, "stripeEvents"), orderBy("processedAt", "desc"), limit(20)),
+      query(
+        collection(firestoreTicketing, "stripeEvents"),
+        orderBy("processedAt", "desc"),
+        limit(20),
+      ),
       (snap) => {
         setState((prev) => ({
           ...prev,
@@ -704,7 +1257,7 @@ export function useTicketingAdminOverview(): UseTicketingAdminOverviewResult {
         }));
         markLoaded();
       },
-      setError
+      setError,
     );
 
     return () => {

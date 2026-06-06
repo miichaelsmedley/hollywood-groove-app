@@ -2,14 +2,14 @@
 //
 // Three sections, in priority order:
 //   1. My tickets (active)   — what they need at the door tonight/soon
-//   2. Upcoming shows        — shows on sale, click through to ShowDetail to buy
+//   2. Upcoming shows        — shows on sale, click through to ticketing to buy
 //   3. Past tickets          — used/refunded/cancelled history
 //
 // "Upcoming shows" intentionally lives on this page (not just /shows) because
 // some buyers think of "the place I buy tickets" and "the place I view tickets"
 // as the same surface. Surfacing both keeps the mental model tight.
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { onValue, ref } from "firebase/database";
 import { Ticket, Calendar, MapPin, ArrowRight, ExternalLink } from "lucide-react";
@@ -19,7 +19,8 @@ import type { ShowMeta } from "../types/firebaseContract";
 import { getShowBasePath } from "../lib/mode";
 import { isShowLive, ShowRecordSnapshot } from "../lib/showStatus";
 import MyTicketsSection from "../features/tickets/MyTicketsSection";
-import { useTicketedShow } from "../lib/firebaseTicketing";
+import { useOnSaleTicketedShows, useTicketedShow } from "../lib/firebaseTicketing";
+import type { TicketedShow, TicketingTimestamp } from "../types/ticketingContract";
 
 interface ShowListEntry {
   showId: string;
@@ -27,15 +28,48 @@ interface ShowListEntry {
   isLive: boolean;
 }
 
+type TicketedShowWithId = TicketedShow & { id: string };
+
+interface UpcomingShowListEntry extends ShowListEntry {
+  startDate: Date | null;
+  ticketedShow?: TicketedShowWithId;
+}
+
+function toTicketingDate(value: TicketingTimestamp | string | null | undefined): Date | null {
+  let date: Date | null = null;
+
+  if (value && typeof (value as { toMillis?: () => number }).toMillis === "function") {
+    date = new Date((value as { toMillis: () => number }).toMillis());
+  } else if (value instanceof Date) {
+    date = value;
+  } else if (typeof value === "number") {
+    date = new Date(value);
+  } else if (typeof value === "string") {
+    date = new Date(value);
+  } else if (
+    value &&
+    typeof value === "object" &&
+    typeof (value as { seconds?: unknown }).seconds === "number"
+  ) {
+    date = new Date((value as { seconds: number }).seconds * 1000);
+  }
+
+  if (!date || !Number.isFinite(date.getTime())) return null;
+  return date;
+}
+
+function sortableTime(date: Date | null): number {
+  return date ? date.getTime() : Number.POSITIVE_INFINITY;
+}
+
 export default function TicketsHub() {
   const { canUseTestMode } = useUser();
   const uid = auth.currentUser?.uid;
   const [shows, setShows] = useState<ShowListEntry[]>([]);
+  const { shows: ledgerShows } = useOnSaleTicketedShows();
 
-  // Subscribe to RTDB shows so the upcoming list stays live. The Firestore
-  // ticketing data is fetched per-card via `useTicketedShow` (same pattern as
-  // ShowCard) so we only highlight rows that actually have ticketing enabled
-  // or an external ticketUrl.
+  // Subscribe to RTDB shows so the existing upcoming list stays live. The
+  // Firestore ticketing ledger is merged below without changing this feed.
   useEffect(() => {
     const unsub = onValue(
       ref(db, getShowBasePath()),
@@ -71,6 +105,52 @@ export default function TicketsHub() {
     );
     return () => unsub();
   }, [canUseTestMode]);
+
+  const upcomingShows = useMemo<UpcomingShowListEntry[]>(() => {
+    const rowsByShowId = new Map<string, UpcomingShowListEntry>();
+
+    shows.forEach((row) => {
+      rowsByShowId.set(row.showId, {
+        ...row,
+        startDate: toTicketingDate(row.meta.startDate),
+      });
+    });
+
+    ledgerShows.forEach((show) => {
+      const effectiveShowId = show.rtdbShowId || show.id;
+      const startDate = toTicketingDate(show.startDate);
+      const existing = rowsByShowId.get(effectiveShowId);
+
+      if (existing) {
+        rowsByShowId.set(effectiveShowId, {
+          ...existing,
+          ticketedShow: show,
+        });
+        return;
+      }
+
+      rowsByShowId.set(effectiveShowId, {
+        showId: effectiveShowId,
+        meta: {
+          orgId: show.orgId,
+          title: show.title,
+          startDate: startDate?.toISOString() ?? "",
+          venueName: show.venueName ?? "",
+          schemaVersion: 1,
+          publishedAt: 0,
+        },
+        isLive: false,
+        startDate,
+        ticketedShow: show,
+      });
+    });
+
+    return Array.from(rowsByShowId.values()).sort((a, b) => {
+      if (a.isLive && !b.isLive) return -1;
+      if (!a.isLive && b.isLive) return 1;
+      return sortableTime(a.startDate) - sortableTime(b.startDate);
+    });
+  }, [shows, ledgerShows]);
 
   return (
     <div className="space-y-8">
@@ -109,13 +189,13 @@ export default function TicketsHub() {
           </Link>
         </header>
 
-        {shows.length === 0 ? (
+        {upcomingShows.length === 0 ? (
           <div className="card-cinema p-4 text-sm text-cinema-700">
             No upcoming shows right now. Check back soon.
           </div>
         ) : (
           <ul className="space-y-2">
-            {shows.slice(0, 6).map((row) => (
+            {upcomingShows.slice(0, 6).map((row) => (
               <UpcomingShowRow key={row.showId} row={row} />
             ))}
           </ul>
@@ -134,18 +214,21 @@ export default function TicketsHub() {
 
 // One row per upcoming show. Reads the Firestore ticketing doc to decide
 // the CTA copy (internal vs external vs none).
-function UpcomingShowRow({ row }: { row: ShowListEntry }) {
-  const { show: ticketed } = useTicketedShow(row.showId);
+function UpcomingShowRow({ row }: { row: UpcomingShowListEntry }) {
+  const { show: fetchedTicketed } = useTicketedShow(row.ticketedShow ? undefined : row.showId);
+  const ticketed = row.ticketedShow ?? fetchedTicketed;
   const internalOnSale =
     Boolean(ticketed?.ticketingEnabled) &&
-    ticketed?.status !== "cancelled" &&
-    ticketed?.status !== "completed";
+    ticketed?.status === "on_sale";
+  const internalSoldOut =
+    Boolean(ticketed?.ticketingEnabled) &&
+    ticketed?.status === "sold_out";
   const externalUrl = row.meta.ticketUrl;
+  const ticketingShowId = ticketed?.id ?? row.showId;
 
-  const startDate = new Date(row.meta.startDate);
-  const startLabel = isNaN(startDate.getTime())
+  const startLabel = row.startDate === null
     ? "Date TBA"
-    : startDate.toLocaleString("en-AU", {
+    : row.startDate.toLocaleString("en-AU", {
         weekday: "short",
         day: "numeric",
         month: "short",
@@ -170,11 +253,15 @@ function UpcomingShowRow({ row }: { row: ShowListEntry }) {
         <div className="flex-shrink-0">
           {internalOnSale ? (
             <Link
-              to={`/shows/${row.showId}`}
+              to={`/event/${ticketingShowId}`}
               className="btn-primary py-1.5 px-3 text-xs font-semibold inline-flex items-center gap-1"
             >
               <Ticket className="w-3.5 h-3.5" /> Buy
             </Link>
+          ) : internalSoldOut ? (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-cinema-700 border border-cinema-300 px-3 py-1.5 rounded-lg opacity-70">
+              Sold out
+            </span>
           ) : externalUrl ? (
             <a
               href={externalUrl}

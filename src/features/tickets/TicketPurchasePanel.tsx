@@ -6,17 +6,23 @@
 // our deployed webhook mints tickets when the payment succeeds.
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Ticket, AlertCircle } from "lucide-react";
+import { AlertCircle, BadgePercent, Loader2, Ticket, X } from "lucide-react";
 import { auth } from "../../lib/firebase";
 import {
   createCheckoutSession,
   formatAud,
+  getPromoCodePreview,
+  normalizePromoCodeInput,
+  type PromoCodePreview,
   ticketAvailableCount,
   ticketTypePricingPreview,
   useTicketTypes,
   useTicketedShow,
 } from "../../lib/firebaseTicketing";
-import HolderConsentRow, { EMPTY_HOLDER, HolderFormState } from "./HolderConsentRow";
+import HolderConsentRow, {
+  EMPTY_HOLDER,
+  HolderFormState,
+} from "./HolderConsentRow";
 import type { TicketType } from "../../types/ticketingContract";
 
 type TicketTypeWithId = TicketType & { id: string };
@@ -25,15 +31,31 @@ interface TicketPurchasePanelProps {
   showId: string;
 }
 
-export default function TicketPurchasePanel({ showId }: TicketPurchasePanelProps) {
+export default function TicketPurchasePanel({
+  showId,
+}: TicketPurchasePanelProps) {
   const { show, loading: showLoading } = useTicketedShow(showId);
-  const { ticketTypes, loading: typesLoading, error: typesError } = useTicketTypes(showId);
+  const {
+    ticketTypes,
+    loading: typesLoading,
+    error: typesError,
+  } = useTicketTypes(showId);
 
-  const [selectedTicketTypeId, setSelectedTicketTypeId] = useState<string | null>(null);
+  const [selectedTicketTypeId, setSelectedTicketTypeId] = useState<
+    string | null
+  >(null);
   const [quantity, setQuantity] = useState(1);
-  const [holders, setHolders] = useState<HolderFormState[]>([{ ...EMPTY_HOLDER }]);
+  const [holders, setHolders] = useState<HolderFormState[]>([
+    { ...EMPTY_HOLDER },
+  ]);
   const [emailOptIn, setEmailOptIn] = useState(false);
   const [smsOptIn, setSmsOptIn] = useState(false);
+  const [promoInput, setPromoInput] = useState("");
+  const [promoPreview, setPromoPreview] = useState<PromoCodePreview | null>(
+    null,
+  );
+  const [promoMessage, setPromoMessage] = useState<string | null>(null);
+  const [promoApplying, setPromoApplying] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -50,7 +72,10 @@ export default function TicketPurchasePanel({ showId }: TicketPurchasePanelProps
   }, [ticketTypes, selectedTicketTypeId]);
 
   const maxQuantity = selectedTicketType
-    ? Math.min(selectedTicketType.maxPerOrder, ticketAvailableCount(selectedTicketType))
+    ? Math.min(
+        selectedTicketType.maxPerOrder,
+        ticketAvailableCount(selectedTicketType),
+      )
     : 1;
 
   // Keep holders array length in sync with quantity
@@ -58,7 +83,10 @@ export default function TicketPurchasePanel({ showId }: TicketPurchasePanelProps
     setHolders((current) => {
       if (current.length === quantity) return current;
       if (current.length < quantity) {
-        const additions = Array.from({ length: quantity - current.length }, () => ({ ...EMPTY_HOLDER }));
+        const additions = Array.from(
+          { length: quantity - current.length },
+          () => ({ ...EMPTY_HOLDER }),
+        );
         return [...current, ...additions];
       }
       return current.slice(0, quantity);
@@ -120,7 +148,9 @@ export default function TicketPurchasePanel({ showId }: TicketPurchasePanelProps
       <div className="card-cinema p-6">
         <div className="flex items-start gap-2 text-cinema-700">
           <Ticket className="w-5 h-5 flex-shrink-0 mt-0.5" />
-          <div className="text-sm">Tickets aren't on sale yet for this show.</div>
+          <div className="text-sm">
+            Tickets aren't on sale yet for this show.
+          </div>
         </div>
       </div>
     );
@@ -130,12 +160,59 @@ export default function TicketPurchasePanel({ showId }: TicketPurchasePanelProps
     return null;
   }
 
-  const pricing = ticketTypePricingPreview(selectedTicketType, quantity);
+  const basePricing = ticketTypePricingPreview(selectedTicketType, quantity);
+  const pricing = {
+    ...basePricing,
+    discountCents: promoPreview?.discountCents ?? 0,
+    totalCents: promoPreview?.totalCents ?? basePricing.totalCents,
+  };
   const buyerHolder = holders[0];
-  const everyHolderHasEmail = holders.every((h) => h.holderEmail.trim().length > 0);
-  const everyHolderHasName = holders.every((h) => h.holderName.trim().length > 0);
+  const everyHolderHasEmail = holders.every(
+    (h) => h.holderEmail.trim().length > 0,
+  );
+  const everyHolderHasName = holders.every(
+    (h) => h.holderName.trim().length > 0,
+  );
   const submittable =
     everyHolderHasEmail && everyHolderHasName && !submitting && quantity > 0;
+
+  const clearPromoPreview = () => {
+    setPromoPreview(null);
+    setPromoMessage(null);
+  };
+
+  const handleApplyPromo = async () => {
+    const normalized = normalizePromoCodeInput(promoInput);
+    if (!normalized) {
+      setPromoPreview(null);
+      setPromoMessage("Enter a valid promo code.");
+      return;
+    }
+    setPromoApplying(true);
+    setPromoMessage(null);
+    try {
+      const preview = await getPromoCodePreview({
+        showId,
+        ticketTypeId: selectedTicketType.id,
+        quantity,
+        subtotalCents: basePricing.subtotalCents,
+        bookingFeeCents: basePricing.bookingFeeTotalCents,
+        promoCode: normalized,
+      });
+      setPromoInput(preview.code);
+      setPromoPreview(preview);
+      setPromoMessage(`${preview.code} applied`);
+    } catch (err) {
+      setPromoPreview(null);
+      setPromoMessage(
+        err instanceof Error
+          ? err.message
+          : "That promo code could not be applied.",
+      );
+    } finally {
+      setPromoApplying(false);
+    }
+  };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -150,6 +227,7 @@ export default function TicketPurchasePanel({ showId }: TicketPurchasePanelProps
         showId,
         ticketTypeId: selectedTicketType.id,
         quantity,
+        promoCode: promoPreview?.code,
         buyerSnapshot: {
           email: buyerHolder.holderEmail,
           displayName: buyerHolder.holderName,
@@ -188,7 +266,8 @@ export default function TicketPurchasePanel({ showId }: TicketPurchasePanelProps
           Buy tickets
         </h2>
         <p className="text-sm text-cinema-600">
-          Secure checkout by Stripe. Tickets are emailed to each holder when payment lands.
+          Secure checkout by Stripe. Tickets are emailed to each holder when
+          payment lands.
         </p>
       </header>
 
@@ -205,6 +284,7 @@ export default function TicketPurchasePanel({ showId }: TicketPurchasePanelProps
                 onClick={() => {
                   setSelectedTicketTypeId(tt.id);
                   setQuantity(1);
+                  clearPromoPreview();
                 }}
                 disabled={soldOut}
                 className={`text-left p-3 rounded-lg border-2 transition-colors ${
@@ -214,13 +294,17 @@ export default function TicketPurchasePanel({ showId }: TicketPurchasePanelProps
                 } ${soldOut ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-semibold text-cinema-900">{tt.name}</span>
+                  <span className="font-semibold text-cinema-900">
+                    {tt.name}
+                  </span>
                   <span className="text-sm text-cinema-700">
                     {formatAud(tt.priceCents + tt.bookingFeeCents)}
                   </span>
                 </div>
                 {tt.description && (
-                  <p className="text-xs text-cinema-600 mt-1">{tt.description}</p>
+                  <p className="text-xs text-cinema-600 mt-1">
+                    {tt.description}
+                  </p>
                 )}
                 <p className="text-[11px] text-cinema-500 mt-1">
                   {soldOut ? "Sold out" : `${available} available`}
@@ -235,24 +319,35 @@ export default function TicketPurchasePanel({ showId }: TicketPurchasePanelProps
         <div className="card-cinema p-4">
           <div className="flex items-baseline justify-between gap-2">
             <div>
-              <p className="text-sm font-semibold text-cinema-900">{selectedTicketType.name}</p>
+              <p className="text-sm font-semibold text-cinema-900">
+                {selectedTicketType.name}
+              </p>
               <p className="text-xs text-cinema-600">
                 {formatAud(selectedTicketType.priceCents)} ticket +{" "}
                 {formatAud(selectedTicketType.bookingFeeCents)} booking fee
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <label htmlFor="quantity" className="text-xs text-cinema-700 font-medium">
+              <label
+                htmlFor="quantity"
+                className="text-xs text-cinema-700 font-medium"
+              >
                 Qty
               </label>
               <select
                 id="quantity"
                 value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value))}
+                onChange={(e) => {
+                  setQuantity(Number(e.target.value));
+                  clearPromoPreview();
+                }}
                 disabled={submitting || maxQuantity < 1}
                 className="input-cinema py-1 pr-7"
               >
-                {Array.from({ length: Math.max(1, maxQuantity) }, (_, i) => i + 1).map((n) => (
+                {Array.from(
+                  { length: Math.max(1, maxQuantity) },
+                  (_, i) => i + 1,
+                ).map((n) => (
                   <option key={n} value={n}>
                     {n}
                   </option>
@@ -260,12 +355,78 @@ export default function TicketPurchasePanel({ showId }: TicketPurchasePanelProps
               </select>
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-cinema-100 flex items-baseline justify-between">
-            <span className="text-sm text-cinema-700">Total</span>
-            <span className="text-lg font-bold text-cinema-900">
-              {formatAud(pricing.totalCents)}
-            </span>
+          <div className="mt-3 pt-3 border-t border-cinema-100 space-y-1">
+            {pricing.discountCents > 0 && (
+              <div className="flex items-baseline justify-between text-sm">
+                <span className="text-cinema-700">Discount</span>
+                <span className="font-semibold text-emerald-700">
+                  -{formatAud(pricing.discountCents)}
+                </span>
+              </div>
+            )}
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-cinema-700">Total</span>
+              <span className="text-lg font-bold text-cinema-900">
+                {formatAud(pricing.totalCents)}
+              </span>
+            </div>
           </div>
+        </div>
+
+        <div className="card-cinema p-4 space-y-2">
+          <label
+            htmlFor="embedded-promo-code"
+            className="text-xs uppercase tracking-wide text-cinema-700 font-semibold"
+          >
+            Promo code
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="embedded-promo-code"
+              value={promoInput}
+              onChange={(event) => setPromoInput(event.target.value)}
+              disabled={submitting || promoApplying}
+              className="input-cinema min-w-0 flex-1 uppercase"
+              autoComplete="off"
+            />
+            {promoPreview ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setPromoInput("");
+                  setPromoPreview(null);
+                  setPromoMessage(null);
+                }}
+                className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-cinema-300 text-cinema-600 hover:border-primary/70"
+                aria-label="Remove promo code"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleApplyPromo}
+                disabled={
+                  submitting || promoApplying || promoInput.trim().length === 0
+                }
+                className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-primary/50 px-3 text-sm font-bold text-primary hover:bg-primary/10 disabled:opacity-50"
+              >
+                {promoApplying ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <BadgePercent className="w-4 h-4" />
+                )}
+                Apply
+              </button>
+            )}
+          </div>
+          {promoMessage && (
+            <p
+              className={`text-xs ${promoPreview ? "text-emerald-700" : "text-amber-700"}`}
+            >
+              {promoMessage}
+            </p>
+          )}
         </div>
 
         <div className="space-y-3">
@@ -277,7 +438,7 @@ export default function TicketPurchasePanel({ showId }: TicketPurchasePanelProps
               value={holder}
               onChange={(next) =>
                 setHolders((current) =>
-                  current.map((h, i) => (i === index ? next : h))
+                  current.map((h, i) => (i === index ? next : h)),
                 )
               }
               disabled={submitting}
@@ -326,9 +487,9 @@ export default function TicketPurchasePanel({ showId }: TicketPurchasePanelProps
         </button>
 
         <p className="text-[11px] text-center text-cinema-600 leading-snug">
-          You'll be taken to Stripe to enter card details. We never see your card.
-          The Adele Show is the merchant of record for tickets, including those branded
-          "Hollywood Groove".
+          You'll be taken to Stripe to enter card details. We never see your
+          card. The Adele Show is the merchant of record for tickets, including
+          those branded "Hollywood Groove".
         </p>
       </form>
     </section>
@@ -342,7 +503,12 @@ interface BuyerOptInRowProps {
   disabled: boolean;
 }
 
-function BuyerOptInRow({ label, checked, onChange, disabled }: BuyerOptInRowProps) {
+function BuyerOptInRow({
+  label,
+  checked,
+  onChange,
+  disabled,
+}: BuyerOptInRowProps) {
   return (
     <label
       className={`flex items-start gap-2 ${

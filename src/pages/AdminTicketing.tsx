@@ -5,11 +5,13 @@
 // readiness, orders and payment-ledger health live here in the PWA.
 
 import { Link } from "react-router-dom";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, FormEvent, ReactNode } from "react";
 import { useState } from "react";
+import SelfTicketGigsPanel from "../features/tickets/SelfTicketGigsPanel";
 import {
   Activity,
   AlertTriangle,
+  BadgePercent,
   Building2,
   Calendar,
   CheckCircle2,
@@ -18,6 +20,7 @@ import {
   ExternalLink,
   Loader2,
   QrCode,
+  Save,
   ShieldCheck,
   Ticket,
   Users,
@@ -25,6 +28,8 @@ import {
 import {
   formatAud,
   refundOrder,
+  savePromoCode,
+  usePromoCodes,
   useTicketingAdminOverview,
 } from "../lib/firebaseTicketing";
 import type {
@@ -32,13 +37,17 @@ import type {
   ShowTicketingStatus,
   TicketOrder,
   TicketOrderStatus,
+  TicketPromoCode,
   TicketRefund,
   TicketRefundStatus,
   TicketedShow,
 } from "../types/ticketingContract";
 
 function toMillis(value: unknown): number | null {
-  if (value && typeof (value as { toMillis?: () => number }).toMillis === "function") {
+  if (
+    value &&
+    typeof (value as { toMillis?: () => number }).toMillis === "function"
+  ) {
     return (value as { toMillis: () => number }).toMillis();
   }
   if (value instanceof Date) return value.getTime();
@@ -67,13 +76,17 @@ function dateLabel(value: unknown): string {
 }
 
 function shortId(value: string): string {
-  return value.length > 10 ? `${value.slice(0, 6)}...${value.slice(-4)}` : value;
+  return value.length > 10
+    ? `${value.slice(0, 6)}...${value.slice(-4)}`
+    : value;
 }
 
 function showStatusTone(status: ShowTicketingStatus): string {
-  if (status === "on_sale" || status === "published") return "bg-emerald-100 text-emerald-800";
+  if (status === "on_sale" || status === "published")
+    return "bg-emerald-100 text-emerald-800";
   if (status === "sold_out") return "bg-amber-100 text-amber-800";
-  if (status === "cancelled" || status === "postponed") return "bg-red-100 text-red-800";
+  if (status === "cancelled" || status === "postponed")
+    return "bg-red-100 text-red-800";
   return "bg-cinema-200 text-cinema-700";
 }
 
@@ -81,20 +94,30 @@ function orderStatusTone(status: TicketOrderStatus): string {
   if (status === "paid") return "bg-emerald-100 text-emerald-800";
   if (status === "pending") return "bg-amber-100 text-amber-800";
   if (status === "disputed") return "bg-red-100 text-red-800";
-  if (status === "refunded" || status === "partially_refunded") return "bg-sky-100 text-sky-800";
+  if (status === "refunded" || status === "partially_refunded")
+    return "bg-sky-100 text-sky-800";
   return "bg-cinema-200 text-cinema-700";
 }
 
 function refundStatusTone(status: TicketRefundStatus): string {
   if (status === "succeeded") return "bg-emerald-100 text-emerald-800";
   if (status === "pending") return "bg-amber-100 text-amber-800";
-  if (status === "failed" || status === "cancelled") return "bg-red-100 text-red-800";
+  if (status === "failed" || status === "cancelled")
+    return "bg-red-100 text-red-800";
   return "bg-cinema-200 text-cinema-700";
 }
 
-function Badge({ children, className = "" }: { children: ReactNode; className?: string }) {
+function Badge({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${className}`}>
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${className}`}
+    >
       {children}
     </span>
   );
@@ -125,24 +148,34 @@ function StatCard({
 }
 
 export default function AdminTicketing() {
-  const { shows, orders, tickets, refunds, stripeEvents, loading, error } = useTicketingAdminOverview();
+  const { shows, orders, tickets, refunds, stripeEvents, loading, error } =
+    useTicketingAdminOverview();
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const paidOrders = orders.filter((o) => o.status === "paid");
   const pendingOrders = orders.filter((o) => o.status === "pending");
-  const grossCents = paidOrders.reduce((sum, order) => sum + Number(order.totalCents ?? 0), 0);
+  const grossCents = paidOrders.reduce(
+    (sum, order) => sum + Number(order.totalCents ?? 0),
+    0,
+  );
   const refundedCents = refunds
     .filter((refund) => refund.status === "succeeded")
     .reduce((sum, refund) => sum + Number(refund.amountCents ?? 0), 0);
   const validTickets = tickets.filter((t) => t.status === "valid");
   const usedTickets = tickets.filter((t) => t.status === "used");
-  const riskTickets = tickets.filter((t) => t.status === "disputed" || t.status === "lost_to_dispute");
-  const activeShows = shows.filter((s) => ["published", "on_sale", "sold_out"].includes(s.status));
+  const riskTickets = tickets.filter(
+    (t) => t.status === "disputed" || t.status === "lost_to_dispute",
+  );
+  const activeShows = shows.filter((s) =>
+    ["published", "on_sale", "sold_out"].includes(s.status),
+  );
 
   const handleRefund = async (order: TicketOrder & { id: string }) => {
     const buyer = order.buyerSnapshot?.email || "this buyer";
-    const ok = window.confirm(`Refund ${formatAud(order.totalCents)} for ${buyer}? This will invalidate the order's tickets.`);
+    const ok = window.confirm(
+      `Refund ${formatAud(order.totalCents)} for ${buyer}? This will invalidate the order's tickets.`,
+    );
     if (!ok) return;
 
     const reason = window.prompt("Refund reason", "Customer requested refund");
@@ -192,10 +225,13 @@ export default function AdminTicketing() {
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-7 h-7 text-primary" />
-            <h1 className="text-3xl font-bold text-cinema-900">Ticketing admin</h1>
+            <h1 className="text-3xl font-bold text-cinema-900">
+              Ticketing admin
+            </h1>
           </div>
           <p className="text-sm text-cinema-600">
-            Transactional control for Hollywood Groove and The Adele Show ticketing.
+            Transactional control for Hollywood Groove and The Adele Show
+            ticketing.
           </p>
         </div>
         <Link
@@ -211,15 +247,19 @@ export default function AdminTicketing() {
         <div className="flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
           <div className="space-y-1">
-            <p className="font-bold">Live payments are not switched on from this screen.</p>
+            <p className="font-bold">
+              Live payments are not switched on from this screen.
+            </p>
             <p className="text-sm">
-              The backend is sandbox-proven. Before real money, finish live Stripe
-              webhook/secrets, refund/dispute handling, confirmation email, and a tiny
-              live pilot transaction.
+              The backend is sandbox-proven. Before real money, finish live
+              Stripe webhook/secrets, refund/dispute handling, confirmation
+              email, and a tiny live pilot transaction.
             </p>
           </div>
         </div>
       </section>
+
+      <SelfTicketGigsPanel />
 
       {actionError && (
         <section className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
@@ -230,11 +270,30 @@ export default function AdminTicketing() {
         </section>
       )}
 
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3" aria-label="Ticketing totals">
-        <StatCard label="Active shows" value={String(activeShows.length)} Icon={Calendar} />
-        <StatCard label="Paid orders" value={String(paidOrders.length)} Icon={CreditCard} />
-        <StatCard label="Gross paid" value={formatAud(grossCents)} Icon={Activity} />
-        <StatCard label="Refunded" value={formatAud(refundedCents)} Icon={AlertTriangle} />
+      <section
+        className="grid grid-cols-2 lg:grid-cols-4 gap-3"
+        aria-label="Ticketing totals"
+      >
+        <StatCard
+          label="Active shows"
+          value={String(activeShows.length)}
+          Icon={Calendar}
+        />
+        <StatCard
+          label="Paid orders"
+          value={String(paidOrders.length)}
+          Icon={CreditCard}
+        />
+        <StatCard
+          label="Gross paid"
+          value={formatAud(grossCents)}
+          Icon={Activity}
+        />
+        <StatCard
+          label="Refunded"
+          value={formatAud(refundedCents)}
+          Icon={AlertTriangle}
+        />
       </section>
 
       <section className="grid md:grid-cols-3 gap-3">
@@ -279,7 +338,9 @@ export default function AdminTicketing() {
                 key={order.id}
                 order={order}
                 show={shows.find((s) => s.id === order.showId)}
-                refunds={refunds.filter((refund) => refund.orderId === order.id)}
+                refunds={refunds.filter(
+                  (refund) => refund.orderId === order.id,
+                )}
                 busy={busyOrderId === order.id}
                 onRefund={() => handleRefund(order)}
               />
@@ -295,7 +356,11 @@ export default function AdminTicketing() {
         ) : (
           <div className="overflow-hidden rounded-xl border border-cinema-200">
             {refunds.slice(0, 8).map((refund) => (
-              <RefundRow key={refund.id} refund={refund} order={orders.find((order) => order.id === refund.orderId)} />
+              <RefundRow
+                key={refund.id}
+                refund={refund}
+                order={orders.find((order) => order.id === refund.orderId)}
+              />
             ))}
           </div>
         )}
@@ -304,10 +369,26 @@ export default function AdminTicketing() {
       <section className="space-y-3">
         <SectionHeader Icon={QrCode} title="Ticket states" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="Valid" value={String(validTickets.length)} Icon={Ticket} />
-          <StatCard label="Used" value={String(usedTickets.length)} Icon={CheckCircle2} />
-          <StatCard label="Pending orders" value={String(pendingOrders.length)} Icon={Clock} />
-          <StatCard label="Risk/dispute" value={String(riskTickets.length)} Icon={AlertTriangle} />
+          <StatCard
+            label="Valid"
+            value={String(validTickets.length)}
+            Icon={Ticket}
+          />
+          <StatCard
+            label="Used"
+            value={String(usedTickets.length)}
+            Icon={CheckCircle2}
+          />
+          <StatCard
+            label="Pending orders"
+            value={String(pendingOrders.length)}
+            Icon={Clock}
+          />
+          <StatCard
+            label="Risk/dispute"
+            value={String(riskTickets.length)}
+            Icon={AlertTriangle}
+          />
         </div>
       </section>
     </div>
@@ -371,26 +452,37 @@ function ShowRow({
   tickets: Array<IssuedTicket & { id: string }>;
 }) {
   const showTickets = tickets.filter((ticket) => ticket.showId === show.id);
-  const sold = showTickets.filter((ticket) => ticket.status === "valid" || ticket.status === "used").length;
+  const sold = showTickets.filter(
+    (ticket) => ticket.status === "valid" || ticket.status === "used",
+  ).length;
   const used = showTickets.filter((ticket) => ticket.status === "used").length;
-  const front = show.sellingFrontId === "adele_show" ? "The Adele Show" : "Hollywood Groove";
+  const front =
+    show.sellingFrontId === "adele_show"
+      ? "The Adele Show"
+      : "Hollywood Groove";
 
   return (
     <div className="rounded-xl border border-cinema-200 bg-cinema-50 p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-sm font-bold text-cinema-900 truncate">{show.title}</h3>
-            <Badge className={showStatusTone(show.status)}>{show.status.replace("_", " ")}</Badge>
+            <h3 className="text-sm font-bold text-cinema-900 truncate">
+              {show.title}
+            </h3>
+            <Badge className={showStatusTone(show.status)}>
+              {show.status.replace("_", " ")}
+            </Badge>
           </div>
-          <p className="text-xs text-cinema-600">{dateLabel(show.startDate)} · {front}</p>
+          <p className="text-xs text-cinema-600">
+            {dateLabel(show.startDate)} · {front}
+          </p>
           <p className="text-xs text-cinema-500">
             {sold} sold, {used} scanned, capacity {show.capacity || "not set"}
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0">
           <Link
-            to={`/event/${show.id}`}
+            to={`/event/${show.publicSlug || show.id}`}
             className="inline-flex items-center justify-center gap-1 rounded-lg border border-cinema-300 px-3 py-1.5 text-xs font-semibold text-cinema-800 hover:border-primary/60"
           >
             <ExternalLink className="w-3.5 h-3.5" /> Event page
@@ -405,7 +497,210 @@ function ShowRow({
           )}
         </div>
       </div>
+      <ShowPromoPanel show={show} />
     </div>
+  );
+}
+
+function promoExpiryLabel(promo: TicketPromoCode): string {
+  const millis = toMillis(promo.validUntil);
+  return millis ? `Valid until ${dateLabel(promo.validUntil)}` : "No end date";
+}
+
+function ShowPromoPanel({ show }: { show: TicketedShow & { id: string } }) {
+  const { promoCodes, loading } = usePromoCodes(show.id);
+  const [code, setCode] = useState("");
+  const [discountType, setDiscountType] = useState<"percent" | "amount">(
+    "percent",
+  );
+  const [discountValue, setDiscountValue] = useState("10");
+  const [validUntil, setValidUntil] = useState("");
+  const [maxRedemptions, setMaxRedemptions] = useState("");
+  const [active, setActive] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const handleSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const numericDiscount = Number(discountValue);
+    const maxUses = Number(maxRedemptions);
+    setSaving(true);
+    setMessage(null);
+    try {
+      const savedCode = await savePromoCode(show.id, {
+        code,
+        active,
+        discountType,
+        percentOff: discountType === "percent" ? numericDiscount : null,
+        amountOffCents:
+          discountType === "amount" ? Math.round(numericDiscount * 100) : null,
+        validUntil: validUntil ? new Date(validUntil) : null,
+        maxRedemptions:
+          Number.isFinite(maxUses) && maxUses > 0 ? maxUses : null,
+      });
+      setCode("");
+      setMessage(`${savedCode} saved`);
+    } catch (err) {
+      setMessage(
+        err instanceof Error ? err.message : "Promo code could not be saved.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <details className="mt-3 border-t border-cinema-200 pt-3">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-cinema-900">
+        <span className="inline-flex items-center gap-2">
+          <BadgePercent className="w-4 h-4 text-primary" />
+          Promos
+        </span>
+        <span className="text-xs font-medium text-cinema-500">
+          {loading
+            ? "Loading..."
+            : `${promoCodes.length} code${promoCodes.length === 1 ? "" : "s"}`}
+        </span>
+      </summary>
+
+      <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1.25fr]">
+        <div className="space-y-2 rounded-lg border border-cinema-200 bg-white p-3">
+          {promoCodes.length === 0 ? (
+            <p className="text-xs text-cinema-500">No promo codes yet.</p>
+          ) : (
+            promoCodes.slice(0, 5).map((promo) => {
+              const amount =
+                promo.discountType === "percent"
+                  ? `${promo.percentOff ?? 0}%`
+                  : formatAud(Number(promo.amountOffCents ?? 0));
+              const committed =
+                Number(promo.redemptionCount ?? 0) +
+                Number(promo.reservationCount ?? 0);
+              return (
+                <div
+                  key={promo.id}
+                  className="border-b border-cinema-100 pb-2 last:border-b-0 last:pb-0"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs font-bold text-cinema-900">
+                      {promo.code}
+                    </span>
+                    <Badge
+                      className={
+                        promo.active
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-cinema-200 text-cinema-700"
+                      }
+                    >
+                      {promo.active ? "active" : "off"}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-[11px] text-cinema-500">
+                    {amount} off · {committed}/
+                    {promo.maxRedemptions || "no limit"} used or reserved ·{" "}
+                    {promoExpiryLabel(promo)}
+                  </p>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <form
+          onSubmit={handleSave}
+          className="grid gap-2 rounded-lg border border-cinema-200 bg-white p-3 sm:grid-cols-2"
+        >
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
+              Code
+            </span>
+            <input
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              className="input-cinema uppercase"
+              placeholder="EARLYBIRD"
+              disabled={saving}
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
+              Discount
+            </span>
+            <div className="flex gap-2">
+              <select
+                value={discountType}
+                onChange={(event) =>
+                  setDiscountType(event.target.value as "percent" | "amount")
+                }
+                className="input-cinema w-28"
+                disabled={saving}
+              >
+                <option value="percent">Percent</option>
+                <option value="amount">Amount</option>
+              </select>
+              <input
+                value={discountValue}
+                onChange={(event) => setDiscountValue(event.target.value)}
+                className="input-cinema min-w-0 flex-1"
+                inputMode="decimal"
+                disabled={saving}
+              />
+            </div>
+          </label>
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
+              Valid until
+            </span>
+            <input
+              type="datetime-local"
+              value={validUntil}
+              onChange={(event) => setValidUntil(event.target.value)}
+              className="input-cinema"
+              disabled={saving}
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
+              Max uses
+            </span>
+            <input
+              value={maxRedemptions}
+              onChange={(event) => setMaxRedemptions(event.target.value)}
+              className="input-cinema"
+              inputMode="numeric"
+              disabled={saving}
+            />
+          </label>
+          <label className="inline-flex items-center gap-2 text-xs font-semibold text-cinema-700">
+            <input
+              type="checkbox"
+              checked={active}
+              onChange={(event) => setActive(event.target.checked)}
+              disabled={saving}
+              className="h-4 w-4 rounded border-cinema-300 text-primary focus:ring-primary"
+            />
+            Active
+          </label>
+          <div className="flex items-center justify-end gap-2">
+            {message && (
+              <span className="text-xs text-cinema-600">{message}</span>
+            )}
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-bold text-cinema hover:bg-primary/90 disabled:opacity-60"
+            >
+              {saving ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Save className="w-3.5 h-3.5" />
+              )}
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+    </details>
   );
 }
 
@@ -432,23 +727,36 @@ function OrderRow({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-bold text-cinema-900">{show?.title ?? order.showId}</span>
-            <Badge className={orderStatusTone(order.status)}>{order.status}</Badge>
+            <span className="text-sm font-bold text-cinema-900">
+              {show?.title ?? order.showId}
+            </span>
+            <Badge className={orderStatusTone(order.status)}>
+              {order.status}
+            </Badge>
           </div>
           <p className="text-xs text-cinema-600">
-            {order.buyerSnapshot?.email || "No buyer email"} · {dateLabel(order.createdAt)}
+            {order.buyerSnapshot?.email || "No buyer email"} ·{" "}
+            {dateLabel(order.createdAt)}
           </p>
           <p className="text-[11px] text-cinema-500 font-mono">
             {shortId(order.id)}
-            {order.stripePaymentIntentId ? ` · ${shortId(order.stripePaymentIntentId)}` : ""}
+            {order.stripePaymentIntentId
+              ? ` · ${shortId(order.stripePaymentIntentId)}`
+              : ""}
           </p>
           {refundedCents > 0 && (
-            <p className="text-[11px] text-sky-700">Refunded {formatAud(refundedCents)}</p>
+            <p className="text-[11px] text-sky-700">
+              Refunded {formatAud(refundedCents)}
+            </p>
           )}
         </div>
         <div className="text-right flex-shrink-0 space-y-2">
-          <p className="text-sm font-bold text-cinema-900">{formatAud(order.totalCents)}</p>
-          <p className="text-[11px] text-cinema-500">{order.lineItems?.[0]?.quantity ?? 0} ticket(s)</p>
+          <p className="text-sm font-bold text-cinema-900">
+            {formatAud(order.totalCents)}
+          </p>
+          <p className="text-[11px] text-cinema-500">
+            {order.lineItems?.[0]?.quantity ?? 0} ticket(s)
+          </p>
           {canRefund && (
             <button
               type="button"
@@ -456,7 +764,11 @@ function OrderRow({
               disabled={busy}
               className="inline-flex items-center justify-center gap-1 rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
             >
-              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+              {busy ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <AlertTriangle className="w-3.5 h-3.5" />
+              )}
               Refund
             </button>
           )}
@@ -478,18 +790,31 @@ function RefundRow({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-bold text-cinema-900">{order?.buyerSnapshot?.email ?? refund.orderId}</span>
-            <Badge className={refundStatusTone(refund.status)}>{refund.status}</Badge>
+            <span className="text-sm font-bold text-cinema-900">
+              {order?.buyerSnapshot?.email ?? refund.orderId}
+            </span>
+            <Badge className={refundStatusTone(refund.status)}>
+              {refund.status}
+            </Badge>
           </div>
-          <p className="text-xs text-cinema-600">{refund.reason || "No reason supplied"} · {dateLabel(refund.createdAt)}</p>
+          <p className="text-xs text-cinema-600">
+            {refund.reason || "No reason supplied"} ·{" "}
+            {dateLabel(refund.createdAt)}
+          </p>
           <p className="text-[11px] text-cinema-500 font-mono">
             {shortId(refund.id)}
-            {refund.stripeRefundId ? ` · ${shortId(refund.stripeRefundId)}` : ""}
+            {refund.stripeRefundId
+              ? ` · ${shortId(refund.stripeRefundId)}`
+              : ""}
           </p>
         </div>
         <div className="text-right flex-shrink-0">
-          <p className="text-sm font-bold text-cinema-900">{formatAud(refund.amountCents)}</p>
-          <p className="text-[11px] text-cinema-500">{refund.ticketIds?.length ?? 0} ticket(s)</p>
+          <p className="text-sm font-bold text-cinema-900">
+            {formatAud(refund.amountCents)}
+          </p>
+          <p className="text-[11px] text-cinema-500">
+            {refund.ticketIds?.length ?? 0} ticket(s)
+          </p>
         </div>
       </div>
     </div>
