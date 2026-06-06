@@ -326,6 +326,45 @@ export async function refundOrder(
 }
 
 // ---------------------------------------------------------------------------
+// issueCompTicket callable wrapper (platform-admin or event-admin)
+// ---------------------------------------------------------------------------
+
+export interface IssueCompTicketInput {
+  showId: string;
+  ticketTypeId: string;
+  recipientName: string;
+  recipientEmail: string;
+  quantity?: number;
+  note?: string | null;
+  idempotencyKey: string;
+}
+
+export interface IssueCompTicketResult {
+  ok: true;
+  orderId: string;
+  ticketIds: string[];
+  recipientUid: string;
+  recipientEmail: string;
+  showId: string;
+  ticketTypeId: string;
+  quantity: number;
+  idempotent: boolean;
+  note: string;
+}
+
+const issueCompTicketCallable = httpsCallable<
+  IssueCompTicketInput,
+  IssueCompTicketResult
+>(functions, "issueCompTicket");
+
+export async function issueCompTicket(
+  input: IssueCompTicketInput,
+): Promise<IssueCompTicketResult> {
+  const response = await issueCompTicketCallable(input);
+  return response.data;
+}
+
+// ---------------------------------------------------------------------------
 // Venue staff management callables (Phase 4a)
 // ---------------------------------------------------------------------------
 

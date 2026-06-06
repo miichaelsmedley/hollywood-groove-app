@@ -36,6 +36,8 @@ export type TicketOrderStatus =
   | "partially_refunded"
   | "disputed";
 
+export type TicketOrderPaymentType = "stripe" | "comp" | "cash";
+
 export type TicketStatus =
   | "valid"
   | "used"
@@ -77,7 +79,8 @@ export type TicketConsentSource =
   | "ticket_purchase"
   | "self_confirm"
   | "join_show"
-  | "import";
+  | "import"
+  | "comp_issue";
 
 export type TicketAuditAction =
   | "refund"
@@ -246,6 +249,7 @@ export interface TicketOrder {
   buyerUid: string;
   buyerSnapshot: TicketBuyerSnapshot;
   status: TicketOrderStatus;
+  paymentType?: TicketOrderPaymentType;
   lineItems: TicketOrderLineItem[];
   holders?: TicketHolderSnapshot[];
   stripeCheckoutSessionId?: string | null;
@@ -266,8 +270,18 @@ export interface TicketOrder {
   totalCents: number;
   currency: TicketCurrency;
   createdAt: TicketingTimestamp;
+  updatedAt?: TicketingTimestamp;
   reservationExpiresAt?: TicketingTimestamp | null;
   paidAt?: TicketingTimestamp | null;
+  compIssue?: {
+    issuedByUid: string;
+    issuedAt: TicketingTimestamp;
+    recipientUid: string;
+    recipientEmail: string;
+    recipientName: string;
+    note?: string | null;
+    idempotencyKeyHash?: string;
+  };
 }
 
 // Path: /shows/{showId}/promoCodes/{promoCodeId}

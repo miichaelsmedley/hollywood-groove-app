@@ -6,7 +6,7 @@
 
 import { Link } from "react-router-dom";
 import type { ComponentType, FormEvent, ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import SelfTicketGigsPanel from "../features/tickets/SelfTicketGigsPanel";
 import { useStaffRoles } from "../hooks/useStaffRoles";
 import {
@@ -19,18 +19,23 @@ import {
   Clock,
   CreditCard,
   ExternalLink,
+  Gift,
   Loader2,
   QrCode,
   Save,
+  Send,
   ShieldCheck,
   Ticket,
   Users,
 } from "lucide-react";
 import {
   formatAud,
+  issueCompTicket,
   refundOrder,
   savePromoCode,
+  ticketAvailableCount,
   usePromoCodes,
+  useTicketTypes,
   useTicketingAdminOverview,
 } from "../lib/firebaseTicketing";
 import type {
@@ -80,6 +85,13 @@ function shortId(value: string): string {
   return value.length > 10
     ? `${value.slice(0, 6)}...${value.slice(-4)}`
     : value;
+}
+
+function newIdempotencyKey(): string {
+  if (globalThis.crypto && "randomUUID" in globalThis.crypto) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function showStatusTone(status: ShowTicketingStatus): string {
@@ -158,15 +170,15 @@ export default function AdminTicketing() {
   const [actionError, setActionError] = useState<string | null>(null);
   const hasTicketingAdminClaim = isPlatformAdmin || isEventAdmin;
 
-  const paidOrders = orders.filter((o) => o.status === "paid");
+  const paidOrders = orders.filter(
+    (o) => o.status === "paid" && o.paymentType !== "comp",
+  );
+  const compOrders = orders.filter((o) => o.paymentType === "comp");
   const pendingOrders = orders.filter((o) => o.status === "pending");
   const grossCents = paidOrders.reduce(
     (sum, order) => sum + Number(order.totalCents ?? 0),
     0,
   );
-  const refundedCents = refunds
-    .filter((refund) => refund.status === "succeeded")
-    .reduce((sum, refund) => sum + Number(refund.amountCents ?? 0), 0);
   const validTickets = tickets.filter((t) => t.status === "valid");
   const usedTickets = tickets.filter((t) => t.status === "used");
   const riskTickets = tickets.filter(
@@ -268,6 +280,8 @@ export default function AdminTicketing() {
 
       {isPlatformAdmin && <SelfTicketGigsPanel />}
 
+      {hasTicketingAdminClaim && <IssueCompTicketPanel shows={shows} />}
+
       {actionError && (
         <section className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
           <div className="flex items-start gap-2">
@@ -297,9 +311,9 @@ export default function AdminTicketing() {
           Icon={Activity}
         />
         <StatCard
-          label="Refunded"
-          value={formatAud(refundedCents)}
-          Icon={AlertTriangle}
+          label="Comp orders"
+          value={String(compOrders.length)}
+          Icon={Gift}
         />
       </section>
 
@@ -455,6 +469,262 @@ function EmptyState({ children }: { children: ReactNode }) {
     <div className="rounded-xl border border-cinema-200 bg-cinema-50 p-4 text-sm text-cinema-700">
       {children}
     </div>
+  );
+}
+
+function IssueCompTicketPanel({
+  shows,
+}: {
+  shows: Array<TicketedShow & { id: string }>;
+}) {
+  const issuableShows = useMemo(
+    () =>
+      shows.filter(
+        (show) =>
+          show.ticketingEnabled &&
+          ["published", "on_sale", "sold_out"].includes(show.status),
+      ),
+    [shows],
+  );
+  const [showId, setShowId] = useState("");
+  const [ticketTypeId, setTicketTypeId] = useState("");
+  const [recipientName, setRecipientName] = useState("");
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  const [note, setNote] = useState("");
+  const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const {
+    ticketTypes,
+    loading: ticketTypesLoading,
+    error: ticketTypesError,
+  } = useTicketTypes(showId || undefined);
+
+  useEffect(() => {
+    if (!showId && issuableShows.length > 0) {
+      setShowId(issuableShows[0].id);
+    }
+  }, [issuableShows, showId]);
+
+  useEffect(() => {
+    if (ticketTypes.length === 0) {
+      setTicketTypeId("");
+      return;
+    }
+    if (!ticketTypes.some((ticketType) => ticketType.id === ticketTypeId)) {
+      setTicketTypeId(ticketTypes[0].id);
+    }
+  }, [ticketTypeId, ticketTypes]);
+
+  const selectedTicketType = ticketTypes.find(
+    (ticketType) => ticketType.id === ticketTypeId,
+  );
+  const available = selectedTicketType
+    ? ticketAvailableCount(selectedTicketType)
+    : 0;
+  const parsedQuantity = Number(quantity);
+  const validQuantity =
+    Number.isInteger(parsedQuantity) &&
+    parsedQuantity >= 1 &&
+    parsedQuantity <= Math.min(20, Math.max(1, available));
+  const canSubmit =
+    Boolean(showId) &&
+    Boolean(ticketTypeId) &&
+    recipientName.trim().length > 0 &&
+    recipientEmail.trim().includes("@") &&
+    validQuantity &&
+    !submitting;
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setMessage(null);
+    setError(null);
+    try {
+      const result = await issueCompTicket({
+        showId,
+        ticketTypeId,
+        recipientName: recipientName.trim(),
+        recipientEmail: recipientEmail.trim(),
+        quantity: parsedQuantity,
+        note: note.trim() || null,
+        idempotencyKey,
+      });
+      setMessage(
+        result.idempotent
+          ? `Already issued: ${shortId(result.orderId)}`
+          : `Issued ${result.ticketIds.length} comp ticket${result.ticketIds.length === 1 ? "" : "s"} to ${result.recipientEmail}`,
+      );
+      setRecipientName("");
+      setRecipientEmail("");
+      setQuantity("1");
+      setNote("");
+      setIdempotencyKey(newIdempotencyKey());
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Comp ticket could not be issued.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="rounded-xl border border-cinema-200 bg-cinema-50 p-4">
+      <details open>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-2 text-xl font-bold text-cinema-900">
+            <Gift className="w-5 h-5 text-primary" />
+            Issue comp ticket
+          </span>
+          <span className="text-xs font-semibold text-cinema-500">
+            {issuableShows.length} show{issuableShows.length === 1 ? "" : "s"}
+          </span>
+        </summary>
+
+        <form onSubmit={handleSubmit} className="mt-4 grid gap-3 lg:grid-cols-6">
+          <label className="space-y-1 lg:col-span-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
+              Show
+            </span>
+            <select
+              value={showId}
+              onChange={(event) => {
+                setShowId(event.target.value);
+                setTicketTypeId("");
+              }}
+              className="input-cinema"
+              disabled={submitting || issuableShows.length === 0}
+            >
+              {issuableShows.length === 0 ? (
+                <option value="">No issuable shows</option>
+              ) : (
+                issuableShows.map((show) => (
+                  <option key={show.id} value={show.id}>
+                    {show.title} · {dateLabel(show.startDate)}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+
+          <label className="space-y-1 lg:col-span-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
+              Ticket type
+            </span>
+            <select
+              value={ticketTypeId}
+              onChange={(event) => setTicketTypeId(event.target.value)}
+              className="input-cinema"
+              disabled={submitting || ticketTypesLoading || ticketTypes.length === 0}
+            >
+              {ticketTypesLoading ? (
+                <option value="">Loading ticket types</option>
+              ) : ticketTypes.length === 0 ? (
+                <option value="">No active ticket types</option>
+              ) : (
+                ticketTypes.map((ticketType) => (
+                  <option key={ticketType.id} value={ticketType.id}>
+                    {ticketType.name} · {ticketAvailableCount(ticketType)} left
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
+              Qty
+            </span>
+            <input
+              value={quantity}
+              onChange={(event) => setQuantity(event.target.value)}
+              className="input-cinema"
+              inputMode="numeric"
+              disabled={submitting}
+            />
+          </label>
+
+          <div className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
+              Available
+            </span>
+            <div className="min-h-11 rounded-lg border border-cinema-200 bg-white px-3 py-2 text-sm font-bold text-cinema-900">
+              {selectedTicketType ? available : "-"}
+            </div>
+          </div>
+
+          <label className="space-y-1 lg:col-span-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
+              Recipient name
+            </span>
+            <input
+              value={recipientName}
+              onChange={(event) => setRecipientName(event.target.value)}
+              className="input-cinema"
+              disabled={submitting}
+              autoComplete="name"
+            />
+          </label>
+
+          <label className="space-y-1 lg:col-span-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
+              Recipient email
+            </span>
+            <input
+              value={recipientEmail}
+              onChange={(event) => setRecipientEmail(event.target.value)}
+              className="input-cinema"
+              disabled={submitting}
+              autoComplete="email"
+              inputMode="email"
+            />
+          </label>
+
+          <label className="space-y-1 lg:col-span-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
+              Note
+            </span>
+            <input
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              className="input-cinema"
+              disabled={submitting}
+            />
+          </label>
+
+          <div className="flex flex-col gap-2 lg:col-span-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-h-5 text-xs">
+              {ticketTypesError && (
+                <span className="text-red-700">{ticketTypesError.message}</span>
+              )}
+              {error && <span className="text-red-700">{error}</span>}
+              {message && <span className="text-emerald-700">{message}</span>}
+              {!error && !message && selectedTicketType && available === 0 && (
+                <span className="text-amber-700">
+                  This ticket type has no available inventory.
+                </span>
+              )}
+            </div>
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-cinema hover:bg-primary/90 disabled:opacity-60"
+            >
+              {submitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+              Issue comp
+            </button>
+          </div>
+        </form>
+      </details>
+    </section>
   );
 }
 
@@ -736,7 +1006,12 @@ function OrderRow({
   const refundedCents = refunds
     .filter((refund) => refund.status === "succeeded")
     .reduce((sum, refund) => sum + Number(refund.amountCents ?? 0), 0);
-  const canRefund = order.status === "paid";
+  const isComp = order.paymentType === "comp";
+  const canRefund =
+    order.status === "paid" &&
+    !isComp &&
+    Number(order.totalCents ?? 0) > 0 &&
+    Boolean(order.stripePaymentIntentId);
 
   return (
     <div className="border-b border-cinema-200 last:border-b-0 bg-cinema-50 p-3">
@@ -749,6 +1024,9 @@ function OrderRow({
             <Badge className={orderStatusTone(order.status)}>
               {order.status}
             </Badge>
+            {isComp && (
+              <Badge className="bg-primary/20 text-cinema-900">comp</Badge>
+            )}
           </div>
           <p className="text-xs text-cinema-600">
             {order.buyerSnapshot?.email || "No buyer email"} ·{" "}
