@@ -6,11 +6,13 @@
 // at the door for scanning.
 
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { doc, onSnapshot } from "firebase/firestore";
-import { Loader2, Ticket, AlertCircle, ChevronRight } from "lucide-react";
-import { firestoreTicketing, useMyTickets } from "../../lib/firebaseTicketing";
+import { Loader2, Ticket, AlertCircle, ChevronRight, Share2 } from "lucide-react";
+import { firestoreTicketing } from "../../lib/firebaseTicketing";
 import { toTicketingDate } from "../../lib/useUpcomingShows";
+import ShareTicketModal from "./ShareTicketModal";
 import type {
   IssuedTicket,
   TicketedShow,
@@ -19,10 +21,13 @@ import type {
 
 interface MyTicketsSectionProps {
   uid: string | undefined;
+  tickets: Array<IssuedTicket & { id: string }>;
+  loading: boolean;
+  error: Error | null;
   /** "active" filters to tickets the buyer can still use; "past" shows used/expired. */
   filter?: "active" | "past" | "all";
   /** Shown when the buyer has no tickets in the requested bucket. */
-  emptyState?: React.ReactNode;
+  emptyState?: ReactNode;
   /** Heading text; pass null to render headless. */
   heading?: string | null;
 }
@@ -31,11 +36,14 @@ const ACTIVE_STATUSES: TicketStatus[] = ["valid", "disputed"]; // disputed still
 
 export default function MyTicketsSection({
   uid,
+  tickets,
+  loading,
+  error,
   filter = "active",
   emptyState,
   heading = "My tickets",
 }: MyTicketsSectionProps) {
-  const { tickets, loading, error } = useMyTickets(uid);
+  const [sharingTicket, setSharingTicket] = useState<(IssuedTicket & { id: string }) | null>(null);
 
   const visible = useMemo(() => {
     if (filter === "all") return tickets;
@@ -89,9 +97,22 @@ export default function MyTicketsSection({
       {visible.length > 0 && (
         <ul className="space-y-2">
           {visible.map((t) => (
-            <TicketRow key={t.id} ticket={t} />
+            <TicketRow
+              key={t.id}
+              ticket={t}
+              shareEnabled={filter === "active"}
+              onShare={setSharingTicket}
+            />
           ))}
         </ul>
+      )}
+
+      {sharingTicket && (
+        <ShareTicketModal
+          ticket={sharingTicket}
+          open={Boolean(sharingTicket)}
+          onClose={() => setSharingTicket(null)}
+        />
       )}
     </section>
   );
@@ -101,7 +122,16 @@ export default function MyTicketsSection({
 // fetched live; if the show doc is gone we fall back to a title snapshotted onto
 // the ticket (if present) or a clear "no longer available" — never an indefinite
 // "Loading…". Clicking goes to /tickets/view/:ticketId for the scan view.
-function TicketRow({ ticket }: { ticket: IssuedTicket & { id: string } }) {
+function TicketRow({
+  ticket,
+  shareEnabled,
+  onShare,
+}: {
+  ticket: IssuedTicket & { id: string };
+  shareEnabled: boolean;
+  onShare: (ticket: IssuedTicket & { id: string }) => void;
+}) {
+  const navigate = useNavigate();
   const [show, setShow] = useState<(TicketedShow & { id: string }) | null>(null);
   const [resolved, setResolved] = useState(false);
 
@@ -128,12 +158,34 @@ function TicketRow({ ticket }: { ticket: IssuedTicket & { id: string } }) {
     () => toTicketingDate(show?.startDate ?? ticket.showStartDate ?? null),
     [show, ticket.showStartDate]
   );
+  const path = `/tickets/view/${ticket.id}`;
+  const shareStatus = ticket.shareState?.status;
+  const canShare = shareEnabled && ticket.status === "valid" && !shareStatus;
+  const sharedToEmail = ticket.shareState?.sharedToEmail ?? ticket.holderEmail;
+
+  const handleNavigate = () => navigate(path);
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleNavigate();
+    }
+  };
+
+  const handleShare = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onShare(ticket);
+  };
 
   return (
     <li>
-      <Link
-        to={`/tickets/view/${ticket.id}`}
-        className="card-cinema p-3 flex items-center gap-3 hover:border-primary/60 transition-colors"
+      <div
+        role="link"
+        tabIndex={0}
+        onClick={handleNavigate}
+        onKeyDown={handleKeyDown}
+        className="card-cinema p-3 flex items-center gap-3 hover:border-primary/60 transition-colors cursor-pointer"
       >
         <div className="flex-1 min-w-0 space-y-0.5">
           <p className="text-sm font-semibold text-cinema-900 truncate">
@@ -157,9 +209,22 @@ function TicketRow({ ticket }: { ticket: IssuedTicket & { id: string } }) {
         </div>
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
           <TicketStatusBadge status={ticket.status} />
+          {shareStatus && (
+            <ShareStateBadge status={shareStatus} email={sharedToEmail} />
+          )}
+          {canShare && (
+            <button
+              type="button"
+              onClick={handleShare}
+              className="inline-flex items-center gap-1 rounded border border-primary/40 px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/10 transition cursor-pointer"
+            >
+              <Share2 className="w-3 h-3" />
+              Share
+            </button>
+          )}
           <ChevronRight className="w-4 h-4 text-cinema-400" />
         </div>
-      </Link>
+      </div>
     </li>
   );
 }
@@ -176,6 +241,32 @@ function TicketStatusBadge({ status }: { status: TicketStatus }) {
   return (
     <span className={`text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded ${tone}`}>
       {status}
+    </span>
+  );
+}
+
+function ShareStateBadge({
+  status,
+  email,
+}: {
+  status: "pending" | "claimed";
+  email?: string | null;
+}) {
+  const tone =
+    status === "pending"
+      ? "bg-primary/10 text-primary border-primary/20"
+      : "bg-emerald-100 text-emerald-800 border-emerald-200";
+  return (
+    <span
+      className={`inline-flex max-w-36 items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-semibold ${tone}`}
+      title={email ?? undefined}
+    >
+      <span>{status === "pending" ? "Shared" : "Claimed"}</span>
+      {email && (
+        <span className="min-w-0 truncate normal-case font-normal opacity-80">
+          {email}
+        </span>
+      )}
     </span>
   );
 }

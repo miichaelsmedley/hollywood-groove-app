@@ -6,12 +6,13 @@
 // give the QR all the room it can take.
 
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { doc, onSnapshot } from "firebase/firestore";
-import { ArrowLeft, Loader2, AlertCircle, Calendar, MapPin } from "lucide-react";
+import { ArrowLeft, Loader2, AlertCircle, Calendar, MapPin, Send } from "lucide-react";
 import { firestoreTicketing } from "../lib/firebaseTicketing";
 import { getTicketWalletPath, resolveSellingFrontId } from "../lib/sellingFronts";
+import ShareTicketModal from "../features/tickets/ShareTicketModal";
 import type {
   IssuedTicket,
   TicketStatus,
@@ -117,7 +118,56 @@ export default function TicketView() {
           tap it to wake up before handing the phone over.
         </p>
       </div>
+
+      {ticket.status === "valid" && <TicketSharePanel ticket={ticket} />}
     </TicketShell>
+  );
+}
+
+function TicketSharePanel({ ticket }: { ticket: IssuedTicket & { id: string } }) {
+  const navigate = useNavigate();
+  const [shareOpen, setShareOpen] = useState(false);
+  const shareStatus = ticket.shareState?.status;
+  const sharedToEmail = ticket.shareState?.sharedToEmail ?? ticket.holderEmail;
+
+  if (shareStatus === "pending") {
+    return (
+      <div className="card-cinema border-primary/30 bg-primary/10 p-4 text-sm text-cinema-800">
+        Shared with {sharedToEmail || "your friend"} — waiting for them to sign in and claim.
+      </div>
+    );
+  }
+
+  if (shareStatus === "claimed") {
+    return (
+      <div className="card-cinema border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+        Claimed by your friend.
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setShareOpen(true)}
+        className="btn-primary inline-flex w-full items-center justify-center gap-2 py-3 text-sm font-semibold cursor-pointer"
+      >
+        <Send className="w-4 h-4" />
+        Send to a friend
+      </button>
+      <ShareTicketModal
+        ticket={ticket}
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        onShared={(email) => {
+          navigate(getTicketWalletPath(resolveSellingFrontId()), {
+            replace: true,
+            state: { ticketShareMessage: `Ticket sent to ${email}` },
+          });
+        }}
+      />
+    </>
   );
 }
 

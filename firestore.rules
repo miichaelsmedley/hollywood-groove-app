@@ -194,6 +194,15 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Email-keyed pending ticket transfers. Written by the shareTicket callable
+    // and redeemed by claimMyPendingTickets on sign-in — both run server-side
+    // via the Admin SDK and bypass these rules. Clients never read claims
+    // directly during redemption; only platform admins, for support/debugging.
+    match /ticketShareClaims/{claimId} {
+      allow read: if isPlatformAdmin();
+      allow create, update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

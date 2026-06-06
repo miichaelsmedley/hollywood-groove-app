@@ -332,6 +332,12 @@ export interface IssuedTicket {
   holderConsentSource: TicketConsentSource;
   holderConsentAt: TicketingTimestamp | null;
   holderMemberUid?: string | null;
+  shareState?: {
+    status: "pending" | "claimed";
+    sharedToEmail?: string | null;
+    sharedByUid?: string | null;
+    claimedByUid?: string | null;
+  } | null;
   status: TicketStatus;
   qrToken?: string;
   qrTokenHash: string;

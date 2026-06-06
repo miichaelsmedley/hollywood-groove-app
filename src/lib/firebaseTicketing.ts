@@ -365,6 +365,34 @@ export async function issueCompTicket(
 }
 
 // ---------------------------------------------------------------------------
+// shareTicket callable wrapper (ticket holder or buyer-of-order)
+// ---------------------------------------------------------------------------
+
+export interface ShareTicketInput {
+  ticketId: string;
+  recipientEmail: string;
+  recipientName?: string;
+}
+
+export interface ShareTicketResult {
+  ok: true;
+  ticketId: string;
+  sharedToEmail: string;
+}
+
+const shareTicketCallable = httpsCallable<
+  ShareTicketInput,
+  ShareTicketResult
+>(functions, "shareTicket");
+
+export async function shareTicket(
+  input: ShareTicketInput,
+): Promise<ShareTicketResult> {
+  const response = await shareTicketCallable(input);
+  return response.data;
+}
+
+// ---------------------------------------------------------------------------
 // setAdminClaim callable wrapper (platform-admin only)
 // ---------------------------------------------------------------------------
 
@@ -446,6 +474,13 @@ const claimMyPendingVenueStaffInvitesCallable = httpsCallable<
     note?: string;
   }
 >(functions, "claimMyPendingVenueStaffInvites");
+const claimMyPendingTicketsCallable = httpsCallable<
+  Record<string, never>,
+  {
+    ok: true;
+    claimed: Array<{ ticketId: string; showId: string | null }>;
+  }
+>(functions, "claimMyPendingTickets");
 
 export async function grantVenueStaff(
   input: GrantVenueStaffInput,
@@ -463,6 +498,14 @@ export async function revokeVenueStaff(
 
 export async function claimMyPendingVenueStaffInvites() {
   const response = await claimMyPendingVenueStaffInvitesCallable({});
+  return response.data;
+}
+
+export async function claimMyPendingTickets(): Promise<{
+  ok: true;
+  claimed: Array<{ ticketId: string; showId: string | null }>;
+}> {
+  const response = await claimMyPendingTicketsCallable({});
   return response.data;
 }
 
@@ -1148,6 +1191,154 @@ export function useMyTickets(
     );
     return () => unsub();
   }, [memberUid]);
+
+  return state;
+}
+
+const MANAGED_TICKETS_IN_QUERY_LIMIT = 30;
+
+function chunkValues<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function sortTicketRows(
+  a: IssuedTicket & { id: string },
+  b: IssuedTicket & { id: string },
+) {
+  const issuedDelta = timestampToMillis(b.issuedAt) - timestampToMillis(a.issuedAt);
+  if (issuedDelta !== 0) return issuedDelta;
+  return a.id.localeCompare(b.id);
+}
+
+// Buyer-managed list: all tickets attached to orders bought by this uid,
+// including tickets whose holder has since been changed by sharing.
+export function useManagedTickets(
+  uid: string | undefined,
+): UseMyTicketsResult {
+  const [state, setState] = useState<UseMyTicketsResult>({
+    tickets: [],
+    loading: Boolean(uid),
+    error: null,
+  });
+
+  useEffect(() => {
+    if (!uid) {
+      setState({ tickets: [], loading: false, error: null });
+      return;
+    }
+
+    let disposed = false;
+    let version = 0;
+    let ticketUnsubs: Array<() => void> = [];
+
+    const clearTicketUnsubs = () => {
+      ticketUnsubs.forEach((unsub) => unsub());
+      ticketUnsubs = [];
+    };
+
+    setState({ tickets: [], loading: true, error: null });
+
+    const ordersQuery = query(
+      collection(firestoreTicketing, "orders"),
+      where("buyerUid", "==", uid),
+    );
+
+    const ordersUnsub = onSnapshot(
+      ordersQuery,
+      (ordersSnap) => {
+        if (disposed) return;
+        version += 1;
+        const activeVersion = version;
+        clearTicketUnsubs();
+
+        const orderIds = Array.from(new Set(ordersSnap.docs.map((d) => d.id))).sort();
+        if (orderIds.length === 0) {
+          if (!disposed) {
+            setState({ tickets: [], loading: false, error: null });
+          }
+          return;
+        }
+
+        setState({ tickets: [], loading: true, error: null });
+
+        const orderIdChunks = chunkValues(orderIds, MANAGED_TICKETS_IN_QUERY_LIMIT);
+        const chunkTickets = orderIdChunks.map(
+          () => new Map<string, IssuedTicket & { id: string }>(),
+        );
+        const resolvedChunks = new Set<number>();
+        const chunkErrors = new Map<number, Error>();
+
+        const publish = () => {
+          if (disposed || activeVersion !== version) return;
+
+          const merged = new Map<string, IssuedTicket & { id: string }>();
+          chunkTickets.forEach((ticketMap) => {
+            ticketMap.forEach((ticket, ticketId) => {
+              merged.set(ticketId, ticket);
+            });
+          });
+
+          setState({
+            tickets: Array.from(merged.values()).sort(sortTicketRows),
+            loading: resolvedChunks.size < orderIdChunks.length,
+            error: chunkErrors.values().next().value ?? null,
+          });
+        };
+
+        orderIdChunks.forEach((orderIdChunk, chunkIndex) => {
+          const ticketsQuery = query(
+            collection(firestoreTicketing, "tickets"),
+            where("orderId", "in", orderIdChunk),
+          );
+          const unsub = onSnapshot(
+            ticketsQuery,
+            (ticketsSnap) => {
+              const nextTickets = new Map<string, IssuedTicket & { id: string }>();
+              ticketsSnap.docs.forEach((d) => {
+                nextTickets.set(d.id, {
+                  id: d.id,
+                  ...(d.data() as IssuedTicket),
+                });
+              });
+              chunkTickets[chunkIndex] = nextTickets;
+              chunkErrors.delete(chunkIndex);
+              resolvedChunks.add(chunkIndex);
+              publish();
+            },
+            (err) => {
+              chunkTickets[chunkIndex] = new Map();
+              chunkErrors.set(chunkIndex, err);
+              resolvedChunks.add(chunkIndex);
+              publish();
+            },
+          );
+          ticketUnsubs.push(unsub);
+        });
+      },
+      (err) => {
+        version += 1;
+        clearTicketUnsubs();
+        if (!disposed) {
+          setState({ tickets: [], loading: false, error: err });
+        }
+      },
+    );
+
+    return () => {
+      disposed = true;
+      version += 1;
+      clearTicketUnsubs();
+      ordersUnsub();
+    };
+  }, [uid]);
+
+  if (!uid) {
+    return { tickets: [], loading: false, error: null };
+  }
 
   return state;
 }

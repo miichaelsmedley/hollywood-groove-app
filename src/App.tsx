@@ -10,7 +10,10 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { clearStoredAuthAttempt, useAuthBootstrap } from './hooks/useAuthBootstrap';
 import { IS_TEST_MODE } from './lib/mode';
 import { auth } from './lib/firebase';
-import { claimMyPendingVenueStaffInvites } from './lib/firebaseTicketing';
+import {
+  claimMyPendingTickets,
+  claimMyPendingVenueStaffInvites,
+} from './lib/firebaseTicketing';
 
 const Home = lazy(() => import('./pages/Home'));
 const ShowsPage = lazy(() => import('./features/shows/ShowsPage'));
@@ -48,11 +51,11 @@ const AdminVenues = lazy(() => import('./pages/AdminVenues'));
 const TICKETING_ADMIN_ROLES = ['platform_admin', 'event_admin'] as const;
 
 /**
- * Top-level effect that auto-redeems any pending venue-staff invites
+ * Top-level effect that auto-redeems any pending ticketing invites
  * for the signed-in user. Fires once per non-anonymous, email-verified
  * session. No-op when there are no pending invites.
  */
-function AutoClaimVenueStaffInvites() {
+function AutoClaimPendingInvites() {
   useEffect(() => {
     const claimedThisSession = new Set<string>();
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -71,6 +74,9 @@ function AutoClaimVenueStaffInvites() {
         // both of which can happen briefly during sign-in; swallow rather
         // than surfacing as a user-facing error.
         console.warn('claimMyPendingVenueStaffInvites silently failed', err);
+      });
+      claimMyPendingTickets().catch((err) => {
+        console.warn('claimMyPendingTickets silently failed', err);
       });
     });
     return () => unsubscribe();
@@ -121,7 +127,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <UserProvider>
-        <AutoClaimVenueStaffInvites />
+        <AutoClaimPendingInvites />
         {/* Auth error banner */}
         {showErrorBanner && authError && (
           <div className="fixed top-0 left-0 right-0 z-50 bg-red-600 text-white px-4 py-3 flex items-center justify-between shadow-lg">

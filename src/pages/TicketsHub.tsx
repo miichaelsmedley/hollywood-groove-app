@@ -12,17 +12,67 @@
 // useUpcomingShows so the same gig appears consistently everywhere.
 
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
-import { Ticket, Calendar, MapPin, ArrowRight, ExternalLink } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import {
+  Ticket,
+  Calendar,
+  MapPin,
+  ArrowRight,
+  ExternalLink,
+  CheckCircle,
+  X,
+} from "lucide-react";
 import { auth } from "../lib/firebase";
 import MyTicketsSection from "../features/tickets/MyTicketsSection";
-import { useTicketedShow } from "../lib/firebaseTicketing";
-import { useUpcomingShows } from "../lib/useUpcomingShows";
+import {
+  useManagedTickets,
+  useMyTickets,
+  useTicketedShow,
+} from "../lib/firebaseTicketing";
+import { toTicketingDate, useUpcomingShows } from "../lib/useUpcomingShows";
 import type { UpcomingShowListEntry } from "../lib/useUpcomingShows";
+import type { IssuedTicket } from "../types/ticketingContract";
+
+type WalletTicket = IssuedTicket & { id: string };
+
+function sortWalletTickets(a: WalletTicket, b: WalletTicket) {
+  const aTime =
+    toTicketingDate(a.showStartDate ?? a.issuedAt)?.getTime() ??
+    Number.POSITIVE_INFINITY;
+  const bTime =
+    toTicketingDate(b.showStartDate ?? b.issuedAt)?.getTime() ??
+    Number.POSITIVE_INFINITY;
+  if (aTime !== bTime) return aTime - bTime;
+  return a.id.localeCompare(b.id);
+}
 
 export default function TicketsHub() {
   const uid = auth.currentUser?.uid;
+  const location = useLocation();
+  const navigate = useNavigate();
+  const heldTickets = useMyTickets(uid);
+  const managedTickets = useManagedTickets(uid);
   const { rows } = useUpcomingShows();
+  const shareMessageState = location.state as { ticketShareMessage?: unknown } | null;
+  const ticketShareMessage =
+    typeof shareMessageState?.ticketShareMessage === "string"
+      ? shareMessageState.ticketShareMessage
+      : null;
+
+  const walletTickets = useMemo<WalletTicket[]>(() => {
+    const ticketsById = new Map<string, WalletTicket>();
+    [...managedTickets.tickets, ...heldTickets.tickets].forEach((ticket) => {
+      ticketsById.set(ticket.id, {
+        ...ticketsById.get(ticket.id),
+        ...ticket,
+      });
+    });
+    return Array.from(ticketsById.values()).sort(sortWalletTickets);
+  }, [heldTickets.tickets, managedTickets.tickets]);
+
+  const walletLoading =
+    Boolean(uid) && (heldTickets.loading || managedTickets.loading);
+  const walletError = heldTickets.error ?? managedTickets.error;
 
   // Surface live shows, anything still upcoming, and any ticketed (on-sale) gig.
   const upcomingShows = useMemo<UpcomingShowListEntry[]>(() => {
@@ -47,8 +97,31 @@ export default function TicketsHub() {
         </p>
       </header>
 
+      {ticketShareMessage && (
+        <div className="card-cinema border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 flex items-center gap-3">
+          <CheckCircle className="w-4 h-4 flex-shrink-0" />
+          <span className="font-semibold flex-1">{ticketShareMessage}</span>
+          <button
+            type="button"
+            onClick={() =>
+              navigate(`${location.pathname}${location.search}`, {
+                replace: true,
+                state: null,
+              })
+            }
+            className="rounded p-1 text-emerald-700 hover:bg-emerald-100 cursor-pointer"
+            aria-label="Dismiss"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <MyTicketsSection
         uid={uid}
+        tickets={walletTickets}
+        loading={walletLoading}
+        error={walletError}
         filter="active"
         heading="Your tickets"
         emptyState={
@@ -87,6 +160,9 @@ export default function TicketsHub() {
 
       <MyTicketsSection
         uid={uid}
+        tickets={walletTickets}
+        loading={walletLoading}
+        error={walletError}
         filter="past"
         heading="Past tickets"
         emptyState="No past tickets yet."
