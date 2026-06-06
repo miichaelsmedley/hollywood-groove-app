@@ -11,7 +11,7 @@ import { ArrowLeft, CheckCircle, XCircle, Star, Loader2, Brain, Trophy, User, Ma
 import { auth } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
 import { signInWithGoogle } from '../lib/auth';
-import { useTriviaPlay, getSettings } from '../lib/triviaLibraryService';
+import { useTriviaPlay, getSettings, getCategories } from '../lib/triviaLibraryService';
 import {
   getUserUsage,
   canPlayMore,
@@ -21,7 +21,7 @@ import {
   type UsageData,
   type CanPlayResult,
 } from '../lib/engagementService';
-import type { TriviaLibrarySettings } from '../types/firebaseContract';
+import type { TriviaLibrarySettings, TriviaLibraryCategory } from '../types/firebaseContract';
 
 type GameState = 'loading' | 'ready' | 'answered' | 'limit_reached' | 'no_questions' | 'star_earned';
 
@@ -42,6 +42,7 @@ export default function Play() {
   const [usage, setUsage] = useState<UsageData | null>(null);
   const [canPlayResult, setCanPlayResult] = useState<CanPlayResult | null>(null);
   const [settings, setSettings] = useState<TriviaLibrarySettings | null>(null);
+  const [categories, setCategories] = useState<Record<string, TriviaLibraryCategory>>({});
   const [submitting, setSubmitting] = useState(false);
 
   // Registration form state
@@ -67,11 +68,12 @@ export default function Play() {
         // Reset daily counters if needed
         await resetDailyIfNeeded(uid);
 
-        // Get settings and usage
-        const [settingsData, usageData, playResult] = await Promise.all([
+        // Get settings, usage, and the category lookup (id -> human-readable name)
+        const [settingsData, usageData, playResult, categoriesData] = await Promise.all([
           getSettings(),
           getUserUsage(uid),
           canPlayMore(uid),
+          getCategories(),
         ]);
 
         if (!isMounted) return;
@@ -79,6 +81,7 @@ export default function Play() {
         setSettings(settingsData);
         setUsage(usageData);
         setCanPlayResult(playResult);
+        setCategories(categoriesData);
 
         if (!playResult.canPlay) {
           setGameState('limit_reached');
@@ -673,15 +676,35 @@ export default function Play() {
   }
 
   const question = currentQuestion.question;
+  // The heading line should show the category/movie NAME, never a raw id.
+  // `category_id` is a UUID foreign key into trivia_library/categories — resolve it
+  // to its human-readable `name`. Any value that still looks like an id is suppressed.
+  const looksLikeId = (value: string) => {
+    const v = value.trim();
+    // Stored ids are UUIDs with '_' separators (Firebase-key-safe), e.g.
+    // "648b10ce_5c94_4db7_b1d4_fa30503f3f13"; also tolerate the '-' form.
+    return (
+      /^[0-9a-f]{8}[_-][0-9a-f]{4}[_-][0-9a-f]{4}[_-][0-9a-f]{4}[_-][0-9a-f]{12}$/i.test(v) ||
+      /^[0-9a-f]{20,}$/i.test(v)
+    );
+  };
   const formatContextLabel = (value: string) =>
     value
       .replace(/[_-]+/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
       .replace(/\b\w/g, (match) => match.toUpperCase());
-  const questionContext = question.subcategory
-    ? `${formatContextLabel(question.subcategory)} • ${formatContextLabel(question.category_id)}`
-    : formatContextLabel(question.category_id);
+  const categoryName = categories[question.category_id]?.name?.trim();
+  const categoryLabel = categoryName
+    ? categoryName
+    : question.category_id && !looksLikeId(question.category_id)
+    ? formatContextLabel(question.category_id)
+    : '';
+  const subcategoryLabel =
+    question.subcategory && !looksLikeId(question.subcategory)
+      ? formatContextLabel(question.subcategory)
+      : '';
+  const questionContext = [subcategoryLabel, categoryLabel].filter(Boolean).join(' • ');
 
   return (
     <div className="mx-auto max-w-lg space-y-4">
@@ -730,10 +753,12 @@ export default function Play() {
           </span>
         </div>
 
-        {/* Question */}
-        <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">
-          {questionContext}
-        </p>
+        {/* Category / theme heading — hidden entirely if it can't be resolved to a name */}
+        {questionContext && (
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">
+            {questionContext}
+          </p>
+        )}
         <h2 className="text-lg font-bold mb-4 leading-snug">{question.question}</h2>
 
         {/* Options */}
