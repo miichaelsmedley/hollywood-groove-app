@@ -1,5 +1,6 @@
 import { Outlet, useParams, useSearchParams } from 'react-router-dom';
 import { ShowProvider } from '../contexts/ShowContext';
+import MomentOverlay from '../components/show/MomentOverlay';
 
 /**
  * Layout wrapper for show-related pages (Trivia, Activity).
@@ -22,6 +23,7 @@ export default function ShowLayout() {
   return (
     <ShowProvider showId={showId} isTestShow={isTestShow}>
       <Outlet />
+      <MomentOverlay />
     </ShowProvider>
   );
 }

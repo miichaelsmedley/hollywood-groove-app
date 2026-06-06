@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
 import { ref, onValue, set } from 'firebase/database';
 import { auth, db } from '../lib/firebase';
-import { ShowSettings, LiveActivityState, LiveTriviaState } from '../types/firebaseContract';
+import { ShowSettings, LiveActivityState, LiveTriviaState, LiveMomentState } from '../types/firebaseContract';
 import { getShowPath, getTestShowPath } from '../lib/mode';
 
 interface DanceClaimRecord {
@@ -29,6 +29,7 @@ interface ShowContextType {
   settings: ShowSettings | null;
   liveActivity: LiveActivityState | null;
   liveTrivia: LiveTriviaState | null;
+  liveMoment: LiveMomentState | null;
 
   // Dancing state
   dancingEnabled: boolean;
@@ -83,6 +84,7 @@ export function ShowProvider({ showId, isTestShow = false, children }: ShowProvi
   const [settings, setSettings] = useState<ShowSettings | null>(null);
   const [liveActivity, setLiveActivity] = useState<LiveActivityState | null>(null);
   const [liveTrivia, setLiveTrivia] = useState<LiveTriviaState | null>(null);
+  const [liveMoment, setLiveMoment] = useState<LiveMomentState | null>(null);
   const [lastDanceClaim, setLastDanceClaim] = useState<DanceClaimRecord | null>(null);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
 
@@ -129,6 +131,15 @@ export function ShowProvider({ showId, isTestShow = false, children }: ShowProvi
       const data = snapshot.val();
       console.log(`📡 ShowContext: Received trivia data:`, data);
       setLiveTrivia(data as LiveTriviaState | null);
+    });
+    return () => unsubscribe();
+  }, [getPath]);
+
+  // Listen to live media moment state (rich media overlay)
+  useEffect(() => {
+    const momentRef = ref(db, getPath('live/moment'));
+    const unsubscribe = onValue(momentRef, (snapshot) => {
+      setLiveMoment(snapshot.val() as LiveMomentState | null);
     });
     return () => unsubscribe();
   }, [getPath]);
@@ -290,6 +301,7 @@ export function ShowProvider({ showId, isTestShow = false, children }: ShowProvi
         settings: effectiveSettings,
         liveActivity,
         liveTrivia,
+        liveMoment,
         dancingEnabled,
         currentMedian,
         canClaimDance,

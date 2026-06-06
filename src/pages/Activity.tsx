@@ -6,6 +6,7 @@ import { auth, db } from '../lib/firebase';
 import { CrowdActivity, LiveActivityState } from '../types/firebaseContract';
 import ActionBar from '../components/show/ActionBar';
 import { getShowPath, getTestShowPath } from '../lib/mode';
+import { getActivityFixture, recordE2EResponse, type E2EUser } from '../lib/e2eShowFixtures';
 
 export default function Activity() {
   const { id } = useParams<{ id: string }>();
@@ -14,6 +15,8 @@ export default function Activity() {
   const [activity, setActivity] = useState<CrowdActivity | null>(null);
   const [hasResponded, setHasResponded] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const fixtureName = searchParams.get('fixture');
+  const activityFixture = useMemo(() => getActivityFixture(fixtureName), [fixtureName]);
 
   // Check if this is a test show via query param
   const isTestShow = searchParams.get('test') === 'true';
@@ -28,6 +31,14 @@ export default function Activity() {
   useEffect(() => {
     if (!id) return;
 
+    if (activityFixture) {
+      setLiveActivity(activityFixture.live);
+      setActivity(activityFixture.activity);
+      setHasResponded(false);
+      setSelectedOption(null);
+      return;
+    }
+
     const unsubscribe = onValue(
       ref(db, getPath(id, 'live/activity')),
       (snapshot) => {
@@ -39,9 +50,10 @@ export default function Activity() {
     );
 
     return () => unsubscribe();
-  }, [id, getPath]);
+  }, [id, getPath, activityFixture]);
 
   useEffect(() => {
+    if (activityFixture) return;
     if (!id || !liveActivity?.activityId) {
       setActivity(null);
       return;
@@ -53,17 +65,38 @@ export default function Activity() {
     });
 
     return () => unsubscribe();
-  }, [id, liveActivity?.activityId, getPath]);
+  }, [id, liveActivity?.activityId, getPath, activityFixture]);
+
+  const getResponseUser = (): E2EUser | null => {
+    if (activityFixture) return activityFixture.user;
+    const user = auth.currentUser;
+    return user
+      ? {
+          uid: user.uid,
+          displayName: user.displayName || 'Anonymous',
+        }
+      : null;
+  };
+
+  const writeActivityResponse = async (uid: string, payload: Record<string, unknown>) => {
+    if (!id || !liveActivity?.activityId) return;
+    const path = getPath(id, `responses/${liveActivity.activityId}/${uid}`);
+    if (activityFixture) {
+      await recordE2EResponse(path, payload);
+      return;
+    }
+    await set(ref(db, path), payload);
+  };
 
   const joinActivity = async () => {
-    if (!id || !liveActivity?.activityId || !auth.currentUser) return;
-    const uid = auth.currentUser.uid;
+    const user = getResponseUser();
+    if (!id || !liveActivity?.activityId || !user) return;
 
     try {
-      await set(ref(db, getPath(id, `responses/${liveActivity.activityId}/${uid}`)), {
+      await writeActivityResponse(user.uid, {
         action: 'join',
         joinedAt: Date.now(),
-        displayName: auth.currentUser.displayName || 'Anonymous',
+        displayName: user.displayName,
       });
       setHasResponded(true);
     } catch (error) {
@@ -72,14 +105,14 @@ export default function Activity() {
   };
 
   const claimDancePoints = async () => {
-    if (!id || !liveActivity?.activityId || !auth.currentUser) return;
-    const uid = auth.currentUser.uid;
+    const user = getResponseUser();
+    if (!id || !liveActivity?.activityId || !user) return;
 
     try {
-      await set(ref(db, getPath(id, `responses/${liveActivity.activityId}/${uid}`)), {
+      await writeActivityResponse(user.uid, {
         type: 'dance_claim',
         claimedAt: Date.now(),
-        displayName: auth.currentUser.displayName || 'Anonymous',
+        displayName: user.displayName,
       });
       setHasResponded(true);
     } catch (error) {
@@ -88,15 +121,15 @@ export default function Activity() {
   };
 
   const voteOption = async (optionIndex: number, optionText: string) => {
-    if (!id || !liveActivity?.activityId || !auth.currentUser) return;
-    const uid = auth.currentUser.uid;
+    const user = getResponseUser();
+    if (!id || !liveActivity?.activityId || !user) return;
 
     try {
-      await set(ref(db, getPath(id, `responses/${liveActivity.activityId}/${uid}`)), {
+      await writeActivityResponse(user.uid, {
         optionIndex,
         optionText,
         votedAt: Date.now(),
-        displayName: auth.currentUser.displayName || 'Anonymous',
+        displayName: user.displayName,
       });
       setSelectedOption(optionIndex);
       setHasResponded(true);

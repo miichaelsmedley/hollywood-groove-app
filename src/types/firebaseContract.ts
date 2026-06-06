@@ -264,6 +264,25 @@ export interface LiveActivityState {
   fixedPoints?: number;        // Participation activities
 }
 
+// Path: shows/{showId}/live/moment  (rich media moment — additive, v2.2)
+export type MomentKind = 'image' | 'video' | 'audio' | 'map' | 'gallery';
+export type MomentPhase = 'displaying' | 'idle';
+export type MomentDisplayStyle = 'fullscreen' | 'lowerThird' | 'overlay';
+
+export interface LiveMomentState {
+  kind: MomentKind;
+  phase: MomentPhase;
+  targetDisplays: 'audience' | 'band' | 'both';
+  displayStyle: MomentDisplayStyle;
+  startedAt: number;            // Server timestamp
+  title?: string;
+  caption?: string;
+  assetUrl?: string;            // Firebase Storage download URL (image/video/audio/map image)
+  mimeType?: string;
+  holdSeconds?: number;
+  mapPins?: { lat: number; lng: number; label?: string }[];
+}
+
 // 4. User Response (Write only)
 // Path: shows/{showId}/responses/{activityId}/{uid}
 export interface UserResponse {

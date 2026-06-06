@@ -6,6 +6,7 @@ import { db, auth } from '../lib/firebase';
 import { LiveTriviaState, CrowdActivity, UserScore } from '../types/firebaseContract';
 import ActionBar from '../components/show/ActionBar';
 import { getShowPath, getTestShowPath } from '../lib/mode';
+import { getTriviaFixture, recordE2EResponse, type E2EUser } from '../lib/e2eShowFixtures';
 
 export default function Trivia() {
   const { id } = useParams<{ id: string }>();
@@ -21,6 +22,8 @@ export default function Trivia() {
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const activityUnsubscribeRef = useRef<(() => void) | null>(null);
   const activeActivityIdRef = useRef<string | null>(null);
+  const fixtureName = searchParams.get('fixture');
+  const triviaFixture = useMemo(() => getTriviaFixture(fixtureName), [fixtureName]);
 
   // Check if this is a test show via query param
   const isTestShow = searchParams.get('test') === 'true';
@@ -34,6 +37,21 @@ export default function Trivia() {
 
   useEffect(() => {
     if (!id) return;
+
+    if (triviaFixture) {
+      activeActivityIdRef.current = triviaFixture.live.activityId;
+      setLiveTrivia(triviaFixture.live);
+      setCurrentActivity(triviaFixture.activity);
+      setMyScore(triviaFixture.score);
+      setHasAnswered(false);
+      setSelectedOption(null);
+      setFreeformText('');
+      setBooleanValue(null);
+      setScaleValue(null);
+      return () => {
+        activeActivityIdRef.current = null;
+      };
+    }
 
     const triviaPath = getPath(id, 'live/trivia');
     console.log(`📡 Trivia: Listening to ${triviaPath} (testMode=${isTestShow})`);
@@ -98,7 +116,7 @@ export default function Trivia() {
       cleanupActivityListener();
       activeActivityIdRef.current = null;
     };
-  }, [id, getPath]);
+  }, [id, getPath, triviaFixture]);
 
   const isTriviaActivity = currentActivity?.type === 'trivia';
   const triviaData = isTriviaActivity && 'trivia' in currentActivity
@@ -135,6 +153,27 @@ export default function Trivia() {
     setScaleValue((current) => (current === null ? scaleMin : current));
   }, [kind, liveTrivia?.phase, scaleMin]);
 
+  const getResponseUser = (): E2EUser | null => {
+    if (triviaFixture) return triviaFixture.user;
+    const user = auth.currentUser;
+    return user
+      ? {
+          uid: user.uid,
+          displayName: user.displayName || 'Anonymous',
+        }
+      : null;
+  };
+
+  const writeTriviaResponse = async (uid: string, payload: Record<string, unknown>) => {
+    if (!id || !liveTrivia?.activityId) return;
+    const path = getPath(id, `responses/${liveTrivia.activityId}/${uid}`);
+    if (triviaFixture) {
+      await recordE2EResponse(path, payload);
+      return;
+    }
+    await set(ref(db, path), payload);
+  };
+
   // Timer countdown
   useEffect(() => {
     if (liveTrivia?.phase !== 'question' || !liveTrivia.durationSeconds) {
@@ -157,23 +196,20 @@ export default function Trivia() {
   }, [liveTrivia]);
 
   const submitMultiChoice = async (optionIndex: number) => {
-    if (!id || !liveTrivia?.activityId || !auth.currentUser) return;
+    const user = getResponseUser();
+    if (!id || !liveTrivia?.activityId || !user) return;
 
-    const uid = auth.currentUser.uid;
     const answeredAt = Date.now();
     const startedAt = typeof liveTrivia.startedAt === 'number' ? liveTrivia.startedAt : answeredAt;
     const responseTime = Math.max(0, answeredAt - startedAt);
 
     try {
-      await set(
-        ref(db, getPath(id, `responses/${liveTrivia.activityId}/${uid}`)),
-        {
-          optionIndex,
-          answeredAt,
-          responseTime,
-          displayName: auth.currentUser.displayName || 'Anonymous',
-        }
-      );
+      await writeTriviaResponse(user.uid, {
+        optionIndex,
+        answeredAt,
+        responseTime,
+        displayName: user.displayName,
+      });
 
       setSelectedOption(optionIndex);
       setHasAnswered(true);
@@ -183,21 +219,21 @@ export default function Trivia() {
   };
 
   const submitFreeform = async () => {
-    if (!id || !liveTrivia?.activityId || !auth.currentUser) return;
+    const user = getResponseUser();
+    if (!id || !liveTrivia?.activityId || !user) return;
     const trimmed = freeformText.trim();
     if (!trimmed) return;
 
-    const uid = auth.currentUser.uid;
     const answeredAt = Date.now();
     const startedAt = typeof liveTrivia.startedAt === 'number' ? liveTrivia.startedAt : answeredAt;
     const responseTime = Math.max(0, answeredAt - startedAt);
 
     try {
-      await set(ref(db, getPath(id, `responses/${liveTrivia.activityId}/${uid}`)), {
+      await writeTriviaResponse(user.uid, {
         text: trimmed,
         answeredAt,
         responseTime,
-        displayName: auth.currentUser.displayName || 'Anonymous',
+        displayName: user.displayName,
       });
 
       setHasAnswered(true);
@@ -207,19 +243,19 @@ export default function Trivia() {
   };
 
   const submitBoolean = async (value: boolean) => {
-    if (!id || !liveTrivia?.activityId || !auth.currentUser) return;
+    const user = getResponseUser();
+    if (!id || !liveTrivia?.activityId || !user) return;
 
-    const uid = auth.currentUser.uid;
     const answeredAt = Date.now();
     const startedAt = typeof liveTrivia.startedAt === 'number' ? liveTrivia.startedAt : answeredAt;
     const responseTime = Math.max(0, answeredAt - startedAt);
 
     try {
-      await set(ref(db, getPath(id, `responses/${liveTrivia.activityId}/${uid}`)), {
+      await writeTriviaResponse(user.uid, {
         booleanValue: value,
         answeredAt,
         responseTime,
-        displayName: auth.currentUser.displayName || 'Anonymous',
+        displayName: user.displayName,
       });
 
       setBooleanValue(value);
@@ -230,20 +266,20 @@ export default function Trivia() {
   };
 
   const submitScale = async () => {
-    if (!id || !liveTrivia?.activityId || !auth.currentUser) return;
+    const user = getResponseUser();
+    if (!id || !liveTrivia?.activityId || !user) return;
     const value = scaleValue ?? scaleMin;
 
-    const uid = auth.currentUser.uid;
     const answeredAt = Date.now();
     const startedAt = typeof liveTrivia.startedAt === 'number' ? liveTrivia.startedAt : answeredAt;
     const responseTime = Math.max(0, answeredAt - startedAt);
 
     try {
-      await set(ref(db, getPath(id, `responses/${liveTrivia.activityId}/${uid}`)), {
+      await writeTriviaResponse(user.uid, {
         scaleValue: value,
         answeredAt,
         responseTime,
-        displayName: auth.currentUser.displayName || 'Anonymous',
+        displayName: user.displayName,
       });
 
       setHasAnswered(true);
