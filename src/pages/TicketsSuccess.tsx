@@ -6,7 +6,7 @@
 // Firestore real-time, so any small lag resolves on its own.
 
 import { useMemo } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle2, Loader2, AlertCircle, Ticket } from "lucide-react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { useEffect, useState } from "react";
@@ -19,6 +19,8 @@ import {
   resolveSellingFrontId,
 } from "../lib/sellingFronts";
 import type { TicketOrder } from "../types/ticketingContract";
+import { useAuthUser } from "../features/auth/useAuthUser";
+import WalletSignInPrompt from "../features/tickets/WalletSignInPrompt";
 
 export default function TicketsSuccess() {
   const [searchParams] = useSearchParams();
@@ -26,6 +28,9 @@ export default function TicketsSuccess() {
   const [order, setOrder] = useState<(TicketOrder & { id: string }) | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const authUser = useAuthUser();
+  const isAnonymous = !authUser || authUser.isAnonymous;
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!orderId) {
@@ -179,14 +184,34 @@ export default function TicketsSuccess() {
         </p>
       </div>
 
-      <div className="mt-5 flex flex-col sm:flex-row gap-2">
-        <Link to={getTicketWalletPath(frontId)} className="btn-primary flex-1 py-3 text-center inline-flex items-center justify-center gap-2">
-          <Ticket className="w-4 h-4" /> View my tickets
-        </Link>
-        <Link to={getTicketEventPath(order.showId, frontId)} className="flex-1 py-3 text-center rounded-lg border border-cinema-200 text-cinema-800 hover:bg-cinema-50">
-          Back to show
-        </Link>
-      </div>
+      {isAnonymous ? (
+        <div className="mt-5">
+          <WalletSignInPrompt
+            heading={null}
+            title="One last step — save your ticket"
+            subtitle={
+              <>
+                Create a free account (or sign in) with{" "}
+                <span className="font-semibold">{order.buyerSnapshot.email}</span>{" "}
+                — the email you bought with — to pull up your ticket's QR code at
+                the door and manage it anytime.
+              </>
+            }
+            defaultEmail={order.buyerSnapshot.email ?? undefined}
+            returnPath={getTicketWalletPath(frontId)}
+            onSignedIn={() => navigate(getTicketWalletPath(frontId))}
+          />
+        </div>
+      ) : (
+        <div className="mt-5 flex flex-col sm:flex-row gap-2">
+          <Link to={getTicketWalletPath(frontId)} className="btn-primary flex-1 py-3 text-center inline-flex items-center justify-center gap-2">
+            <Ticket className="w-4 h-4" /> View my tickets
+          </Link>
+          <Link to={getTicketEventPath(order.showId, frontId)} className="flex-1 py-3 text-center rounded-lg border border-cinema-200 text-cinema-800 hover:bg-cinema-50">
+            Back to show
+          </Link>
+        </div>
+      )}
     </CenteredCard>
   );
 }

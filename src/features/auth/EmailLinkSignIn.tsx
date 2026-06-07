@@ -15,10 +15,12 @@ interface EmailLinkSignInProps {
    * page mid-checkout). Defaults to /tickets when omitted.
    */
   returnPath?: string;
+  /** Pre-fill the email field (e.g. the address used at checkout). */
+  defaultEmail?: string;
 }
 
-export default function EmailLinkSignIn({ returnPath }: EmailLinkSignInProps) {
-  const [email, setEmail] = useState("");
+export default function EmailLinkSignIn({ returnPath, defaultEmail }: EmailLinkSignInProps) {
+  const [email, setEmail] = useState(defaultEmail ?? "");
   const [phase, setPhase] = useState<Phase>("form");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
