@@ -11,7 +11,7 @@
 // RTDB + ticketing feed is shared with the /upcoming + /shows pages via
 // useUpcomingShows so the same gig appears consistently everywhere.
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Ticket,
@@ -22,9 +22,11 @@ import {
   CheckCircle,
   X,
 } from "lucide-react";
-import { auth } from "../lib/firebase";
 import MyTicketsSection from "../features/tickets/MyTicketsSection";
+import WalletSignInPrompt from "../features/tickets/WalletSignInPrompt";
+import { useAuthUser } from "../features/auth/useAuthUser";
 import {
+  claimMyPendingTickets,
   useManagedTickets,
   useMyTickets,
   useTicketedShow,
@@ -47,7 +49,9 @@ function sortWalletTickets(a: WalletTicket, b: WalletTicket) {
 }
 
 export default function TicketsHub() {
-  const uid = auth.currentUser?.uid;
+  const authUser = useAuthUser();
+  const uid = authUser?.uid;
+  const isAnonymous = !authUser || authUser.isAnonymous;
   const location = useLocation();
   const navigate = useNavigate();
   const heldTickets = useMyTickets(uid);
@@ -73,6 +77,19 @@ export default function TicketsHub() {
   const walletLoading =
     Boolean(uid) && (heldTickets.loading || managedTickets.loading);
   const walletError = heldTickets.error ?? managedTickets.error;
+
+  // When a real account signs in (e.g. via the prompt below, after opening a
+  // ticket email in a fresh browser), sweep any tickets pending for their
+  // now-verified email into the wallet — once per signed-in account.
+  const sweptForUid = useRef<string | null>(null);
+  useEffect(() => {
+    if (!authUser || authUser.isAnonymous || !authUser.emailVerified) return;
+    if (sweptForUid.current === authUser.uid) return;
+    sweptForUid.current = authUser.uid;
+    claimMyPendingTickets().catch(() => {
+      // Best-effort; tickets already linked to this account still show.
+    });
+  }, [authUser]);
 
   // Surface live shows, anything still upcoming, and any ticketed (on-sale) gig.
   const upcomingShows = useMemo<UpcomingShowListEntry[]>(() => {
@@ -117,22 +134,26 @@ export default function TicketsHub() {
         </div>
       )}
 
-      <MyTicketsSection
-        uid={uid}
-        tickets={walletTickets}
-        loading={walletLoading}
-        error={walletError}
-        filter="active"
-        heading="Your tickets"
-        emptyState={
-          <>
-            You don't have any active tickets.{" "}
-            <span className="text-primary font-semibold">
-              Browse upcoming shows below to book one.
-            </span>
-          </>
-        }
-      />
+      {isAnonymous ? (
+        <WalletSignInPrompt />
+      ) : (
+        <MyTicketsSection
+          uid={uid}
+          tickets={walletTickets}
+          loading={walletLoading}
+          error={walletError}
+          filter="active"
+          heading="Your tickets"
+          emptyState={
+            <>
+              You don't have any active tickets.{" "}
+              <span className="text-primary font-semibold">
+                Browse upcoming shows below to book one.
+              </span>
+            </>
+          }
+        />
+      )}
 
       <section className="space-y-3" aria-label="Upcoming shows">
         <header className="flex items-center justify-between">
@@ -158,15 +179,17 @@ export default function TicketsHub() {
         )}
       </section>
 
-      <MyTicketsSection
-        uid={uid}
-        tickets={walletTickets}
-        loading={walletLoading}
-        error={walletError}
-        filter="past"
-        heading="Past tickets"
-        emptyState="No past tickets yet."
-      />
+      {!isAnonymous && (
+        <MyTicketsSection
+          uid={uid}
+          tickets={walletTickets}
+          loading={walletLoading}
+          error={walletError}
+          filter="past"
+          heading="Past tickets"
+          emptyState="No past tickets yet."
+        />
+      )}
     </div>
   );
 }
