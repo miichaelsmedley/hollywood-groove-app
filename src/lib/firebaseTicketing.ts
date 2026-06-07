@@ -15,6 +15,7 @@ import {
   collection,
   doc,
   getDoc,
+  deleteDoc,
   getFirestore,
   onSnapshot,
   query,
@@ -289,6 +290,21 @@ export async function savePromoCode(
     { merge: true },
   );
   return code;
+}
+
+// Delete a promo code. The doc id is the normalized code. Gated server-side by
+// firestore.rules (platform_admin or event_admin for the show).
+export async function deletePromoCode(
+  showId: string,
+  code: string,
+): Promise<void> {
+  const normalized = normalizePromoCodeInput(code);
+  if (!normalized) {
+    throw new Error("Invalid promo code.");
+  }
+  await deleteDoc(
+    doc(firestoreTicketing, "shows", showId, "promoCodes", normalized),
+  );
 }
 
 // ---------------------------------------------------------------------------

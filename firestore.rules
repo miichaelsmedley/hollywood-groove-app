@@ -154,7 +154,8 @@ service cloud.firestore {
         allow list: if isTicketingAdmin() || isVenueStaffForShow(showId);
         allow create, update: if isPlatformAdmin()
           || (isEventAdmin() && showExists(showId));
-        allow delete: if isPlatformAdmin();
+        allow delete: if isPlatformAdmin()
+          || (isEventAdmin() && showExists(showId));
       }
     }
 
