@@ -6,10 +6,11 @@
 // bottom tab bar, no Shows/Tickets/Join nav — so it reads as a real ticketing
 // page, not an in-venue game app.
 //
-// Flow: browse (pick ticket type + quantity) → sign in (required, so the buyer
-// can always manage their tickets later) → holder details + consent → Stripe
-// Checkout. The ticket selection is persisted to sessionStorage so the
-// email-link sign-in round-trip doesn't lose it.
+// Flow: browse (pick ticket type + quantity) → holder details + consent →
+// Stripe Checkout. Sign-in is NOT required to buy (guest checkout); the buyer
+// enters their email at the details step and signs in AFTER paying to claim
+// their ticket. Selection is persisted to sessionStorage so any optional
+// sign-in round-trip doesn't lose it.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
@@ -346,7 +347,10 @@ export default function EventTicketing() {
 
   const handleGetTickets = () => {
     setSubmitError(null);
-    setStep(signedIn ? "details" : "signin");
+    // Guest checkout: go straight to details — no sign-in required to buy. The
+    // buyer enters their email at the details step and signs in AFTER paying to
+    // claim the ticket (post-purchase wallet prompt + claimMyPendingTickets).
+    setStep("details");
   };
 
   const handleGoogle = async () => {
