@@ -32,16 +32,23 @@ export default function EmailLinkSignIn({ returnPath }: EmailLinkSignInProps) {
       setPhase("sent");
     } catch (err) {
       console.error("sendEmailLinkSignIn failed", err);
-      const code = (err as { code?: string }).code;
-      let message = err instanceof Error ? err.message : "Couldn't send the link.";
-      if (code === "auth/operation-not-allowed") {
-        // The most common deploy-time problem — provider not enabled in console.
+      // The sign-in link now comes from the sendEmailSignInLink callable, which
+      // returns friendly HttpsError messages (rate limit, bad email, send
+      // failure) that propagate as err.message. Only App Check / session
+      // attestation failures need a clearer override.
+      const code = ((err as { code?: string }).code ?? "").toLowerCase();
+      let message =
+        err instanceof Error && err.message
+          ? err.message
+          : "Couldn't send the link. Please try again.";
+      if (
+        code.includes("unauthenticated") ||
+        code.includes("failed-precondition") ||
+        code.includes("app-check") ||
+        code.includes("appcheck")
+      ) {
         message =
-          "Email sign-in isn't switched on yet. Hold tight while we finish setting it up.";
-      } else if (code === "auth/invalid-email") {
-        message = "That email doesn't look right. Double-check and try again.";
-      } else if (code === "auth/quota-exceeded") {
-        message = "Too many sign-in requests today. Try again tomorrow.";
+          "Couldn't verify this app session. Refresh the page and try again.";
       }
       setErrorMessage(message);
       setPhase("error");

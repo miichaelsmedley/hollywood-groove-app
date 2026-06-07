@@ -7,12 +7,21 @@ import {
   getRedirectResult,
   signOut as firebaseSignOut,
   signInWithCredential,
-  sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
   User,
 } from 'firebase/auth';
-import { auth } from './firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import app, { auth } from './firebase';
+import { resolveSellingFrontId } from './sellingFronts';
+
+// The sign-in link is minted + emailed by the `sendEmailSignInLink` callable in
+// asia-southeast1 (sent via our verified Resend domain), not by Firebase's
+// built-in email sender — far better deliverability to corporate/Outlook inboxes.
+const sendEmailSignInLinkCallable = httpsCallable<
+  { email: string; returnPath?: string; sellingFrontId?: string },
+  { ok: true }
+>(getFunctions(app, 'asia-southeast1'), 'sendEmailSignInLink');
 
 // Email link (passwordless) sign-in storage key — the email the user entered
 // when they requested the link must be re-presented when completing the
@@ -20,30 +29,11 @@ import { auth } from './firebase';
 const EMAIL_LINK_PENDING_KEY = 'hg_email_link_pending_email';
 
 /**
- * Resolves the absolute URL where the user lands after they tap the link
- * in the Firebase-sent sign-in email. Must be a whitelisted domain in
- * Firebase Console → Authentication → Settings → Authorized domains.
- * In production this is `https://app.hollywoodgroove.com.au/auth/finish`.
- *
- * `returnPath` (e.g. "/event/abc123") is carried through so the buyer
- * lands back where they started checkout after the email round-trip.
- */
-function getEmailLinkContinueUrl(returnPath?: string): string {
-  const origin =
-    typeof window === 'undefined'
-      ? 'https://app.hollywoodgroove.com.au'
-      : window.location.origin;
-  const base = `${origin}/auth/finish`;
-  if (returnPath && returnPath.startsWith('/')) {
-    return `${base}?return=${encodeURIComponent(returnPath)}`;
-  }
-  return base;
-}
-
-/**
  * Sends a "tap to sign in" link to the given email address. Works for any
- * email provider (Google, Outlook, Yahoo, work, anything). Firebase sends
- * the email using its built-in template; no SES/Resend wiring required.
+ * email provider (Google, Outlook, Yahoo, work, anything). The link is minted
+ * and emailed server-side by the `sendEmailSignInLink` callable via our verified
+ * Resend domain (hollywoodgroove.com.au) — much more deliverable than Firebase's
+ * built-in firebaseapp.com sender, which corporate/Outlook mail tends to junk.
  *
  * After the user taps the link, they land on /auth/finish which calls
  * `completeEmailLinkSignIn()` to actually complete the sign-in, then
@@ -57,12 +47,15 @@ export async function sendEmailLinkSignIn(
   if (!normalized || !normalized.includes('@')) {
     throw new Error('Please enter a valid email address.');
   }
-  await sendSignInLinkToEmail(auth, normalized, {
-    url: getEmailLinkContinueUrl(returnPath),
-    handleCodeInApp: true,
+  await sendEmailSignInLinkCallable({
+    email: normalized,
+    returnPath:
+      returnPath && returnPath.startsWith('/') ? returnPath : undefined,
+    sellingFrontId: resolveSellingFrontId(),
   });
-  // Persist the email so we can complete the sign-in after redirect — Firebase
-  // doesn't include the email in the link itself for security reasons.
+  // Persist the email so we can complete the sign-in after redirect — the link
+  // doesn't include the email in it (Firebase requires re-presenting it to
+  // prevent session-fixation).
   try {
     window.localStorage.setItem(EMAIL_LINK_PENDING_KEY, normalized);
   } catch {
