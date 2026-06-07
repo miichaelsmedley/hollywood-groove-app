@@ -308,6 +308,32 @@ export async function deletePromoCode(
 }
 
 // ---------------------------------------------------------------------------
+// Ticket type settings (platform-admin only)
+// ---------------------------------------------------------------------------
+
+// Set how many tickets a single order may contain for one ticket type. Firestore
+// rules restrict shows/{showId}/ticketTypes writes to platform_admin, and the
+// server (createCheckoutSession) re-enforces maxPerOrder at checkout, so this is
+// the per-show control behind the buyer quantity picker — not a security gate.
+export async function updateTicketTypeMaxPerOrder(
+  showId: string,
+  ticketTypeId: string,
+  maxPerOrder: number,
+): Promise<void> {
+  const value = Math.floor(maxPerOrder);
+  if (!Number.isFinite(value) || value < 1) {
+    throw new Error("Max per order must be a whole number of at least 1.");
+  }
+  if (value > 1000) {
+    throw new Error("Max per order can't exceed 1000 per order.");
+  }
+  await updateDoc(
+    doc(firestoreTicketing, "shows", showId, "ticketTypes", ticketTypeId),
+    { maxPerOrder: value, updatedAt: serverTimestamp() },
+  );
+}
+
+// ---------------------------------------------------------------------------
 // refundOrder callable wrapper (platform-admin or event-admin)
 // ---------------------------------------------------------------------------
 
