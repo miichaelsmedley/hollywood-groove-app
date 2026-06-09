@@ -11,6 +11,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { ArrowLeft, Loader2, AlertCircle, Calendar, MapPin, Send } from "lucide-react";
 import { firestoreTicketing } from "../lib/firebaseTicketing";
+import { toTicketingDate } from "../lib/ticketingTime";
 import { getTicketWalletPath, resolveSellingFrontId } from "../lib/sellingFronts";
 import ShareTicketModal from "../features/tickets/ShareTicketModal";
 import type {
@@ -220,16 +221,10 @@ function ShowHeader({ showId }: { showId: string }) {
     return () => unsub();
   }, [show?.venueId]);
 
-  const startDate = useMemo(() => {
-    if (!show) return null;
-    const ts: unknown = show.startDate;
-    if (ts && typeof (ts as { toMillis?: () => number }).toMillis === "function") {
-      return new Date((ts as { toMillis: () => number }).toMillis());
-    }
-    if (ts instanceof Date) return ts;
-    if (typeof ts === "number") return new Date(ts);
-    return null;
-  }, [show]);
+  const startDate = useMemo(
+    () => (show ? toTicketingDate(show.startDate) : null),
+    [show],
+  );
 
   return (
     <div className="card-cinema p-4 space-y-2">

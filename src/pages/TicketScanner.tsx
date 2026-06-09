@@ -28,6 +28,7 @@ import {
 } from "../lib/firebaseTicketing";
 import QrScanner from "../features/tickets/QrScanner";
 import { useStaffRoles } from "../hooks/useStaffRoles";
+import { toTicketingDate, toTicketingMillis } from "../lib/ticketingTime";
 
 type ScreenState = "pick_show" | "scanning" | "result";
 
@@ -47,15 +48,8 @@ const RESULT_STYLE: Record<ScanResult, ResultStyle> = {
 };
 
 function showStartLabel(value: unknown): string {
-  let date: Date | null = null;
-  if (value && typeof (value as { toMillis?: () => number }).toMillis === "function") {
-    date = new Date((value as { toMillis: () => number }).toMillis());
-  } else if (value instanceof Date) {
-    date = value;
-  } else if (typeof value === "number") {
-    date = new Date(value);
-  }
-  if (!date || isNaN(date.getTime())) return "Date TBA";
+  const date = toTicketingDate(value);
+  if (!date) return "Date TBA";
   return date.toLocaleString("en-AU", {
     weekday: "short",
     day: "numeric",
@@ -129,13 +123,11 @@ export default function TicketScanner() {
 
   const sortedShows = useMemo(
     () =>
-      [...shows].sort((a, b) => {
-        const am =
-          (a.startDate as { toMillis?: () => number })?.toMillis?.() ?? 0;
-        const bm =
-          (b.startDate as { toMillis?: () => number })?.toMillis?.() ?? 0;
-        return bm - am;
-      }),
+      [...shows].sort(
+        (a, b) =>
+          (toTicketingMillis(b.startDate) ?? 0) -
+          (toTicketingMillis(a.startDate) ?? 0),
+      ),
     [shows]
   );
 

@@ -27,6 +27,7 @@ import {
   firestoreTicketing,
 } from "../lib/firebaseTicketing";
 import EmailLinkSignIn from "../features/auth/EmailLinkSignIn";
+import { toTicketingDate as toDate } from "../lib/ticketingTime";
 import type { TicketedShow, TicketVenue } from "../types/ticketingContract";
 
 type ClaimState =
@@ -37,17 +38,7 @@ type ClaimState =
   | "none_found"
   | "error";
 
-function toDate(value: unknown): Date | null {
-  if (
-    value &&
-    typeof (value as { toMillis?: () => number }).toMillis === "function"
-  ) {
-    return new Date((value as { toMillis: () => number }).toMillis());
-  }
-  if (value instanceof Date) return value;
-  if (typeof value === "number") return new Date(value);
-  return null;
-}
+// Date coercion is imported above as `toDate` from lib/ticketingTime.
 
 export default function ClaimTicket() {
   const [params] = useSearchParams();

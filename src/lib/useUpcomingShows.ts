@@ -15,7 +15,8 @@ import type { ShowMeta } from "../types/firebaseContract";
 import { getShowBasePath } from "./mode";
 import { isShowLive, ShowRecordSnapshot } from "./showStatus";
 import { useOnSaleTicketedShows } from "./firebaseTicketing";
-import type { TicketedShow, TicketingTimestamp } from "../types/ticketingContract";
+import type { TicketedShow } from "../types/ticketingContract";
+import { toTicketingDate } from "./ticketingTime";
 
 export interface ShowListEntry {
   showId: string;
@@ -30,32 +31,10 @@ export interface UpcomingShowListEntry extends ShowListEntry {
   ticketedShow?: TicketedShowWithId;
 }
 
-/** Best-effort coercion of the various date shapes (Firestore Timestamp, Date,
- * epoch ms, ISO string, or {seconds}) into a Date — or null if unparseable. */
-export function toTicketingDate(
-  value: TicketingTimestamp | string | null | undefined,
-): Date | null {
-  let date: Date | null = null;
-
-  if (value && typeof (value as { toMillis?: () => number }).toMillis === "function") {
-    date = new Date((value as { toMillis: () => number }).toMillis());
-  } else if (value instanceof Date) {
-    date = value;
-  } else if (typeof value === "number") {
-    date = new Date(value);
-  } else if (typeof value === "string") {
-    date = new Date(value);
-  } else if (
-    value &&
-    typeof value === "object" &&
-    typeof (value as { seconds?: unknown }).seconds === "number"
-  ) {
-    date = new Date((value as { seconds: number }).seconds * 1000);
-  }
-
-  if (!date || !Number.isFinite(date.getTime())) return null;
-  return date;
-}
+// toTicketingDate now lives in ./ticketingTime (shared by ~8 call sites);
+// re-exported here so existing importers (MyTicketsSection, TicketsHub) keep
+// their import path unchanged.
+export { toTicketingDate };
 
 export function sortableTime(date: Date | null): number {
   return date ? date.getTime() : Number.POSITIVE_INFINITY;

@@ -28,6 +28,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { toTicketingMillis } from "./ticketingTime";
 import { useEffect, useState } from "react";
 import app from "./firebase";
 import type {
@@ -117,22 +118,7 @@ export interface SavePromoCodeInput {
 }
 
 function timestampToMillis(value: unknown): number {
-  if (
-    value &&
-    typeof (value as { toMillis?: () => number }).toMillis === "function"
-  ) {
-    return (value as { toMillis: () => number }).toMillis();
-  }
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (
-    value &&
-    typeof value === "object" &&
-    typeof (value as { seconds?: unknown }).seconds === "number"
-  ) {
-    return (value as { seconds: number }).seconds * 1000;
-  }
-  return 0;
+  return toTicketingMillis(value) ?? 0;
 }
 
 export function normalizePromoCodeInput(value: string): string | null {
