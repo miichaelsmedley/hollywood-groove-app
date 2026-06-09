@@ -23,8 +23,8 @@ import {
 import type { TicketVenue } from "../types/ticketingContract";
 
 const ROLE_LABEL: Record<VenueStaffRole, string> = {
-  door_staff: "Door staff",
-  venue_manager: "Venue manager",
+  door_staff: "Scanner",
+  venue_manager: "Ticketer",
 };
 
 interface VenueState {
@@ -147,12 +147,12 @@ export default function AdminVenueStaff() {
       </Link>
 
       <header>
-        <h1 className="text-2xl font-bold text-cinema-900">Venue door staff</h1>
+        <h1 className="text-2xl font-bold text-cinema-900">Venue ticketing staff</h1>
         <p className="text-cinema-600 text-sm mt-1">
           {venueState.loading
             ? "Loading venue…"
             : venueState.venue
-              ? `Manage scanner access at ${venueState.venue.name}.`
+              ? `Manage scanner and ticketer access at ${venueState.venue.name}.`
               : "This venue couldn't be loaded."}
         </p>
       </header>
@@ -170,10 +170,10 @@ export default function AdminVenueStaff() {
       )}
 
       {/* Invite / grant form */}
-      <section className="card-cinema p-4 space-y-3" aria-label="Invite a scanner">
+      <section className="card-cinema p-4 space-y-3" aria-label="Invite ticketing staff">
         <header className="flex items-center gap-2">
           <UserPlus className="w-4 h-4 text-primary" />
-          <h2 className="text-base font-bold text-cinema-900">Invite a scanner</h2>
+          <h2 className="text-base font-bold text-cinema-900">Invite ticketing staff</h2>
         </header>
         <form onSubmit={handleGrant} className="space-y-3">
           <label className="block">
@@ -190,7 +190,7 @@ export default function AdminVenueStaff() {
             />
             <p className="text-[11px] text-cinema-500 mt-1">
               They'll need to sign in to the Hollywood Groove app with this email (via
-              Google) to activate their scanner access.
+              Google) to activate their ticketing access.
             </p>
           </label>
 
@@ -203,9 +203,9 @@ export default function AdminVenueStaff() {
                 disabled={submitting}
                 className="input-cinema mt-1 w-full"
               >
-                <option value="door_staff">Door staff (scanner only)</option>
+                <option value="door_staff">Scanner (scan only)</option>
                 <option value="venue_manager">
-                  Venue manager (can also grant door staff at this venue)
+                  Ticketer (can also grant scanners at this venue)
                 </option>
               </select>
             </label>
@@ -251,7 +251,7 @@ export default function AdminVenueStaff() {
         </h2>
         {sortedStaff.length === 0 ? (
           <div className="card-cinema p-4 text-sm text-cinema-700">
-            Nobody has scanner access at this venue yet.
+            Nobody has ticketing access at this venue yet.
           </div>
         ) : (
           <ul className="space-y-2">

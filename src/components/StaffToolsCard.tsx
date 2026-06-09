@@ -65,10 +65,10 @@ export default function StaffToolsCard() {
   if (tools.length === 0) return null;
 
   const roleLabels = [
-    isPlatformAdmin && 'Admin',
-    isEventAdmin && 'Ticketing co-admin',
-    isVenueManager && 'Venue manager',
-    isDoorStaff && 'Door staff',
+    isPlatformAdmin && 'Absolute admin',
+    isEventAdmin && 'Ticket admin',
+    isVenueManager && 'Ticketer',
+    isDoorStaff && 'Scanner',
   ].filter((label): label is string => Boolean(label));
 
   return (

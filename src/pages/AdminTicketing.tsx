@@ -42,6 +42,7 @@ import {
   setAdminClaim,
   ticketAvailableCount,
   updateTicketTypeMaxPerOrder,
+  type AdminClaimRole,
   usePromoCodes,
   useTicketTypes,
   useTicketingAdminOverview,
@@ -486,8 +487,36 @@ function EmptyState({ children }: { children: ReactNode }) {
 const COMPACT_FIELD_CLASS =
   "input-cinema min-h-9 rounded-md px-2 py-1.5 text-[13px] leading-tight";
 
+const TICKETING_ACCESS_ROLES: Array<{
+  value: AdminClaimRole;
+  label: string;
+  helper: string;
+}> = [
+  {
+    value: "door_staff",
+    label: "Scanner",
+    helper: "Can scan tickets once assigned to a venue.",
+  },
+  {
+    value: "venue_manager",
+    label: "Ticketer",
+    helper: "Venue-level ticketing lead; can scan and manage door staff at assigned venues.",
+  },
+  {
+    value: "event_admin",
+    label: "Ticket admin",
+    helper: "Can administer ticketing workflows and issue/refund tickets.",
+  },
+  {
+    value: "platform_admin",
+    label: "Absolute admin",
+    helper: "Full Hollywood Groove platform access.",
+  },
+];
+
 function TicketingCoAdminsPanel() {
   const [email, setEmail] = useState("");
+  const [role, setRole] = useState<AdminClaimRole>("event_admin");
   const [busyAction, setBusyAction] = useState<"grant" | "revoke" | null>(null);
   const [feedback, setFeedback] = useState<{
     tone: "ok" | "error";
@@ -496,12 +525,15 @@ function TicketingCoAdminsPanel() {
 
   const targetEmail = email.trim().toLowerCase();
   const canSubmit = targetEmail.includes("@") && busyAction === null;
+  const selectedRole =
+    TICKETING_ACCESS_ROLES.find((option) => option.value === role) ||
+    TICKETING_ACCESS_ROLES[0];
 
-  const updateCoAdmin = async (grant: boolean) => {
+  const updateTicketingRole = async (grant: boolean) => {
     if (!canSubmit) return;
     if (
       !grant &&
-      !window.confirm(`Revoke ticketing co-admin access for ${targetEmail}?`)
+      !window.confirm(`Revoke ${selectedRole.label} access for ${targetEmail}?`)
     ) {
       return;
     }
@@ -512,14 +544,14 @@ function TicketingCoAdminsPanel() {
     try {
       const result = await setAdminClaim({
         email: targetEmail,
-        role: "event_admin",
+        role,
         grant,
       });
       setFeedback({
         tone: "ok",
         message: grant
-          ? `Granted ticketing co-admin access to ${targetEmail}. ${result.note}`
-          : `Revoked ticketing co-admin access for ${targetEmail}. ${result.note}`,
+          ? `Set ${targetEmail} to ${selectedRole.label}. ${result.note}`
+          : `Revoked ${selectedRole.label} access for ${targetEmail}. ${result.note}`,
       });
       setEmail("");
     } catch (err) {
@@ -528,7 +560,7 @@ function TicketingCoAdminsPanel() {
         message:
           err instanceof Error
             ? err.message
-            : "Could not update ticketing co-admin access.",
+            : "Could not update ticketing access.",
       });
     } finally {
       setBusyAction(null);
@@ -537,7 +569,7 @@ function TicketingCoAdminsPanel() {
 
   const handleGrant = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    await updateCoAdmin(true);
+    await updateTicketingRole(true);
   };
 
   return (
@@ -547,19 +579,19 @@ function TicketingCoAdminsPanel() {
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-primary" />
             <h2 className="text-xl font-bold text-cinema-900">
-              Ticketing co-admins
+              Ticketing access
             </h2>
           </div>
           <p className="text-sm text-cinema-600">
-            Grant or revoke the event_admin ticketing claim for band members.
-            They must have signed in to Hollywood Groove at least once with this
-            email so an Auth account exists. The matching PRIS user is synced
-            when that CRM account exists.
+            Set scanner, ticketer, ticket admin, or absolute admin access for
+            band members. The matching PRIS user role is synced when that CRM
+            account exists. Scanner and ticketer still need venue assignment
+            before door access works.
           </p>
         </div>
       </div>
 
-      <form onSubmit={handleGrant} className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
+      <form onSubmit={handleGrant} className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(220px,0.8fr)_auto_auto]">
         <label className="space-y-1">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
             Band member email
@@ -576,6 +608,27 @@ function TicketingCoAdminsPanel() {
           />
         </label>
 
+        <label className="space-y-1">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">
+            Ticketing role
+          </span>
+          <select
+            value={role}
+            onChange={(event) => setRole(event.target.value as AdminClaimRole)}
+            className="input-cinema"
+            disabled={busyAction !== null}
+          >
+            {TICKETING_ACCESS_ROLES.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] leading-snug text-cinema-500">
+            {selectedRole.helper}
+          </p>
+        </label>
+
         <div className="flex items-end">
           <button
             type="submit"
@@ -587,14 +640,14 @@ function TicketingCoAdminsPanel() {
             ) : (
               <UserPlus className="w-4 h-4" />
             )}
-            Grant co-admin
+            Apply role
           </button>
         </div>
 
         <div className="flex items-end">
           <button
             type="button"
-            onClick={() => updateCoAdmin(false)}
+            onClick={() => updateTicketingRole(false)}
             disabled={!canSubmit}
             className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-red-300 px-4 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-60 lg:w-auto"
           >
@@ -603,7 +656,7 @@ function TicketingCoAdminsPanel() {
             ) : (
               <UserMinus className="w-4 h-4" />
             )}
-            Revoke co-admin
+            Revoke role
           </button>
         </div>
       </form>

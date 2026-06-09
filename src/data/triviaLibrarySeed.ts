@@ -36,6 +36,11 @@ export const settings: TriviaLibrarySettings = {
   star_weekly_cap: 3,
   stars_per_threshold: 1,
   star_threshold: 3.0,
+  ai_autopilot_enabled: false,
+  ai_min_questions_per_pool: 3,
+  ai_target_questions_per_pool: 8,
+  ai_batch_size: 5,
+  ai_model: 'gpt-4o-mini',
 };
 
 // ============================================

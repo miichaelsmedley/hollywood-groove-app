@@ -423,6 +423,11 @@ export interface TriviaLibrarySettings {
   star_weekly_cap: number;         // Max stars earnable per week from trivia
   stars_per_threshold: number;     // Stars earned when threshold met (usually 1)
   star_threshold: number;          // Sum of star_values needed for 1 star (e.g., 3.0)
+  ai_autopilot_enabled?: boolean;  // Opt-in automatic daily-question backfill
+  ai_min_questions_per_pool?: number;
+  ai_target_questions_per_pool?: number;
+  ai_batch_size?: number;
+  ai_model?: string;
 }
 
 // Path: trivia_library/categories/{categoryId}
@@ -496,6 +501,9 @@ export interface TriviaLibraryQuestion {
   difficulty: TriviaQuestionDifficulty;
   star_value: number;              // Contribution toward star threshold (e.g., 1.0)
   image_url?: string | null;
+  audio_url?: string | null;
+  audio_mime_type?: string | null;
+  duration_seconds?: number;
   explanation?: string;            // Shown after answer
 
   // AI generation metadata (optional for seed data)

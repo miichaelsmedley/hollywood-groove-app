@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, XCircle, Star, Loader2, Brain, Trophy, User, Mail, Phone, Check } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Star, Loader2, Brain, Trophy, User, Mail, Phone, Check, Volume2, MapPin, Image as ImageIcon } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
 import { signInWithGoogle } from '../lib/auth';
@@ -21,9 +21,87 @@ import {
   type UsageData,
   type CanPlayResult,
 } from '../lib/engagementService';
-import type { TriviaLibrarySettings, TriviaLibraryCategory } from '../types/firebaseContract';
+import type { TriviaLibrarySettings, TriviaLibraryCategory, TriviaLibraryQuestion } from '../types/firebaseContract';
 
 type GameState = 'loading' | 'ready' | 'answered' | 'limit_reached' | 'no_questions' | 'star_earned';
+type DailyAnswerMode = 'choice' | 'multi_select' | 'text' | 'numeric' | 'unsupported';
+
+const choiceQuestionTypes = new Set([
+  'multiple_choice',
+  'image_choice',
+  'image_reveal',
+  'mixed_image_faces',
+  'guess_person',
+  'map_guess_place',
+  'audio_clip',
+  'true_false',
+]);
+
+function getDailyAnswerMode(question: TriviaLibraryQuestion): DailyAnswerMode {
+  if (question.type === 'multi_select') return 'multi_select';
+  if (question.type === 'closest_number') return 'numeric';
+  if (choiceQuestionTypes.has(question.type) && (question.options?.length ?? 0) >= 2) return 'choice';
+  if (question.correct_text || question.type === 'type_answer' || question.type === 'lyric_completion' || question.type === 'audio_clip' || question.type === 'map_guess_place') {
+    return 'text';
+  }
+  return 'unsupported';
+}
+
+function normaliseAnswerText(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function getCorrectTextValues(question: TriviaLibraryQuestion): string[] {
+  if (Array.isArray(question.correct_text)) return question.correct_text;
+  if (typeof question.correct_text === 'string') return [question.correct_text];
+  const correctOption = question.options?.find((option) => option.index === question.correct_index);
+  return correctOption ? [correctOption.text] : [];
+}
+
+function isTextAnswerCorrect(question: TriviaLibraryQuestion, answer: string): boolean {
+  const normalizedAnswer = normaliseAnswerText(answer);
+  if (!normalizedAnswer) return false;
+  return getCorrectTextValues(question).some((value) => normaliseAnswerText(value) === normalizedAnswer);
+}
+
+function isNumericAnswerCorrect(question: TriviaLibraryQuestion, answer: string): boolean {
+  const submitted = Number(answer);
+  if (!Number.isFinite(submitted) || typeof question.numeric_answer !== 'number') return false;
+  const tolerance = typeof question.numeric_tolerance === 'number' ? Math.max(0, question.numeric_tolerance) : 0;
+  return Math.abs(submitted - question.numeric_answer) <= tolerance;
+}
+
+function areSelectionsCorrect(question: TriviaLibraryQuestion, selected: number[]): boolean {
+  const expected = [...(question.correct_indices ?? [])].sort((a, b) => a - b);
+  const actual = [...selected].sort((a, b) => a - b);
+  return expected.length > 0 && expected.length === actual.length && expected.every((value, index) => value === actual[index]);
+}
+
+function describeCorrectAnswer(question: TriviaLibraryQuestion): string {
+  const textAnswers = getCorrectTextValues(question).filter(Boolean);
+  if (textAnswers.length > 0) return textAnswers.join(' / ');
+
+  if (typeof question.numeric_answer === 'number') {
+    return question.numeric_tolerance
+      ? `${question.numeric_answer} (within ${question.numeric_tolerance})`
+      : String(question.numeric_answer);
+  }
+
+  if (question.correct_indices?.length) {
+    const optionText = question.correct_indices
+      .map((index) => question.options?.find((option) => option.index === index)?.text)
+      .filter(Boolean);
+    if (optionText.length > 0) return optionText.join(', ');
+  }
+
+  if (question.map_target?.label) return question.map_target.label;
+  if (question.image_hotspot?.label) return question.image_hotspot.label;
+  return 'Answer unavailable';
+}
 
 export default function Play() {
   const { isRegistered, loading: userLoading, registerUser, isGoogleUser, googlePhotoURL } = useUser();
@@ -38,6 +116,9 @@ export default function Play() {
 
   const [gameState, setGameState] = useState<GameState>('loading');
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [selectedOptions, setSelectedOptions] = useState<number[]>([]);
+  const [textAnswer, setTextAnswer] = useState('');
+  const [numericAnswer, setNumericAnswer] = useState('');
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [usage, setUsage] = useState<UsageData | null>(null);
   const [canPlayResult, setCanPlayResult] = useState<CanPlayResult | null>(null);
@@ -116,18 +197,14 @@ export default function Play() {
     }
   }, [questionLoading, currentQuestion, gameState]);
 
-  // Handle answer selection
-  const handleSelectAnswer = useCallback(async (optionIndex: number) => {
+  // Record an answer after the UI-specific control has calculated correctness.
+  const recordQuestionResult = useCallback(async (correct: boolean) => {
     if (gameState !== 'ready' || !currentQuestion || submitting) return;
 
     const uid = auth.currentUser?.uid;
     if (!uid) return;
 
     setSubmitting(true);
-    setSelectedOption(optionIndex);
-
-    const correct = currentQuestion.question.correct_index !== undefined
-      && optionIndex === currentQuestion.question.correct_index;
     setIsCorrect(correct);
 
     try {
@@ -173,6 +250,41 @@ export default function Play() {
     }
   }, [gameState, currentQuestion, submitting]);
 
+  // Handle answer selection
+  const handleSelectAnswer = useCallback(async (optionIndex: number) => {
+    if (!currentQuestion) return;
+
+    setSelectedOption(optionIndex);
+    const correct = currentQuestion.question.correct_index !== undefined
+      && optionIndex === currentQuestion.question.correct_index;
+
+    await recordQuestionResult(correct);
+  }, [currentQuestion, recordQuestionResult]);
+
+  const handleToggleMultiSelect = useCallback((optionIndex: number) => {
+    if (gameState !== 'ready' || submitting) return;
+    setSelectedOptions((current) =>
+      current.includes(optionIndex)
+        ? current.filter((index) => index !== optionIndex)
+        : [...current, optionIndex]
+    );
+  }, [gameState, submitting]);
+
+  const handleSubmitMultiSelect = useCallback(async () => {
+    if (!currentQuestion || selectedOptions.length === 0) return;
+    await recordQuestionResult(areSelectionsCorrect(currentQuestion.question, selectedOptions));
+  }, [currentQuestion, selectedOptions, recordQuestionResult]);
+
+  const handleSubmitTextAnswer = useCallback(async () => {
+    if (!currentQuestion || textAnswer.trim().length === 0) return;
+    await recordQuestionResult(isTextAnswerCorrect(currentQuestion.question, textAnswer));
+  }, [currentQuestion, textAnswer, recordQuestionResult]);
+
+  const handleSubmitNumericAnswer = useCallback(async () => {
+    if (!currentQuestion || numericAnswer.trim().length === 0) return;
+    await recordQuestionResult(isNumericAnswerCorrect(currentQuestion.question, numericAnswer));
+  }, [currentQuestion, numericAnswer, recordQuestionResult]);
+
   // Handle next question
   const handleNextQuestion = useCallback(async () => {
     const uid = auth.currentUser?.uid;
@@ -189,6 +301,9 @@ export default function Play() {
 
     // Reset state for next question
     setSelectedOption(null);
+    setSelectedOptions([]);
+    setTextAnswer('');
+    setNumericAnswer('');
     setIsCorrect(null);
     setGameState('loading');
 
@@ -676,6 +791,9 @@ export default function Play() {
   }
 
   const question = currentQuestion.question;
+  const answerMode = getDailyAnswerMode(question);
+  const correctAnswerLabel = describeCorrectAnswer(question);
+  const showResult = gameState === 'answered';
   // The heading line should show the category/movie NAME, never a raw id.
   // `category_id` is a UUID foreign key into trivia_library/categories — resolve it
   // to its human-readable `name`. Any value that still looks like an id is suppressed.
@@ -759,14 +877,59 @@ export default function Play() {
             {questionContext}
           </p>
         )}
+
+        {(question.image_url || question.audio_url || question.map_target) && (
+          <div className="mb-4 space-y-3">
+            {question.image_url && (
+              <div className="overflow-hidden rounded-lg border border-gray-800 bg-gray-950">
+                <img
+                  src={question.image_url}
+                  alt="Trivia clue"
+                  className="w-full max-h-72 object-contain bg-black"
+                />
+              </div>
+            )}
+
+            {question.audio_url && (
+              <div className="rounded-lg border border-gray-800 bg-gray-950 p-3">
+                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-primary">
+                  <Volume2 className="h-4 w-4" />
+                  <span>Audio clue</span>
+                </div>
+                <audio src={question.audio_url} controls preload="metadata" className="w-full" />
+              </div>
+            )}
+
+            {question.map_target && (
+              <div className="rounded-lg border border-gray-800 bg-gray-950 p-3">
+                <div className="flex items-start gap-2">
+                  <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" />
+                  <div className="text-sm text-gray-300">
+                    <div className="font-semibold text-gray-100">Map clue</div>
+                    {showResult ? (
+                      <div className="text-gray-400">
+                        {question.map_target.label ?? 'Target location'}:
+                        {' '}
+                        {question.map_target.lat.toFixed(4)}, {question.map_target.lng.toFixed(4)}
+                      </div>
+                    ) : (
+                      <div className="text-gray-500">Answer first to reveal the location.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <h2 className="text-lg font-bold mb-4 leading-snug">{question.question}</h2>
 
         {/* Options */}
-        <div className="space-y-2">
+        {answerMode === 'choice' && (
+          <div className="space-y-2">
           {(question.options ?? []).map((option) => {
             const isSelected = selectedOption === option.index;
             const isCorrectOption = option.index === question.correct_index;
-            const showResult = gameState === 'answered';
 
             let optionClass =
               'w-full text-left p-4 rounded-lg border-2 transition-all duration-200 ';
@@ -804,7 +967,113 @@ export default function Play() {
               </button>
             );
           })}
-        </div>
+          </div>
+        )}
+
+        {answerMode === 'multi_select' && (
+          <div className="space-y-2">
+            {(question.options ?? []).map((option) => {
+              const isSelected = selectedOptions.includes(option.index);
+              const isCorrectOption = question.correct_indices?.includes(option.index) ?? false;
+              let optionClass = 'w-full text-left p-4 rounded-lg border-2 transition-all duration-200 ';
+
+              if (showResult) {
+                if (isCorrectOption) {
+                  optionClass += 'border-green-500 bg-green-500/10';
+                } else if (isSelected) {
+                  optionClass += 'border-red-500 bg-red-500/10';
+                } else {
+                  optionClass += 'border-gray-700 bg-gray-800 opacity-50';
+                }
+              } else if (isSelected) {
+                optionClass += 'border-primary bg-primary/10';
+              } else {
+                optionClass += 'border-gray-700 bg-gray-800 hover:border-gray-600 hover:bg-gray-700';
+              }
+
+              return (
+                <button
+                  key={option.index}
+                  onClick={() => handleToggleMultiSelect(option.index)}
+                  disabled={gameState !== 'ready' || submitting}
+                  className={optionClass}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium">{option.text}</span>
+                    {(isSelected || (showResult && isCorrectOption)) && (
+                      <CheckCircle className={`h-5 w-5 flex-shrink-0 ${showResult && !isCorrectOption ? 'text-red-400' : 'text-primary'}`} />
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+            {gameState === 'ready' && (
+              <button
+                onClick={handleSubmitMultiSelect}
+                disabled={selectedOptions.length === 0 || submitting}
+                className="w-full rounded-lg bg-primary px-4 py-3 font-bold text-gray-900 transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Submit Selections
+              </button>
+            )}
+          </div>
+        )}
+
+        {answerMode === 'text' && (
+          <div className="space-y-3">
+            <input
+              type="text"
+              value={textAnswer}
+              onChange={(event) => setTextAnswer(event.target.value)}
+              disabled={gameState !== 'ready' || submitting}
+              placeholder="Type your answer"
+              className="w-full rounded-lg border-2 border-gray-700 bg-gray-800 px-4 py-3 text-gray-100 placeholder-gray-500 outline-none transition focus:border-primary disabled:opacity-60"
+            />
+            {gameState === 'ready' && (
+              <button
+                onClick={handleSubmitTextAnswer}
+                disabled={textAnswer.trim().length === 0 || submitting}
+                className="w-full rounded-lg bg-primary px-4 py-3 font-bold text-gray-900 transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Submit Answer
+              </button>
+            )}
+          </div>
+        )}
+
+        {answerMode === 'numeric' && (
+          <div className="space-y-3">
+            <input
+              type="number"
+              value={numericAnswer}
+              onChange={(event) => setNumericAnswer(event.target.value)}
+              disabled={gameState !== 'ready' || submitting}
+              placeholder="Enter a number"
+              className="w-full rounded-lg border-2 border-gray-700 bg-gray-800 px-4 py-3 text-gray-100 placeholder-gray-500 outline-none transition focus:border-primary disabled:opacity-60"
+            />
+            {gameState === 'ready' && (
+              <button
+                onClick={handleSubmitNumericAnswer}
+                disabled={numericAnswer.trim().length === 0 || submitting}
+                className="w-full rounded-lg bg-primary px-4 py-3 font-bold text-gray-900 transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Submit Answer
+              </button>
+            )}
+          </div>
+        )}
+
+        {answerMode === 'unsupported' && (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
+            <div className="mb-2 flex items-center gap-2 font-semibold">
+              <ImageIcon className="h-4 w-4" />
+              <span>This trivia type needs a playable answer field.</span>
+            </div>
+            <p className="text-amber-100/80">
+              Add options, accepted text, or a numeric answer before scheduling it.
+            </p>
+          </div>
+        )}
 
         {/* Feedback */}
         {gameState === 'answered' && (
@@ -828,6 +1097,9 @@ export default function Play() {
                 </>
               )}
             </div>
+            <p className="mb-2 text-sm text-gray-300">
+              Correct answer: <span className="font-semibold text-gray-100">{correctAnswerLabel}</span>
+            </p>
             {question.explanation && (
               <p className="text-sm text-gray-300">{question.explanation}</p>
             )}
