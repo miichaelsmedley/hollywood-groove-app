@@ -3,7 +3,13 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-  base: "/", // Root path for Azure Static Web Apps deployment
+  base: "/", // Root path for the Cloudflare Workers deployment
+  esbuild: {
+    // Strip noisy console.log/info/debug from production bundles — several of
+    // them logged buyer email + uid. console.warn/error are kept for real
+    // diagnostics. esbuild only drops these when minifying, so dev keeps them.
+    pure: ["console.log", "console.info", "console.debug"],
+  },
   server: {
     headers: {
       // Allow Firebase Auth popup to communicate with opener window

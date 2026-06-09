@@ -14,13 +14,15 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle2, AlertCircle, Loader2, Mail } from "lucide-react";
 import { completeEmailLinkSignIn, isSignInWithEmailLink } from "../lib/auth";
 import { auth } from "../lib/firebase";
+import { safeInternalPath } from "../lib/safeRedirect";
 
 type Phase = "verifying" | "needs_email" | "success" | "failed";
 
 export default function AuthFinish() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const returnUrl = params.get("return") ?? "/tickets";
+  // Constrain to an in-app path so `?return=` can't redirect off-site after sign-in.
+  const returnUrl = safeInternalPath(params.get("return"), "/tickets");
 
   const [phase, setPhase] = useState<Phase>("verifying");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);

@@ -6,6 +6,7 @@ import { useUser } from '../contexts/UserContext';
 import { Music, Mail, Phone, User, Check, Sparkles, AlertCircle, CheckCircle, PartyPopper, ExternalLink } from 'lucide-react';
 import { signInWithGoogle } from '../lib/auth';
 import EmailLinkSignIn from '../features/auth/EmailLinkSignIn';
+import { safeReturnUrl } from '../lib/safeRedirect';
 
 export default function Signup() {
   const [searchParams] = useSearchParams();
@@ -30,8 +31,13 @@ export default function Signup() {
   const [signingInWithGoogle, setSigningInWithGoogle] = useState(false);
   const [signupComplete, setSignupComplete] = useState(false);
 
-  // Get return URL from query params
-  const returnUrl = searchParams.get('return') || 'https://hollywoodgroove.com.au';
+  // Get return URL from query params — validated to a trusted host / in-app
+  // path so a crafted `?return=` can't turn "Back to Website" into a phishing
+  // redirect (or a javascript: URI).
+  const returnUrl = safeReturnUrl(
+    searchParams.get('return'),
+    'https://hollywoodgroove.com.au',
+  );
 
   // Pre-fill form when user signs in with Google
   useEffect(() => {
