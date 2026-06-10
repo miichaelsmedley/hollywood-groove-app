@@ -6,9 +6,8 @@
  * Supports test mode: when isTestMode is true, listens to test/ paths.
  */
 
-import { useState, useEffect } from 'react';
-import { ref, onValue } from 'firebase/database';
-import { db } from '../lib/firebase';
+import { useMemo } from 'react';
+import { useRtdbValue } from './useRtdbValue';
 import type { Team, TeamMember } from '../types/firebaseContract';
 
 export interface UseTeamResult {
@@ -25,75 +24,23 @@ export interface UseTeamOptions {
 
 export function useTeam(teamId: string | null, options: UseTeamOptions = {}): UseTeamResult {
   const { isTestMode = false } = options;
-  const [team, setTeam] = useState<Team | null>(null);
-  const [members, setMembers] = useState<Record<string, TeamMember>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
   const prefix = isTestMode ? 'test/' : '';
+  const teamPath = teamId ? `${prefix}teams/${teamId}` : null;
+  const membersPath = teamId ? `${prefix}teams/${teamId}/members` : null;
+  const {
+    value: rawTeam,
+    loading,
+    error,
+  } = useRtdbValue<Team & { members?: Record<string, TeamMember> }>(teamPath);
+  const { value: membersValue } =
+    useRtdbValue<Record<string, TeamMember>>(membersPath);
 
-  // Listen to team details
-  useEffect(() => {
-    if (!teamId) {
-      setTeam(null);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    const teamRef = ref(db, `${prefix}teams/${teamId}`);
-
-    const unsubscribe = onValue(
-      teamRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.val();
-          // Extract team data (excluding members sub-path)
-          const { members: _, ...teamData } = data;
-          setTeam(teamData as Team);
-        } else {
-          setTeam(null);
-        }
-        setLoading(false);
-        setError(null);
-      },
-      (err) => {
-        console.error('Failed to load team:', err);
-        setLoading(false);
-        setError(err);
-        setTeam(null);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [teamId, prefix]);
-
-  // Listen to team members separately
-  useEffect(() => {
-    if (!teamId) {
-      setMembers({});
-      return;
-    }
-
-    const membersRef = ref(db, `${prefix}teams/${teamId}/members`);
-
-    const unsubscribe = onValue(
-      membersRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          setMembers(snapshot.val() as Record<string, TeamMember>);
-        } else {
-          setMembers({});
-        }
-      },
-      (err) => {
-        console.error('Failed to load team members:', err);
-        setMembers({});
-      }
-    );
-
-    return () => unsubscribe();
-  }, [teamId, prefix]);
+  const team = useMemo(() => {
+    if (!rawTeam) return null;
+    const { members: _, ...teamData } = rawTeam;
+    return teamData as Team;
+  }, [rawTeam]);
+  const members = membersValue ?? {};
 
   // Convert members object to sorted array
   const membersList = Object.entries(members)

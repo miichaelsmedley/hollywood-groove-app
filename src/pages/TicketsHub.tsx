@@ -31,6 +31,7 @@ import {
   useMyTickets,
   useTicketedShow,
 } from "../lib/firebaseTicketing";
+import { formatTicketingDateTime } from "../lib/ticketingTime";
 import { toTicketingDate, useUpcomingShows } from "../lib/useUpcomingShows";
 import type { UpcomingShowListEntry } from "../lib/useUpcomingShows";
 import type { IssuedTicket } from "../types/ticketingContract";
@@ -210,13 +211,13 @@ function UpcomingShowRow({ row }: { row: UpcomingShowListEntry }) {
 
   const startLabel = row.startDate === null
     ? "Date TBA"
-    : row.startDate.toLocaleString("en-AU", {
+    : formatTicketingDateTime(row.startDate, {
         weekday: "short",
         day: "numeric",
         month: "short",
         hour: "2-digit",
         minute: "2-digit",
-      });
+      }) ?? "Date TBA";
 
   return (
     <li>

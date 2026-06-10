@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import { onValue, ref } from 'firebase/database';
-import { db } from '../lib/firebase';
+import { useMemo } from 'react';
 import { LeaderboardEntry, ShowLeaderboard } from '../types/firebaseContract';
 import { getShowPath, getTestShowPath } from '../lib/mode';
+import { useRtdbValue } from './useRtdbValue';
 
 interface LeaderboardState {
   entries: LeaderboardEntry[];
@@ -21,52 +20,24 @@ export function useLeaderboard(
   options?: UseLeaderboardOptions
 ) {
   const isTestShow = options?.isTestShow ?? false;
-
-  const [state, setState] = useState<LeaderboardState>({
-    entries: [],
-    updatedAt: undefined,
-    isLoading: true,
-    error: null,
-  });
-
-  useEffect(() => {
-    if (!showId) {
-      setState({ entries: [], updatedAt: undefined, isLoading: false, error: null });
-      return;
-    }
-
-    setState((current) => ({ ...current, isLoading: true, error: null }));
-
-    const path = isTestShow
+  const path = showId
+    ? isTestShow
       ? getTestShowPath(showId, 'leaderboard')
-      : getShowPath(showId, 'leaderboard');
-    const leaderboardRef = ref(db, path);
-    const unsubscribe = onValue(
-      leaderboardRef,
-      (snapshot) => {
-        const payload = snapshot.val() as ShowLeaderboard | null;
-        const entries = Array.isArray(payload?.top) ? payload?.top ?? [] : [];
-        const sorted = [...entries].sort((a, b) => b.totalScore - a.totalScore);
+      : getShowPath(showId, 'leaderboard')
+    : null;
+  const { value: payload, loading, error } =
+    useRtdbValue<ShowLeaderboard>(path);
 
-        setState({
-          entries: sorted,
-          updatedAt: payload?.updatedAt,
-          isLoading: false,
-          error: null,
-        });
-      },
-      (err) => {
-        setState({
-          entries: [],
-          updatedAt: undefined,
-          isLoading: false,
-          error: err.message,
-        });
-      }
-    );
-
-    return () => unsubscribe();
-  }, [showId, isTestShow]);
+  const state = useMemo<LeaderboardState>(() => {
+    const entries = Array.isArray(payload?.top) ? payload?.top ?? [] : [];
+    const sorted = [...entries].sort((a, b) => b.totalScore - a.totalScore);
+    return {
+      entries: sorted,
+      updatedAt: payload?.updatedAt,
+      isLoading: loading,
+      error: error?.message ?? null,
+    };
+  }, [error, loading, payload]);
 
   const currentUserRank = useMemo(() => {
     if (!currentUserId) return null;

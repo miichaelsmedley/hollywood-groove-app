@@ -10,6 +10,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { clearStoredAuthAttempt, useAuthBootstrap } from './hooks/useAuthBootstrap';
 import { IS_TEST_MODE } from './lib/mode';
 import { auth } from './lib/firebase';
+import LoadingScreen from './components/ui/LoadingScreen';
 import {
   claimMyPendingTickets,
   claimMyPendingVenueStaffInvites,
@@ -32,10 +33,10 @@ const Leaderboard = lazy(() => import('./pages/Leaderboard'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Play = lazy(() => import('./pages/Play'));
 const Score = lazy(() => import('./pages/Score'));
-const TeamsHub = lazy(() => import('./pages/Teams').then((module) => ({ default: module.TeamsHub })));
-const CreateTeam = lazy(() => import('./pages/Teams').then((module) => ({ default: module.CreateTeam })));
-const JoinTeam = lazy(() => import('./pages/Teams').then((module) => ({ default: module.JoinTeam })));
-const TeamDetail = lazy(() => import('./pages/Teams').then((module) => ({ default: module.TeamDetail })));
+const TeamsHub = lazy(() => import('./pages/teams/Hub'));
+const CreateTeam = lazy(() => import('./pages/teams/Create'));
+const JoinTeam = lazy(() => import('./pages/teams/Join'));
+const TeamDetail = lazy(() => import('./pages/teams/Detail'));
 const Test = lazy(() => import('./pages/Test'));
 const TicketsSuccess = lazy(() => import('./pages/TicketsSuccess'));
 const TicketsCancelled = lazy(() => import('./pages/TicketsCancelled'));
@@ -85,43 +86,19 @@ function AutoClaimPendingInvites() {
   return null;
 }
 
-function LoadingScreen({ label = 'Loading...' }: { label?: string }) {
-  return (
-    <div className="min-h-screen bg-cinema-900 flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-cinema-400">{label}</p>
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
   const { authReady, authError, showErrorBanner, clearAuthError } = useAuthBootstrap();
 
   // Show loading state while auth is initializing
   if (!authReady) {
     return (
-      <div className="min-h-screen bg-cinema-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-cinema-400">Loading...</p>
-          {authError && (
-            <div className="mt-4">
-              <p className="text-red-400 text-sm mb-3">{authError}</p>
-              <button
-                onClick={() => {
-                  clearStoredAuthAttempt();
-                  window.location.reload();
-                }}
-                className="px-4 py-2 bg-primary text-cinema rounded-lg text-sm font-medium hover:bg-primary/90"
-              >
-                Try Again
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+      <LoadingScreen
+        error={authError}
+        onRetry={() => {
+          clearStoredAuthAttempt();
+          window.location.reload();
+        }}
+      />
     );
   }
 

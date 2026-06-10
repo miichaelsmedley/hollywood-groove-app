@@ -27,7 +27,10 @@ import {
   firestoreTicketing,
 } from "../lib/firebaseTicketing";
 import EmailLinkSignIn from "../features/auth/EmailLinkSignIn";
-import { toTicketingDate as toDate } from "../lib/ticketingTime";
+import {
+  formatTicketingDateTime,
+  toTicketingDate as toDate,
+} from "../lib/ticketingTime";
 import type { TicketedShow, TicketVenue } from "../types/ticketingContract";
 
 type ClaimState =
@@ -138,7 +141,7 @@ export default function ClaimTicket() {
       {startDate && (
         <p className="text-xs text-cinema-700 flex items-center gap-1.5">
           <Calendar className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-          {startDate.toLocaleString("en-AU", {
+          {formatTicketingDateTime(startDate, {
             weekday: "long",
             day: "numeric",
             month: "long",

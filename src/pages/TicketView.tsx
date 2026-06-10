@@ -11,7 +11,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { ArrowLeft, Loader2, AlertCircle, Calendar, MapPin, Send } from "lucide-react";
 import { firestoreTicketing } from "../lib/firebaseTicketing";
-import { toTicketingDate } from "../lib/ticketingTime";
+import { formatTicketingDateTime, toTicketingDate } from "../lib/ticketingTime";
 import { getTicketWalletPath, resolveSellingFrontId } from "../lib/sellingFronts";
 import ShareTicketModal from "../features/tickets/ShareTicketModal";
 import type {
@@ -232,7 +232,7 @@ function ShowHeader({ showId }: { showId: string }) {
       {startDate && (
         <div className="flex items-center gap-2 text-sm text-cinema-700">
           <Calendar className="w-4 h-4 text-primary" />
-          {startDate.toLocaleString("en-AU", {
+          {formatTicketingDateTime(startDate, {
             weekday: "long",
             day: "numeric",
             month: "long",

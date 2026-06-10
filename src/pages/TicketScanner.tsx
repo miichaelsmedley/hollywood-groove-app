@@ -28,7 +28,10 @@ import {
 } from "../lib/firebaseTicketing";
 import QrScanner from "../features/tickets/QrScanner";
 import { useStaffRoles } from "../hooks/useStaffRoles";
-import { toTicketingDate, toTicketingMillis } from "../lib/ticketingTime";
+import {
+  formatTicketingDateTime,
+  toTicketingMillis,
+} from "../lib/ticketingTime";
 
 type ScreenState = "pick_show" | "scanning" | "result";
 
@@ -48,15 +51,13 @@ const RESULT_STYLE: Record<ScanResult, ResultStyle> = {
 };
 
 function showStartLabel(value: unknown): string {
-  const date = toTicketingDate(value);
-  if (!date) return "Date TBA";
-  return date.toLocaleString("en-AU", {
+  return formatTicketingDateTime(value, {
     weekday: "short",
     day: "numeric",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
-  });
+  }) ?? "Date TBA";
 }
 
 export default function TicketScanner() {

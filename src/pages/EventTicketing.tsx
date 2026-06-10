@@ -53,7 +53,10 @@ import HolderConsentRow, {
   EMPTY_HOLDER,
   HolderFormState,
 } from "../features/tickets/HolderConsentRow";
-import { toTicketingDate as toDate } from "../lib/ticketingTime";
+import {
+  formatTicketingDateTime,
+  toTicketingDate as toDate,
+} from "../lib/ticketingTime";
 import {
   getTicketCancelUrl,
   getTicketSuccessUrl,
@@ -61,6 +64,7 @@ import {
   resolveSellingFrontId,
   useSellingFrontBrand,
 } from "../lib/sellingFronts";
+import Spinner from "../components/ui/Spinner";
 
 type TicketTypeWithId = TicketType & { id: string };
 type Step = "browse" | "details";
@@ -244,7 +248,7 @@ export default function EventTicketing() {
     return (
       <EventShell frontName={frontName} frontId={brand.id} signedIn={signedIn}>
         <div className="min-h-[50vh] flex items-center justify-center">
-          <Loader2 className="w-7 h-7 animate-spin text-primary" />
+          <Spinner className="w-7 h-7 border-4 border-primary border-t-transparent" />
         </div>
       </EventShell>
     );
@@ -410,7 +414,7 @@ export default function EventTicketing() {
                   {startDate && (
                     <span className="inline-flex items-center gap-1.5">
                       <Calendar className="w-4 h-4 text-primary" />
-                      {startDate.toLocaleString("en-AU", {
+                      {formatTicketingDateTime(startDate, {
                         weekday: "long",
                         day: "numeric",
                         month: "long",

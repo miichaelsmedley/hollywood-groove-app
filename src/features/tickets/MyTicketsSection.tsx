@@ -11,6 +11,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { doc, onSnapshot } from "firebase/firestore";
 import { Loader2, Ticket, AlertCircle, ChevronRight, Share2 } from "lucide-react";
 import { firestoreTicketing } from "../../lib/firebaseTicketing";
+import { formatTicketingDateTime } from "../../lib/ticketingTime";
 import { toTicketingDate } from "../../lib/useUpcomingShows";
 import ShareTicketModal from "./ShareTicketModal";
 import type {
@@ -193,7 +194,7 @@ function TicketRow({
           </p>
           {startDate && (
             <p className="text-xs text-cinema-600">
-              {startDate.toLocaleString("en-AU", {
+              {formatTicketingDateTime(startDate, {
                 weekday: "short",
                 day: "numeric",
                 month: "short",

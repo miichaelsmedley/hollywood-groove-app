@@ -6,6 +6,7 @@ import { Loader2, ShieldCheck } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import { readStaffClaims, type StaffClaims } from '../lib/claims';
 import { signInWithGoogle } from '../lib/auth';
+import Spinner from './ui/Spinner';
 
 export type AdminRouteRole = 'platform_admin' | 'event_admin';
 
@@ -74,7 +75,7 @@ export default function AdminRoute({
   if (isAdmin === null) {
     return (
       <AdminGateShell>
-        <Loader2 className="w-6 h-6 text-primary animate-spin mx-auto" />
+        <Spinner className="w-6 h-6 border-4 border-primary border-t-transparent mx-auto" />
       </AdminGateShell>
     );
   }

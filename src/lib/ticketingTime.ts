@@ -32,3 +32,20 @@ export function toTicketingDate(value: unknown): Date | null {
 export function toTicketingMillis(value: unknown): number | null {
   return toTicketingDate(value)?.getTime() ?? null;
 }
+
+export const DEFAULT_TICKETING_DATE_TIME_FORMAT: Intl.DateTimeFormatOptions = {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+};
+
+export function formatTicketingDateTime(
+  value: unknown,
+  opts: Intl.DateTimeFormatOptions = DEFAULT_TICKETING_DATE_TIME_FORMAT,
+): string | null {
+  const date = toTicketingDate(value);
+  return date ? date.toLocaleString("en-AU", opts) : null;
+}

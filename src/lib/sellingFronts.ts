@@ -1,6 +1,6 @@
 import { doc, onSnapshot } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
-import { firestoreTicketing } from "./firebaseTicketing";
+import { firestoreTicketing } from "./ticketing/client";
 import type { SellingFrontId, TicketSellingFront } from "../types/ticketingContract";
 
 export type SellingFrontBrand = Omit<TicketSellingFront, "createdAt" | "updatedAt"> & {

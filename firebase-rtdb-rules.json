@@ -78,10 +78,6 @@
             ".read": "auth != null",
             ".write": "auth != null && auth.token.platform_admin == true"
           },
-          "settings-public": {
-            ".read": "auth != null",
-            ".write": "auth != null && auth.token.platform_admin == true"
-          },
           "activities": {
             ".read": "auth != null",
             ".write": "auth != null && auth.token.platform_admin == true"
@@ -326,10 +322,6 @@
           ".write": "auth != null && auth.token.platform_admin == true"
         },
         "settings": {
-          ".read": "auth != null",
-          ".write": "auth != null && auth.token.platform_admin == true"
-        },
-        "settings-public": {
           ".read": "auth != null",
           ".write": "auth != null && auth.token.platform_admin == true"
         },
