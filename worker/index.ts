@@ -15,6 +15,7 @@
 
 interface Env {
   ASSETS: Fetcher;
+  CSP_ENFORCE?: string;
 }
 
 // Flip to `true` to ENFORCE the Content-Security-Policy. It ships in
@@ -25,6 +26,8 @@ interface Env {
 // DevTools, run through sign-in and buy a test ticket, confirm there are no CSP
 // violations in the console, then set this to `true` and redeploy.
 const CSP_ENFORCE = false;
+const CSP_REPORT_PATH = "/csp-report";
+const CSP_REPORT_GROUP = "csp-endpoint";
 
 /**
  * Content-Security-Policy for the app shell (HTML documents only).
@@ -58,9 +61,24 @@ const CONTENT_SECURITY_POLICY = [
   "manifest-src 'self'",
   "form-action 'self'",
   "upgrade-insecure-requests",
+  `report-uri ${CSP_REPORT_PATH}`,
+  `report-to ${CSP_REPORT_GROUP}`,
 ].join("; ");
 
-function applySecurityHeaders(headers: Headers, isDocument: boolean): void {
+function shouldEnforceCsp(env: Env): boolean {
+  const configured = env.CSP_ENFORCE;
+  if (typeof configured === "undefined") return CSP_ENFORCE;
+  const normalised = configured.trim().toLowerCase();
+  if (!normalised) return CSP_ENFORCE;
+  return normalised === "true" || normalised === "1";
+}
+
+function applySecurityHeaders(
+  headers: Headers,
+  isDocument: boolean,
+  cspEnforce: boolean,
+  origin: string,
+): void {
   // Safe on every response (assets + documents).
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-Frame-Options", "DENY");
@@ -76,15 +94,60 @@ function applySecurityHeaders(headers: Headers, isDocument: boolean): void {
   if (isDocument) {
     headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
     headers.set(
-      CSP_ENFORCE ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only",
+      "Report-To",
+      JSON.stringify({
+        group: CSP_REPORT_GROUP,
+        max_age: 10886400,
+        endpoints: [{ url: `${origin}${CSP_REPORT_PATH}` }],
+      }),
+    );
+    headers.set(
+      "Reporting-Endpoints",
+      `${CSP_REPORT_GROUP}="${origin}${CSP_REPORT_PATH}"`,
+    );
+    headers.set(
+      cspEnforce ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only",
       CONTENT_SECURITY_POLICY,
     );
   }
 }
 
+async function handleCspReport(request: Request): Promise<Response> {
+  if (request.method !== "POST") {
+    return new Response(null, {
+      status: 405,
+      headers: {
+        Allow: "POST",
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  // Cap what we read/log so a hostile client can't flood wrangler tail.
+  const MAX_CSP_REPORT_CHARS = 8192;
+  const raw = await request.text();
+  const body = raw.length > MAX_CSP_REPORT_CHARS ? raw.slice(0, MAX_CSP_REPORT_CHARS) : raw;
+  let report: unknown = body;
+  try {
+    report = body ? JSON.parse(body) : {};
+  } catch {
+    // Keep malformed (or truncated) reports visible in wrangler tail rather than rejecting them.
+  }
+  console.log("CSP violation report", JSON.stringify(report));
+
+  return new Response(null, {
+    status: 204,
+    headers: { "Cache-Control": "no-store" },
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === CSP_REPORT_PATH) {
+      return handleCspReport(request);
+    }
 
     // Let the static-assets runtime serve the file (or SPA-fall back to index.html).
     const assetResponse = await env.ASSETS.fetch(request);
@@ -93,7 +156,7 @@ export default {
     const headers = new Headers(assetResponse.headers);
 
     const isDocument = (headers.get("Content-Type") ?? "").includes("text/html");
-    applySecurityHeaders(headers, isDocument);
+    applySecurityHeaders(headers, isDocument, shouldEnforceCsp(env), url.origin);
 
     // Custom MIME type for .webmanifest (Azure SWA mimeTypes equivalent).
     if (url.pathname.endsWith(".webmanifest")) {

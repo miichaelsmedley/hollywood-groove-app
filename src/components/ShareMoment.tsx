@@ -24,6 +24,8 @@ interface ShareMomentProps {
 
 type CameraMode = 'setup' | 'loading' | 'camera' | 'preview' | 'shared';
 
+const HOLLYWOOD_GROOVE_SHARE_URL = 'https://hollywoodgroove.com.au';
+
 function ShareMomentContent({
   showName = 'Hollywood Groove',
   venueName,
@@ -335,7 +337,7 @@ function ShareMomentContent({
   // Share to specific platform with pre-filled text
   const shareToFacebook = useCallback(() => {
     const text = encodeURIComponent(`Having a blast at ${showName}! 🎬✨ #HollywoodGroove`);
-    const url = encodeURIComponent('https://hollywoodgroove.com');
+    const url = encodeURIComponent(HOLLYWOOD_GROOVE_SHARE_URL);
     // Try native app first, fallback to web
     window.location.href = `fb://share?quote=${text}`;
     setTimeout(() => {
@@ -350,7 +352,7 @@ function ShareMomentContent({
   const shareToTwitter = useCallback(() => {
     const text = encodeURIComponent(`Having a blast at ${showName}! 🎬✨`);
     const hashtags = 'HollywoodGroove';
-    const url = encodeURIComponent('https://hollywoodgroove.com');
+    const url = encodeURIComponent(HOLLYWOOD_GROOVE_SHARE_URL);
     // Twitter/X web intent works well and opens app if installed
     window.open(`https://twitter.com/intent/tweet?text=${text}&hashtags=${hashtags}&url=${url}`, '_blank');
     setStarsEarned(true);

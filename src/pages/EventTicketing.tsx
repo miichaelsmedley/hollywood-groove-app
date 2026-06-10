@@ -9,8 +9,8 @@
 // Flow: browse (pick ticket type + quantity) → holder details + consent →
 // Stripe Checkout. Sign-in is NOT required to buy (guest checkout); the buyer
 // enters their email at the details step and signs in AFTER paying to claim
-// their ticket. Selection is persisted to sessionStorage so any optional
-// sign-in round-trip doesn't lose it.
+// their ticket. Selection is persisted to sessionStorage so a refresh doesn't
+// lose it.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
@@ -31,7 +31,6 @@ import {
   X,
 } from "lucide-react";
 import { auth } from "../lib/firebase";
-import { signInWithGoogle } from "../lib/auth";
 import {
   createCheckoutSession,
   firestoreTicketing,
@@ -54,7 +53,6 @@ import HolderConsentRow, {
   EMPTY_HOLDER,
   HolderFormState,
 } from "../features/tickets/HolderConsentRow";
-import EmailLinkSignIn from "../features/auth/EmailLinkSignIn";
 import { toTicketingDate as toDate } from "../lib/ticketingTime";
 import {
   getTicketCancelUrl,
@@ -65,7 +63,7 @@ import {
 } from "../lib/sellingFronts";
 
 type TicketTypeWithId = TicketType & { id: string };
-type Step = "browse" | "signin" | "details";
+type Step = "browse" | "details";
 type PricingPreview = {
   subtotalCents: number;
   bookingFeeTotalCents: number;
@@ -77,7 +75,6 @@ type PricingPreview = {
 
 export default function EventTicketing() {
   const { showId: routeEventId } = useParams<{ showId: string }>();
-  const location = useLocation();
   const {
     showId,
     loading: resolvingShow,
@@ -114,14 +111,12 @@ export default function EventTicketing() {
   const [promoMessage, setPromoMessage] = useState<string | null>(null);
   const [promoApplying, setPromoApplying] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [signingInGoogle, setSigningInGoogle] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const routeFrontId = resolveSellingFrontId();
   const activeFrontId = show?.sellingFrontId ?? routeFrontId;
   const brand = useSellingFrontBrand(activeFrontId);
   const frontName = brand.displayName;
-  const returnPath = `${location.pathname}${location.search}`;
 
   // Track auth so the page reacts when a Google popup sign-in completes.
   useEffect(() => {
@@ -222,14 +217,6 @@ export default function EventTicketing() {
       return current.slice(0, quantity);
     });
   }, [quantity]);
-
-  // Once the buyer signs in (Google popup or returning from email link),
-  // advance from the sign-in step into holder details automatically.
-  useEffect(() => {
-    if (step === "signin" && signedIn) {
-      setStep("details");
-    }
-  }, [step, signedIn]);
 
   // Pre-fill the buyer (holder 0) from the signed-in account, once.
   useEffect(() => {
@@ -342,16 +329,6 @@ export default function EventTicketing() {
     // buyer enters their email at the details step and signs in AFTER paying to
     // claim the ticket (post-purchase wallet prompt + claimMyPendingTickets).
     setStep("details");
-  };
-
-  const handleGoogle = async () => {
-    setSigningInGoogle(true);
-    try {
-      await signInWithGoogle();
-      // onAuthStateChanged flips `signedIn`; advance once that lands.
-    } finally {
-      setSigningInGoogle(false);
-    }
   };
 
   const handlePay = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -506,16 +483,6 @@ export default function EventTicketing() {
                 />
               )}
 
-              {step === "signin" && !signedIn && (
-                <SignInStep
-                  showId={routeEventId ?? showId!}
-                  returnPath={returnPath}
-                  signingInGoogle={signingInGoogle}
-                  onGoogle={handleGoogle}
-                  onBack={() => setStep("browse")}
-                />
-              )}
-
               {step === "details" && selectedTicketType && displayPricing && (
                 <DetailsStep
                   show={{ title: show.title }}
@@ -524,6 +491,7 @@ export default function EventTicketing() {
                   pricing={displayPricing}
                   promoPreview={promoPreview}
                   holders={holders}
+                  signedIn={signedIn}
                   emailOptIn={emailOptIn}
                   smsOptIn={smsOptIn}
                   submitting={submitting}
@@ -813,90 +781,7 @@ function BrowseStep({
 }
 
 // ---------------------------------------------------------------------------
-// Step 2 — sign in (required so the buyer can manage tickets later)
-// ---------------------------------------------------------------------------
-function SignInStep({
-  showId,
-  returnPath,
-  signingInGoogle,
-  onGoogle,
-  onBack,
-}: {
-  showId: string;
-  returnPath: string;
-  signingInGoogle: boolean;
-  onGoogle: () => void;
-  onBack: () => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-bold text-white">Create your account</h2>
-        <p className="text-sm text-cinema-500 mt-1">
-          So you can manage, view and re-download your tickets any time. Takes a
-          few seconds.
-        </p>
-      </div>
-
-      <button
-        type="button"
-        onClick={onGoogle}
-        disabled={signingInGoogle}
-        className="w-full px-4 py-3 rounded-xl border-2 border-cinema-600 bg-white text-gray-700 font-semibold hover:border-primary/60 transition-colors flex items-center justify-center gap-3 disabled:opacity-50 cursor-pointer"
-      >
-        {signingInGoogle ? (
-          <Loader2 className="w-5 h-5 animate-spin" />
-        ) : (
-          <svg className="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              fill="#4285F4"
-              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-            />
-            <path
-              fill="#34A853"
-              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-            />
-            <path
-              fill="#FBBC05"
-              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-            />
-            <path
-              fill="#EA4335"
-              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-            />
-          </svg>
-        )}
-        {signingInGoogle ? "Signing in…" : "Continue with Google"}
-      </button>
-
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-cinema-200" />
-        </div>
-        <div className="relative flex justify-center text-xs">
-          <span className="px-2 bg-cinema-50 text-cinema-500">
-            or use any email
-          </span>
-        </div>
-      </div>
-
-      {/* returnPath sends the buyer back to this exact event page after the
-          email-link round-trip, with their selection restored from storage. */}
-      <EmailLinkSignIn returnPath={returnPath || `/event/${showId}`} />
-
-      <button
-        type="button"
-        onClick={onBack}
-        className="text-xs text-cinema-500 hover:text-white w-full text-center cursor-pointer"
-      >
-        ← Back to tickets
-      </button>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Step 3 — holder details + consent + pay
+// Step 2 — holder details + consent + pay
 // ---------------------------------------------------------------------------
 function DetailsStep({
   show,
@@ -905,6 +790,7 @@ function DetailsStep({
   pricing,
   promoPreview,
   holders,
+  signedIn,
   emailOptIn,
   smsOptIn,
   submitting,
@@ -921,6 +807,7 @@ function DetailsStep({
   pricing: PricingPreview;
   promoPreview: PromoCodePreview | null;
   holders: HolderFormState[];
+  signedIn: boolean;
   emailOptIn: boolean;
   smsOptIn: boolean;
   submitting: boolean;
@@ -935,13 +822,27 @@ function DetailsStep({
     (h) => h.holderName.trim() && h.holderEmail.trim(),
   );
   const buyer = holders[0];
+  const buyerEmail = buyer?.holderEmail.trim();
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <div className="flex items-center gap-2 text-emerald-400 text-sm font-semibold">
-        <CheckCircle2 className="w-4 h-4" /> Signed in — your tickets will be
-        saved
-      </div>
+      {signedIn ? (
+        <div className="flex items-center gap-2 text-emerald-400 text-sm font-semibold">
+          <CheckCircle2 className="w-4 h-4" /> Signed in — your tickets will be
+          saved
+        </div>
+      ) : (
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-amber-300 text-sm font-semibold">
+            <ShieldCheck className="w-4 h-4" /> Buying as guest — we'll email
+            your tickets to{" "}
+            <span>{buyerEmail || "the buyer email you enter below"}</span>
+          </div>
+          <p className="pl-6 text-xs text-cinema-500">
+            After payment, sign in to keep them in your wallet.
+          </p>
+        </div>
+      )}
 
       <div className="rounded-xl bg-cinema-100/60 border border-cinema-200 p-3 space-y-1">
         <p className="text-sm font-semibold text-white">

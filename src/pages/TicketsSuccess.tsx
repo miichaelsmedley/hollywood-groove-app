@@ -22,6 +22,56 @@ import type { TicketOrder } from "../types/ticketingContract";
 import { useAuthUser } from "../features/auth/useAuthUser";
 import WalletSignInPrompt from "../features/tickets/WalletSignInPrompt";
 
+type DisplayLineItem = {
+  name: string;
+  quantity: number;
+  totalCents: number;
+};
+
+function readRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readOptionalNumber(value: unknown): number | null {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function readNumber(value: unknown): number {
+  return readOptionalNumber(value) ?? 0;
+}
+
+function decodeLineItems(value: unknown): DisplayLineItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => {
+    const record = readRecord(item);
+    return {
+      name: readString(record.name) ?? "Ticket",
+      quantity: readNumber(record.quantity),
+      totalCents: readNumber(record.totalCents),
+    };
+  });
+}
+
+function decodeBuyerSnapshot(value: unknown) {
+  const record = readRecord(value);
+  return {
+    displayName: readString(record.displayName),
+    email: readString(record.email),
+  };
+}
+
 export default function TicketsSuccess() {
   const [searchParams] = useSearchParams();
   const orderId = useMemo(() => searchParams.get("orderId"), [searchParams]);
@@ -142,7 +192,16 @@ export default function TicketsSuccess() {
     );
   }
 
-  const ticketCount = order.lineItems.reduce((sum, li) => sum + li.quantity, 0);
+  const lineItems = decodeLineItems(order.lineItems);
+  const buyerSnapshot = decodeBuyerSnapshot(order.buyerSnapshot);
+  const buyerEmail = buyerSnapshot.email;
+  const buyerLabel = buyerSnapshot.displayName ?? buyerEmail ?? "there";
+  const ticketCount = lineItems.reduce((sum, li) => sum + li.quantity, 0);
+  const ticketWord = ticketCount === 1 ? "ticket" : "tickets";
+  const totalCents =
+    readOptionalNumber(order.totalCents) ??
+    lineItems.reduce((sum, li) => sum + li.totalCents, 0);
+  const showId = readString(order.showId);
   const frontId = resolveSellingFrontId();
 
   return (
@@ -152,9 +211,15 @@ export default function TicketsSuccess() {
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-cinema-900 mb-1">Payment received</h1>
           <p className="text-sm text-cinema-600">
-            Thanks {order.buyerSnapshot.displayName || order.buyerSnapshot.email}. We've
-            sent ticket{ticketCount === 1 ? "" : "s"} and a receipt to{" "}
-            <span className="font-semibold">{order.buyerSnapshot.email}</span>.
+            Thanks {buyerLabel}.{" "}
+            {buyerEmail ? (
+              <>
+                We've sent {ticketWord} and a receipt to{" "}
+                <span className="font-semibold">{buyerEmail}</span>.
+              </>
+            ) : (
+              <>Your {ticketWord} and receipt are on the way.</>
+            )}
           </p>
         </div>
       </div>
@@ -163,20 +228,26 @@ export default function TicketsSuccess() {
         <p className="text-xs uppercase tracking-wide text-cinema-500 font-semibold">
           Order summary
         </p>
-        {order.lineItems.map((li, idx) => (
-          <div key={idx} className="flex items-baseline justify-between text-sm">
-            <span className="text-cinema-800">
-              {li.quantity} × {li.name}
-            </span>
-            <span className="text-cinema-900 font-semibold">
-              {formatAud(li.totalCents)}
-            </span>
-          </div>
-        ))}
+        {lineItems.length > 0 ? (
+          lineItems.map((li, idx) => (
+            <div key={idx} className="flex items-baseline justify-between text-sm">
+              <span className="text-cinema-800">
+                {li.quantity} × {li.name}
+              </span>
+              <span className="text-cinema-900 font-semibold">
+                {formatAud(li.totalCents)}
+              </span>
+            </div>
+          ))
+        ) : (
+          <p className="text-sm text-cinema-600">
+            Ticket details are still syncing.
+          </p>
+        )}
         <div className="border-t border-cinema-100 pt-2 flex items-baseline justify-between">
           <span className="text-sm text-cinema-800">Total paid</span>
           <span className="text-base font-bold text-cinema-900">
-            {formatAud(order.totalCents)}
+            {formatAud(totalCents)}
           </span>
         </div>
         <p className="text-[11px] text-cinema-500 pt-1">
@@ -190,14 +261,21 @@ export default function TicketsSuccess() {
             heading={null}
             title="One last step — save your ticket"
             subtitle={
-              <>
-                Create a free account (or sign in) with{" "}
-                <span className="font-semibold">{order.buyerSnapshot.email}</span>{" "}
-                — the email you bought with — to pull up your ticket's QR code at
-                the door and manage it anytime.
-              </>
+              buyerEmail ? (
+                <>
+                  Create a free account (or sign in) with{" "}
+                  <span className="font-semibold">{buyerEmail}</span>{" "}
+                  — the email you bought with — to pull up your ticket's QR code
+                  at the door and manage it anytime.
+                </>
+              ) : (
+                <>
+                  Create a free account (or sign in) to pull up your ticket's QR
+                  code at the door and manage it anytime.
+                </>
+              )
             }
-            defaultEmail={order.buyerSnapshot.email ?? undefined}
+            defaultEmail={buyerEmail ?? undefined}
             returnPath={getTicketWalletPath(frontId)}
             onSignedIn={() => navigate(getTicketWalletPath(frontId))}
           />
@@ -207,9 +285,11 @@ export default function TicketsSuccess() {
           <Link to={getTicketWalletPath(frontId)} className="btn-primary flex-1 py-3 text-center inline-flex items-center justify-center gap-2">
             <Ticket className="w-4 h-4" /> View my tickets
           </Link>
-          <Link to={getTicketEventPath(order.showId, frontId)} className="flex-1 py-3 text-center rounded-lg border border-cinema-200 text-cinema-800 hover:bg-cinema-50">
-            Back to show
-          </Link>
+          {showId && (
+            <Link to={getTicketEventPath(showId, frontId)} className="flex-1 py-3 text-center rounded-lg border border-cinema-200 text-cinema-800 hover:bg-cinema-50">
+              Back to show
+            </Link>
+          )}
         </div>
       )}
     </CenteredCard>

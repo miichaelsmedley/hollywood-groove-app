@@ -277,12 +277,11 @@ export default function AdminTicketing() {
           <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
           <div className="space-y-1">
             <p className="font-bold">
-              Live payments are not switched on from this screen.
+              Live payments are ON — charges are real.
             </p>
             <p className="text-sm">
-              The backend is sandbox-proven. Before real money, finish live
-              Stripe webhook/secrets, refund/dispute handling, confirmation
-              email, and a tiny live pilot transaction.
+              Merchant of record: The Adele Show. Handle refunds, disputes,
+              and pilot purchases as live-money operations.
             </p>
           </div>
         </div>
