@@ -27,9 +27,26 @@
 
       "members": {
         ".read": "auth != null && auth.token.platform_admin == true",
+        ".indexOn": ["display_name"],
         "$uid": {
           ".read": "auth != null && (auth.uid == $uid || auth.token.platform_admin == true)",
           ".write": "auth != null && (auth.uid == $uid || auth.token.platform_admin == true)",
+          "current_team": {
+            ".write": "auth != null && (auth.uid == $uid || auth.token.platform_admin == true || (data.exists() && data.child('team_id').isString() && root.child('test/teams').child(data.child('team_id').val()).child('created_by').val() == auth.uid))",
+            ".validate": "!newData.exists() || (newData.hasChildren(['team_id', 'team_name', 'joined_at', 'role']) && newData.child('team_id').isString() && newData.child('team_id').val().length > 0 && newData.child('team_id').val().length <= 128 && newData.child('team_name').isString() && newData.child('team_name').val().length > 0 && newData.child('team_name').val().length <= 30 && newData.child('joined_at').isNumber() && (newData.child('role').val() == 'owner' || newData.child('role').val() == 'member'))",
+            "team_id": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 128"
+            },
+            "team_name": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 30"
+            },
+            "joined_at": {
+              ".validate": "newData.isNumber()"
+            },
+            "role": {
+              ".validate": "newData.val() == 'owner' || newData.val() == 'member'"
+            }
+          },
           "roles": {
             ".write": "auth != null && auth.token.platform_admin == true",
             ".validate": "auth != null && auth.token.platform_admin == true"
@@ -45,19 +62,28 @@
         }
       },
 
-      "shows": {
+      "shows_index": {
         ".read": "auth != null",
+        ".write": "auth != null && auth.token.platform_admin == true",
+        ".indexOn": ["startDate", "status", "isTestShow", "is_test", "test"]
+      },
+
+      "shows": {
         "$showId": {
           "meta": {
-            ".read": true,
+            ".read": "auth != null",
             ".write": "auth != null && auth.token.platform_admin == true"
           },
           "settings": {
-            ".read": "auth != null && auth.token.platform_admin == true",
+            ".read": "auth != null",
+            ".write": "auth != null && auth.token.platform_admin == true"
+          },
+          "settings-public": {
+            ".read": "auth != null",
             ".write": "auth != null && auth.token.platform_admin == true"
           },
           "activities": {
-            ".read": true,
+            ".read": "auth != null",
             ".write": "auth != null && auth.token.platform_admin == true"
           },
           "activities_private": {
@@ -65,12 +91,12 @@
             ".write": "auth != null && auth.token.platform_admin == true"
           },
           "live": {
-            ".read": true,
+            ".read": "auth != null",
             ".write": "auth != null && auth.token.platform_admin == true"
           },
           "attendees": {
             "$odience": {
-              ".read": true,
+              ".read": "auth != null && (auth.uid == $odience || auth.token.platform_admin == true)",
               ".write": "auth != null && (auth.uid == $odience || auth.token.platform_admin == true)",
               "flags": {
                 ".read": "auth != null && auth.token.platform_admin == true",
@@ -81,29 +107,48 @@
           "responses": {
             "$activityId": {
               "$odience": {
-                ".read": true,
+                ".read": "auth != null && (auth.uid == $odience || auth.token.platform_admin == true)",
                 ".write": "auth != null && auth.uid == $odience",
                 ".validate": "newData.hasChildren() && (!newData.hasChild('displayName') || newData.child('displayName').isString())"
               }
             }
           },
+          "dance_claims": {
+            "$uid": {
+              ".read": "auth != null && (auth.uid == $uid || auth.token.platform_admin == true)",
+              ".write": "auth != null && (auth.uid == $uid || auth.token.platform_admin == true)",
+              ".validate": "newData.hasChildren(['lastClaimAt', 'claimCount', 'activityId']) && newData.child('lastClaimAt').isNumber() && newData.child('claimCount').isNumber() && newData.child('claimCount').val() >= 0 && newData.child('activityId').isString() && newData.child('activityId').val().length > 0 && newData.child('activityId').val().length <= 128",
+              "lastClaimAt": {
+                ".validate": "newData.isNumber()"
+              },
+              "claimCount": {
+                ".validate": "newData.isNumber() && newData.val() >= 0"
+              },
+              "activityId": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 128"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          },
           "results": {
-            ".read": true,
+            ".read": "auth != null",
             ".write": "false"
           },
           "scores": {
-            ".read": true,
+            ".read": "auth != null",
             ".indexOn": ["totalScore"],
             "$odience": {
               ".write": "false"
             }
           },
           "leaderboard": {
-            ".read": true,
+            ".read": "auth != null",
             ".write": "false"
           },
           "offers": {
-            ".read": true,
+            ".read": "auth != null",
             ".write": "auth != null && auth.token.platform_admin == true"
           },
           "offer_claims": {
@@ -113,6 +158,14 @@
                 ".write": "auth != null && auth.uid == $odience"
               }
             }
+          },
+          "team_scores": {
+            ".read": "auth != null",
+            ".write": false
+          },
+          "team_leaderboard": {
+            ".read": "auth != null",
+            ".write": false
           }
         }
       },
@@ -225,9 +278,26 @@
 
     "members": {
       ".read": "auth != null && auth.token.platform_admin == true",
+      ".indexOn": ["display_name"],
       "$uid": {
         ".read": "auth != null && (auth.uid == $uid || auth.token.platform_admin == true)",
         ".write": "auth != null && (auth.uid == $uid || auth.token.platform_admin == true)",
+        "current_team": {
+          ".write": "auth != null && (auth.uid == $uid || auth.token.platform_admin == true || (data.exists() && data.child('team_id').isString() && root.child('teams').child(data.child('team_id').val()).child('created_by').val() == auth.uid))",
+          ".validate": "!newData.exists() || (newData.hasChildren(['team_id', 'team_name', 'joined_at', 'role']) && newData.child('team_id').isString() && newData.child('team_id').val().length > 0 && newData.child('team_id').val().length <= 128 && newData.child('team_name').isString() && newData.child('team_name').val().length > 0 && newData.child('team_name').val().length <= 30 && newData.child('joined_at').isNumber() && (newData.child('role').val() == 'owner' || newData.child('role').val() == 'member'))",
+          "team_id": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 128"
+          },
+          "team_name": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 30"
+          },
+          "joined_at": {
+            ".validate": "newData.isNumber()"
+          },
+          "role": {
+            ".validate": "newData.val() == 'owner' || newData.val() == 'member'"
+          }
+        },
         "roles": {
           ".write": "auth != null && auth.token.platform_admin == true",
           ".validate": "auth != null && auth.token.platform_admin == true"
@@ -243,19 +313,28 @@
       }
     },
 
-    "shows": {
+    "shows_index": {
       ".read": "auth != null",
+      ".write": "auth != null && auth.token.platform_admin == true",
+      ".indexOn": ["startDate", "status", "isTestShow", "is_test", "test"]
+    },
+
+    "shows": {
       "$showId": {
         "meta": {
-          ".read": true,
+          ".read": "auth != null",
           ".write": "auth != null && auth.token.platform_admin == true"
         },
         "settings": {
-          ".read": "auth != null && auth.token.platform_admin == true",
+          ".read": "auth != null",
+          ".write": "auth != null && auth.token.platform_admin == true"
+        },
+        "settings-public": {
+          ".read": "auth != null",
           ".write": "auth != null && auth.token.platform_admin == true"
         },
         "activities": {
-          ".read": true,
+          ".read": "auth != null",
           ".write": "auth != null && auth.token.platform_admin == true"
         },
         "activities_private": {
@@ -263,12 +342,12 @@
           ".write": "auth != null && auth.token.platform_admin == true"
         },
         "live": {
-          ".read": true,
+          ".read": "auth != null",
           ".write": "auth != null && auth.token.platform_admin == true"
         },
         "attendees": {
           "$odience": {
-            ".read": true,
+            ".read": "auth != null && (auth.uid == $odience || auth.token.platform_admin == true)",
             ".write": "auth != null && (auth.uid == $odience || auth.token.platform_admin == true)",
             "flags": {
               ".read": "auth != null && auth.token.platform_admin == true",
@@ -279,29 +358,48 @@
         "responses": {
           "$activityId": {
             "$odience": {
-              ".read": true,
+              ".read": "auth != null && (auth.uid == $odience || auth.token.platform_admin == true)",
               ".write": "auth != null && auth.uid == $odience",
               ".validate": "newData.hasChildren() && (!newData.hasChild('displayName') || newData.child('displayName').isString())"
             }
           }
         },
+        "dance_claims": {
+          "$uid": {
+            ".read": "auth != null && (auth.uid == $uid || auth.token.platform_admin == true)",
+            ".write": "auth != null && (auth.uid == $uid || auth.token.platform_admin == true)",
+            ".validate": "newData.hasChildren(['lastClaimAt', 'claimCount', 'activityId']) && newData.child('lastClaimAt').isNumber() && newData.child('claimCount').isNumber() && newData.child('claimCount').val() >= 0 && newData.child('activityId').isString() && newData.child('activityId').val().length > 0 && newData.child('activityId').val().length <= 128",
+            "lastClaimAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "claimCount": {
+              ".validate": "newData.isNumber() && newData.val() >= 0"
+            },
+            "activityId": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 128"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
         "results": {
-          ".read": true,
+          ".read": "auth != null",
           ".write": "false"
         },
         "scores": {
-          ".read": true,
+          ".read": "auth != null",
           ".indexOn": ["totalScore"],
           "$odience": {
             ".write": "false"
           }
         },
         "leaderboard": {
-          ".read": true,
+          ".read": "auth != null",
           ".write": "false"
         },
         "offers": {
-          ".read": true,
+          ".read": "auth != null",
           ".write": "auth != null && auth.token.platform_admin == true"
         },
         "offer_claims": {

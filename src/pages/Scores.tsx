@@ -6,16 +6,16 @@ import { useUser } from '../contexts/UserContext';
 import { UserScore } from '../types/firebaseContract';
 import { Link, useSearchParams } from 'react-router-dom';
 import Leaderboard from '../components/leaderboard/Leaderboard';
-import { getShowBasePath, getShowPath, getTestShowBasePath, getTestShowPath } from '../lib/mode';
+import { getShowPath, getTestShowPath } from '../lib/mode';
 import { useMemberProfile } from '../hooks/useMemberProfile';
 import TierBadge from '../components/leaderboard/TierBadge';
+import { useActiveShows } from '../lib/showIndex';
 
 export default function Scores() {
   const { userProfile } = useUser();
   const { profile: memberProfile, isLoading: isMemberLoading } = useMemberProfile();
   const [searchParams] = useSearchParams();
   const isTestShow = searchParams.get('test') === 'true';
-  const [liveShowId, setLiveShowId] = useState<string | null>(null);
   const [myScore, setMyScore] = useState<UserScore | null>(null);
   const [myScoreError, setMyScoreError] = useState<string | null>(null);
   const [isMyScoreLoading, setIsMyScoreLoading] = useState(false);
@@ -26,52 +26,11 @@ export default function Scores() {
     return isTestShow ? getTestShowPath(showId, suffix) : getShowPath(showId, suffix);
   };
 
-  useEffect(() => {
-    // Check both production and test shows for live activity
-    const basePath = isTestShow ? getTestShowBasePath() : getShowBasePath();
-    const showsRef = ref(db, basePath);
-    const unsubscribe = onValue(
-      showsRef,
-      (snapshot) => {
-        const data = snapshot.val();
-        if (!data) {
-          setLiveShowId(null);
-          return;
-        }
-
-        const live = Object.entries(data).flatMap(([showId, showData]: [string, any]) => {
-          const liveTrivia = showData?.live?.trivia;
-          const phase = liveTrivia?.phase as string | undefined;
-          const triviaActive = Boolean(phase && phase !== 'idle');
-          const triviaStartedAt = typeof liveTrivia?.startedAt === 'number' ? liveTrivia.startedAt : 0;
-
-          const liveActivity = showData?.live?.activity;
-          const activityActive = liveActivity?.status === 'active';
-          const activityStartedAt = typeof liveActivity?.startedAt === 'number' ? liveActivity.startedAt : 0;
-
-          if (!triviaActive && !activityActive) return [];
-
-          return [
-            {
-              showId,
-              startedAt: Math.max(
-                triviaActive ? triviaStartedAt : 0,
-                activityActive ? activityStartedAt : 0
-              ),
-            },
-          ];
-        });
-
-        live.sort((a, b) => b.startedAt - a.startedAt);
-        setLiveShowId(live[0]?.showId ?? null);
-      },
-      () => {
-        setLiveShowId(null);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [isTestShow]);
+  const { shows: activeShows } = useActiveShows({
+    includeProd: !isTestShow,
+    includeTest: isTestShow,
+  });
+  const liveShowId = activeShows[0]?.showId ?? null;
 
   const selectedShowId = useMemo(() => {
     if (liveShowId) return liveShowId;

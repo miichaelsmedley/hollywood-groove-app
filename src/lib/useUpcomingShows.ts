@@ -7,16 +7,13 @@
 // both into one deduplicated, sorted feed so every upcoming gig surfaces in the
 // same place — used by /tickets (TicketsHub) and /upcoming + /shows (ShowsPage).
 
-import { useEffect, useMemo, useState } from "react";
-import { onValue, ref } from "firebase/database";
-import { db } from "./firebase";
+import { useMemo } from "react";
 import { useUser } from "../contexts/UserContext";
 import type { ShowMeta } from "../types/firebaseContract";
-import { getShowBasePath } from "./mode";
-import { isShowLive, ShowRecordSnapshot } from "./showStatus";
 import { useOnSaleTicketedShows } from "./firebaseTicketing";
 import type { TicketedShow } from "../types/ticketingContract";
 import { toTicketingDate } from "./ticketingTime";
+import { indexedShowToMeta, useActiveShows, useIndexedShows } from "./showIndex";
 
 export interface ShowListEntry {
   showId: string;
@@ -52,38 +49,25 @@ export interface UseUpcomingShowsResult {
  */
 export function useUpcomingShows(): UseUpcomingShowsResult {
   const { canUseTestMode } = useUser();
-  const [rtdbShows, setRtdbShows] = useState<ShowListEntry[]>([]);
-  const [rtdbLoaded, setRtdbLoaded] = useState(false);
+  const { rows: indexedShows, loading: indexLoading } = useIndexedShows(false);
+  const { shows: activeShows, loading: activeShowsLoading } = useActiveShows({
+    includeProd: true,
+    includeTest: false,
+  });
   const { shows: ledgerShows } = useOnSaleTicketedShows();
 
-  useEffect(() => {
-    const unsub = onValue(
-      ref(db, getShowBasePath()),
-      (snap) => {
-        setRtdbLoaded(true);
-        const data = snap.val() as Record<string, ShowRecordSnapshot> | null;
-        if (!data) {
-          setRtdbShows([]);
-          return;
-        }
-        const rows: ShowListEntry[] = Object.entries(data)
-          .map(([showId, record]) => ({
-            showId,
-            meta: record.meta as ShowMeta,
-            isLive: isShowLive(record),
-          }))
-          .filter((row) => row.meta && row.meta.title)
-          // Hide test shows from regular users; testers still see them.
-          .filter((row) => canUseTestMode || !row.meta.isTestShow);
-        setRtdbShows(rows);
-      },
-      () => {
-        setRtdbLoaded(true);
-        setRtdbShows([]);
-      },
-    );
-    return () => unsub();
-  }, [canUseTestMode]);
+  const rtdbShows = useMemo<ShowListEntry[]>(() => {
+    const activeShowIds = new Set(activeShows.map((show) => show.showId));
+    return indexedShows
+      .map((row) => ({
+        showId: row.showId,
+        meta: indexedShowToMeta(row),
+        isLive: activeShowIds.has(row.showId),
+      }))
+      // Hide test-flagged prod records from regular users; dedicated test
+      // records live under test/shows_index and are not part of this public feed.
+      .filter((row) => canUseTestMode || !row.meta.isTestShow);
+  }, [activeShows, canUseTestMode, indexedShows]);
 
   const rows = useMemo<UpcomingShowListEntry[]>(() => {
     const rowsByShowId = new Map<string, UpcomingShowListEntry>();
@@ -130,5 +114,5 @@ export function useUpcomingShows(): UseUpcomingShowsResult {
     });
   }, [rtdbShows, ledgerShows]);
 
-  return { rows, loading: !rtdbLoaded };
+  return { rows, loading: indexLoading || activeShowsLoading };
 }

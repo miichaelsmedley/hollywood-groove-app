@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ref, get, query, orderByChild, equalTo } from 'firebase/database';
-import { db, auth } from '../lib/firebase';
+import { auth } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
 import { Music, Mail, Phone, User, Check, Sparkles, AlertCircle, CheckCircle, PartyPopper, ExternalLink } from 'lucide-react';
 import { signInWithGoogle } from '../lib/auth';
 import EmailLinkSignIn from '../features/auth/EmailLinkSignIn';
 import { safeReturnUrl } from '../lib/safeRedirect';
+import {
+  checkNicknameAvailability as checkNicknameAvailabilityViaCallable,
+  getSuggestedNicknames,
+} from '../lib/nicknameService';
 
 export default function Signup() {
   const [searchParams] = useSearchParams();
@@ -103,13 +106,10 @@ export default function Signup() {
     setCheckingNickname(true);
 
     try {
-      const membersRef = ref(db, 'members');
-      const nicknameQuery = query(membersRef, orderByChild('display_name'), equalTo(nickname));
-      const snapshot = await get(nicknameQuery);
-
-      if (snapshot.exists()) {
+      const result = await checkNicknameAvailabilityViaCallable(nickname);
+      if (!result.available) {
         setNicknameAvailable(false);
-        generateSuggestions(nickname);
+        setSuggestedNicknames(await getSuggestedNicknames(nickname));
       } else {
         setNicknameAvailable(true);
         setSuggestedNicknames([]);
@@ -121,31 +121,6 @@ export default function Signup() {
       setCheckingNickname(false);
     }
   }, []);
-
-  const generateSuggestions = async (baseName: string) => {
-    const suggestions: string[] = [];
-    const membersRef = ref(db, 'members');
-
-    for (let i = 1; i <= 5; i++) {
-      const candidate = `${baseName}_${String(i).padStart(3, '0')}`;
-      const candidateQuery = query(membersRef, orderByChild('display_name'), equalTo(candidate));
-      const snapshot = await get(candidateQuery);
-
-      if (!snapshot.exists()) {
-        suggestions.push(candidate);
-        if (suggestions.length >= 3) break;
-      }
-    }
-
-    const yearCandidate = `${baseName}_${new Date().getFullYear()}`;
-    const yearQuery = query(membersRef, orderByChild('display_name'), equalTo(yearCandidate));
-    const yearSnapshot = await get(yearQuery);
-    if (!yearSnapshot.exists() && suggestions.length < 3) {
-      suggestions.push(yearCandidate);
-    }
-
-    setSuggestedNicknames(suggestions);
-  };
 
   useEffect(() => {
     const timer = setTimeout(() => {

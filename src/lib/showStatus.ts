@@ -5,10 +5,12 @@ export const LIVE_STATE_MAX_AGE_MS = 30 * 60 * 1000;
 
 type TimestampedTriviaState = LiveTriviaState & {
   updatedAt?: number;
+  timestamp?: number;
 };
 
 type TimestampedActivityState = LiveActivityState & {
   updatedAt?: number;
+  timestamp?: number;
 };
 
 export interface ShowRecordSnapshot {
@@ -19,8 +21,8 @@ export interface ShowRecordSnapshot {
   };
 }
 
-function getLiveTimestamp(state?: { updatedAt?: number; startedAt?: number }): number | null {
-  const timestamp = state?.updatedAt ?? state?.startedAt;
+function getLiveTimestamp(state?: { updatedAt?: number; timestamp?: number; startedAt?: number }): number | null {
+  const timestamp = state?.updatedAt ?? state?.timestamp ?? state?.startedAt;
   return typeof timestamp === 'number' && Number.isFinite(timestamp) ? timestamp : null;
 }
 

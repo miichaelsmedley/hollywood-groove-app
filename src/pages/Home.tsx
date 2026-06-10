@@ -1,82 +1,19 @@
 import { Link } from 'react-router-dom';
 import { Sparkles, List, FlaskConical, Brain, Users, UserPlus } from 'lucide-react';
 import { IS_TEST_MODE } from '../lib/mode';
-import { useEffect, useState } from 'react';
 import { useUser } from '../contexts/UserContext';
 import { useTriviaHome } from '../lib/triviaLibraryService';
-import { onValue, ref } from 'firebase/database';
-import { db } from '../lib/firebase';
-import { isShowLive, ShowRecordSnapshot } from '../lib/showStatus';
-
-interface ActiveTestShow {
-  showId: string;
-  title: string;
-}
+import { useActiveShows } from '../lib/showIndex';
 
 export default function Home() {
   const { canUseTestMode } = useUser();
   const { schedule, remaining, availableQuestions, loading: triviaLoading } = useTriviaHome();
-  const [activeTestShow, setActiveTestShow] = useState<ActiveTestShow | null>(null);
-  const [checkingTestShow, setCheckingTestShow] = useState(true);
-
-  // Check for active test shows (only if user can use test mode)
-  useEffect(() => {
-    console.log('🧪 Home: canUseTestMode =', canUseTestMode);
-
-    if (!canUseTestMode) {
-      console.log('🧪 Home: User cannot use test mode, skipping test show check');
-      setCheckingTestShow(false);
-      return;
-    }
-
-    // Listen to test shows path for active test shows
-    const showsRef = ref(db, 'test/shows');
-    console.log('🧪 Home: Listening to test/shows for active test shows');
-
-    const unsubscribe = onValue(
-      showsRef,
-      (snapshot) => {
-        setCheckingTestShow(false);
-        const data = snapshot.val();
-        console.log('🧪 Home: Received test/shows data:', data);
-
-        if (!data) {
-          console.log('🧪 Home: No test shows data found');
-          setActiveTestShow(null);
-          return;
-        }
-
-        const showRecords = data as Record<string, ShowRecordSnapshot>;
-
-        for (const [showId, showData] of Object.entries(showRecords)) {
-          const meta = showData.meta;
-          const showLive = isShowLive(showData);
-
-          console.log(`🧪 Home: Show ${showId} check:`, {
-            meta,
-            showLive,
-            hasTitle: Boolean(meta?.title),
-          });
-
-          if (meta?.title && showLive) {
-            console.log(`🧪 Home: Found active test show: ${showId} - ${meta.title}`);
-            setActiveTestShow({ showId, title: meta.title });
-            return;
-          }
-        }
-
-        console.log('🧪 Home: No active test shows found (all either missing title, inactive, or stale)');
-        setActiveTestShow(null);
-      },
-      (err) => {
-        console.warn('Failed to check for active test shows:', err);
-        setCheckingTestShow(false);
-        setActiveTestShow(null);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [canUseTestMode]);
+  const { shows: activeTestShows, loading: checkingTestShow } = useActiveShows({
+    includeProd: false,
+    includeTest: canUseTestMode,
+    enabled: canUseTestMode,
+  });
+  const activeTestShow = activeTestShows[0] ?? null;
 
   const handleEnableTestMode = () => {
     // Set test mode in localStorage and reload

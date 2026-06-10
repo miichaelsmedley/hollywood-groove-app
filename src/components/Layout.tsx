@@ -1,18 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import { Ticket, Music, Sparkles, BarChart3, Trophy, User, Home, Camera, ClipboardCheck, FlaskConical, ScanLine } from 'lucide-react';
-import { ref, onValue } from 'firebase/database';
-import { db } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
 import { useUserRole } from '../hooks/useUserRole';
 import { useStaffRoles } from '../hooks/useStaffRoles';
 import { isWhiteLabelTicketingFront, resolveSellingFrontId } from '../lib/sellingFronts';
 import ShareMoment from './ShareMoment';
-
-interface ActiveTestShow {
-  showId: string;
-  title: string;
-}
+import { useActiveShows } from '../lib/showIndex';
 
 export default function Layout() {
   const [searchParams] = useSearchParams();
@@ -25,60 +19,12 @@ export default function Layout() {
   const { canScoreActivities } = useUserRole();
   const { canScanTickets } = useStaffRoles();
   const [showShareModal, setShowShareModal] = useState(false);
-  const [activeTestShow, setActiveTestShow] = useState<ActiveTestShow | null>(null);
-
-  // Listen for active test shows
-  useEffect(() => {
-    if (whiteLabelTicketing || !canUseTestMode) {
-      setActiveTestShow(null);
-      return;
-    }
-
-    const showsRef = ref(db, 'test/shows');
-    const unsubscribe = onValue(showsRef, (snapshot) => {
-      if (!snapshot.exists()) {
-        setActiveTestShow(null);
-        return;
-      }
-
-      const shows = snapshot.val();
-      const now = Date.now();
-      const thirtyMinutesAgo = now - 30 * 60 * 1000;
-
-      // Find an active test show (trivia or activity updated recently)
-      for (const [showId, showData] of Object.entries(shows)) {
-        const show = showData as Record<string, unknown>;
-        const meta = show.meta as Record<string, unknown> | undefined;
-        const live = show.live as Record<string, unknown> | undefined;
-
-        if (!meta?.title) continue;
-
-        // Check if trivia is active
-        const trivia = live?.trivia as Record<string, unknown> | undefined;
-        if (trivia?.phase && trivia?.timestamp) {
-          const timestamp = trivia.timestamp as number;
-          if ((trivia.phase === 'question' || trivia.phase === 'answer') && timestamp > thirtyMinutesAgo) {
-            setActiveTestShow({ showId, title: meta.title as string });
-            return;
-          }
-        }
-
-        // Check if activity is active
-        const activity = live?.activity as Record<string, unknown> | undefined;
-        if (activity?.status === 'active' && activity?.timestamp) {
-          const timestamp = activity.timestamp as number;
-          if (timestamp > thirtyMinutesAgo) {
-            setActiveTestShow({ showId, title: meta.title as string });
-            return;
-          }
-        }
-      }
-
-      setActiveTestShow(null);
-    });
-
-    return () => unsubscribe();
-  }, [canUseTestMode, whiteLabelTicketing]);
+  const { shows: activeTestShows } = useActiveShows({
+    includeProd: false,
+    includeTest: canUseTestMode && !whiteLabelTicketing,
+    enabled: canUseTestMode && !whiteLabelTicketing,
+  });
+  const activeTestShow = activeTestShows[0] ?? null;
 
   // Helper to append test param to navigation paths
   const withTestParam = (path: string) => (isTestMode ? `${path}?test=true` : path);

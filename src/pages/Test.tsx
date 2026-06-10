@@ -1,10 +1,8 @@
 import { Link } from 'react-router-dom';
 import { FlaskConical, Play, Settings, AlertTriangle } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
-import { useEffect, useState } from 'react';
-import { onValue, ref } from 'firebase/database';
-import { db } from '../lib/firebase';
-import { ShowMeta } from '../types/firebaseContract';
+import { useMemo } from 'react';
+import { useActiveShows, useIndexedShows } from '../lib/showIndex';
 
 interface TestShow {
   showId: string;
@@ -15,66 +13,28 @@ interface TestShow {
 /**
  * Tester Dashboard
  * Central hub for testers to access test shows and testing tools
- */
+  */
 export default function Test() {
   const { canUseTestMode } = useUser();
-  const [testShows, setTestShows] = useState<TestShow[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Listen to test shows
-  useEffect(() => {
-    if (!canUseTestMode) {
-      setLoading(false);
-      return;
-    }
-
-    const showsRef = ref(db, 'test/shows');
-    const unsubscribe = onValue(
-      showsRef,
-      (snapshot) => {
-        setLoading(false);
-        const data = snapshot.val();
-
-        if (!data) {
-          setTestShows([]);
-          return;
-        }
-
-        const MAX_STALE_MS = 30 * 60 * 1000;
-        const now = Date.now();
-
-        const shows: TestShow[] = [];
-        for (const [showId, showData] of Object.entries(data) as [string, any][]) {
-          const meta = showData?.meta as ShowMeta | undefined;
-          if (!meta?.title) continue;
-
-          const liveTrivia = showData?.live?.trivia;
-          const triviaTimestamp = liveTrivia?.updatedAt || liveTrivia?.startedAt;
-          const triviaActive = liveTrivia?.phase && ['question', 'answer'].includes(liveTrivia.phase) &&
-            triviaTimestamp && (now - triviaTimestamp) < MAX_STALE_MS;
-
-          const liveActivity = showData?.live?.activity;
-          const activityTimestamp = liveActivity?.updatedAt || liveActivity?.startedAt;
-          const activityActive = liveActivity?.status === 'active' &&
-            activityTimestamp && (now - activityTimestamp) < MAX_STALE_MS;
-
-          shows.push({
-            showId,
-            title: meta.title,
-            isActive: Boolean(triviaActive || activityActive),
-          });
-        }
-
-        setTestShows(shows);
-      },
-      (err) => {
-        console.warn('Failed to load test shows:', err);
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [canUseTestMode]);
+  const { rows: indexedTestShows, loading: indexLoading } = useIndexedShows(true, canUseTestMode);
+  const { shows: activeTestShows, loading: activeLoading } = useActiveShows({
+    includeProd: false,
+    includeTest: canUseTestMode,
+    enabled: canUseTestMode,
+  });
+  const activeShowIds = useMemo(
+    () => new Set(activeTestShows.map((show) => show.showId)),
+    [activeTestShows],
+  );
+  const testShows = useMemo<TestShow[]>(
+    () => indexedTestShows.map((show) => ({
+      showId: show.showId,
+      title: show.title,
+      isActive: activeShowIds.has(show.showId),
+    })),
+    [activeShowIds, indexedTestShows],
+  );
+  const loading = canUseTestMode && (indexLoading || activeLoading);
 
   if (!canUseTestMode) {
     return (

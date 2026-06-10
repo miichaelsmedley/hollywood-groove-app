@@ -1,127 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { onValue, ref } from 'firebase/database';
-import { auth, db } from '../lib/firebase';
-import { ShowMeta } from '../types/firebaseContract';
+import { auth } from '../lib/firebase';
 import { AlertCircle, Sparkles, UserPlus } from 'lucide-react';
-import { getShowBasePath, getTestShowBasePath } from '../lib/mode';
 import { useUser } from '../contexts/UserContext';
 import EmailLinkSignIn from '../features/auth/EmailLinkSignIn';
 import { signInWithGoogle } from '../lib/auth';
-
-interface LiveShow {
-  showId: string;
-  meta: ShowMeta;
-  startedAt: number;
-  isTestShow: boolean;
-}
+import { useActiveShows } from '../lib/showIndex';
 
 export default function JoinCurrentShow() {
   const navigate = useNavigate();
   const { canUseTestMode, isRegistered } = useUser();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [liveShows, setLiveShows] = useState<LiveShow[]>([]);
   const [signingIn, setSigningIn] = useState(false);
   void setError; // Suppress unused warning - error state used in JSX
 
   const isGoogleUser = !auth.currentUser?.isAnonymous && Boolean(auth.currentUser?.email);
   const needsSignIn = !isGoogleUser && !isRegistered;
 
-  // Helper to extract live shows from snapshot data
-  const extractLiveShows = (data: any, isTestShow: boolean): LiveShow[] => {
-    if (!data) return [];
-
-    const MAX_STALE_MS = 30 * 60 * 1000; // 30 minutes
-    const now = Date.now();
-
-    return Object.entries(data).flatMap(([showId, showData]: [string, any]) => {
-      const meta = showData?.meta as ShowMeta | undefined;
-      const liveTrivia = showData?.live?.trivia;
-      const phase = liveTrivia?.phase as string | undefined;
-
-      // Check timestamps for staleness
-      const triviaUpdatedAt = liveTrivia?.updatedAt as number | undefined;
-      const triviaStartedAt = typeof liveTrivia?.startedAt === 'number' ? liveTrivia.startedAt : 0;
-      const triviaTimestamp = triviaUpdatedAt || triviaStartedAt;
-      const isTriviaStale = !triviaTimestamp || (now - triviaTimestamp) > MAX_STALE_MS;
-
-      const triviaActive = Boolean(phase && phase !== 'idle' && !isTriviaStale);
-
-      const liveActivity = showData?.live?.activity;
-      const activityUpdatedAt = liveActivity?.updatedAt as number | undefined;
-      const activityStartedAt = typeof liveActivity?.startedAt === 'number' ? liveActivity.startedAt : 0;
-      const activityTimestamp = activityUpdatedAt || activityStartedAt;
-      const isActivityStale = !activityTimestamp || (now - activityTimestamp) > MAX_STALE_MS;
-
-      const activityActive = liveActivity?.status === 'active' && !isActivityStale;
-
-      if (!meta || !meta.title) return [];
-      if (!triviaActive && !activityActive) return [];
-
-      const startedAt = Math.max(
-        triviaActive ? triviaStartedAt : 0,
-        activityActive ? activityStartedAt : 0
-      );
-      return [{ showId, meta, startedAt, isTestShow }];
-    });
-  };
+  const { shows: liveShows, loading: liveShowsLoading } = useActiveShows({
+    includeProd: true,
+    includeTest: canUseTestMode,
+  });
 
   useEffect(() => {
-    const unsubscribes: (() => void)[] = [];
-    let prodShows: LiveShow[] = [];
-    let testShows: LiveShow[] = [];
-    let prodLoaded = false;
-    let testLoaded = !canUseTestMode; // Skip test if user can't use test mode
-
-    const updateLiveShows = () => {
-      if (!prodLoaded || !testLoaded) return;
-
-      // Combine and sort by startedAt, prioritizing test shows
-      const allShows = [...testShows, ...prodShows];
-      allShows.sort((a, b) => b.startedAt - a.startedAt);
-      setLiveShows(allShows);
-      setLoading(false);
-    };
-
-    // Listen to production shows
-    const prodRef = ref(db, getShowBasePath());
-    const prodUnsub = onValue(
-      prodRef,
-      (snapshot) => {
-        prodShows = extractLiveShows(snapshot.val(), false);
-        prodLoaded = true;
-        updateLiveShows();
-      },
-      (err) => {
-        console.warn('Error loading production shows:', err);
-        prodLoaded = true;
-        updateLiveShows();
-      }
-    );
-    unsubscribes.push(prodUnsub);
-
-    // Listen to test shows (if user has access)
-    if (canUseTestMode) {
-      const testRef = ref(db, getTestShowBasePath());
-      const testUnsub = onValue(
-        testRef,
-        (snapshot) => {
-          testShows = extractLiveShows(snapshot.val(), true);
-          testLoaded = true;
-          updateLiveShows();
-        },
-        (err) => {
-          console.warn('Error loading test shows:', err);
-          testLoaded = true;
-          updateLiveShows();
-        }
-      );
-      unsubscribes.push(testUnsub);
-    }
-
-    return () => unsubscribes.forEach(unsub => unsub());
-  }, [canUseTestMode]);
+    setLoading(liveShowsLoading);
+  }, [liveShowsLoading]);
 
   const primaryLiveShow = useMemo(() => liveShows[0] ?? null, [liveShows]);
 

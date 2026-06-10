@@ -4,6 +4,7 @@ import { ref, set, get, update } from 'firebase/database';
 import { auth, db } from '../lib/firebase';
 import { UserProfile, SocialLinks } from '../types/firebaseContract';
 import { signInWithGoogle, signOut as authSignOut, isSignedInWithGoogle, getGooglePhotoURL } from '../lib/auth';
+import { getSuggestedNicknames, isDisplayNameAvailable } from '../lib/nicknameService';
 
 interface UserContextType {
   userProfile: UserProfile | null;
@@ -411,64 +412,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const user = auth.currentUser;
     if (!user) return false;
 
-    const normalizedName = displayName.trim().toLowerCase();
-    if (!normalizedName) return false;
+    const trimmedName = displayName.trim();
+    if (!trimmedName) return false;
 
-    try {
-      // Get all members and check for duplicate display names
-      const membersRef = ref(db, 'members');
-      const snapshot = await get(membersRef);
-
-      if (!snapshot.exists()) return true;
-
-      const members = snapshot.val() as Record<string, any>;
-
-      for (const [uid, member] of Object.entries(members)) {
-        // Skip current user
-        if (uid === user.uid) continue;
-
-        const memberName = (member.display_name || member.displayName || '').trim().toLowerCase();
-        if (memberName === normalizedName) {
-          return false; // Name is taken
-        }
-      }
-
-      return true; // Name is available
-    } catch (error) {
-      console.error('Error checking display name availability:', error);
-      return false; // Assume taken on error to be safe
-    }
+    return isDisplayNameAvailable(trimmedName);
   };
 
   /**
    * Generate suggested display name variations when the desired name is taken
    */
   const getSuggestedDisplayNames = async (baseName: string): Promise<string[]> => {
-    const suggestions: string[] = [];
-    const cleanName = baseName.trim();
-
-    // Generate variations
-    const variations = [
-      `${cleanName}1`,
-      `${cleanName}2`,
-      `${cleanName}_`,
-      `${cleanName}${Math.floor(Math.random() * 100)}`,
-      `The${cleanName}`,
-      `${cleanName}Fan`,
-      `${cleanName}Star`,
-    ];
-
-    // Check which ones are available
-    for (const variation of variations) {
-      if (suggestions.length >= 3) break; // Return max 3 suggestions
-
-      const isAvailable = await checkDisplayNameAvailable(variation);
-      if (isAvailable) {
-        suggestions.push(variation);
-      }
-    }
-
-    return suggestions;
+    return getSuggestedNicknames(baseName);
   };
 
   /**
