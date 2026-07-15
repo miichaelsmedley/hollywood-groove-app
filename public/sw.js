@@ -1,5 +1,6 @@
 // Service Worker for Hollywood Groove PWA
 const CACHE_NAME = 'hollywood-groove-v2';
+const MAX_RUNTIME_CACHE_ENTRIES = 80;
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -7,6 +8,22 @@ const STATIC_ASSETS = [
   '/fonts/BudmoJigglish.woff2',
   '/fonts/BudmoJigglish.woff',
 ];
+
+async function pruneRuntimeCache(cache) {
+  const requests = await cache.keys();
+  const staticPaths = new Set(STATIC_ASSETS);
+  const runtimeRequests = requests.filter((request) => {
+    const url = new URL(request.url);
+    return !staticPaths.has(url.pathname);
+  });
+  const deleteCount = runtimeRequests.length - MAX_RUNTIME_CACHE_ENTRIES;
+  if (deleteCount <= 0) {
+    return;
+  }
+  await Promise.all(
+    runtimeRequests.slice(0, deleteCount).map((request) => cache.delete(request))
+  );
+}
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
@@ -21,13 +38,14 @@ self.addEventListener('install', (event) => {
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
+    caches.keys().then((cacheNames) => (
+      Promise.all(
         cacheNames
           .filter((name) => name !== CACHE_NAME)
           .map((name) => caches.delete(name))
-      );
-    })
+      )
+    )).then(() => caches.open(CACHE_NAME))
+      .then((cache) => pruneRuntimeCache(cache))
   );
   self.clients.claim();
 });
@@ -82,7 +100,8 @@ self.addEventListener('fetch', (event) => {
         // Clone the response before caching
         const responseClone = response.clone();
         caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseClone);
+          cache.put(event.request, responseClone)
+            .then(() => pruneRuntimeCache(cache));
         });
         return response;
       })

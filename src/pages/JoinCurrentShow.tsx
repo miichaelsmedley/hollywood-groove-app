@@ -1,32 +1,45 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth } from '../lib/firebase';
 import { AlertCircle, Sparkles, UserPlus } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
-import EmailLinkSignIn from '../features/auth/EmailLinkSignIn';
 import { signInWithGoogle } from '../lib/auth';
 import { useActiveShows } from '../lib/showIndex';
 import GoogleSignInButton from '../components/ui/GoogleSignInButton';
 
+const LIVE_SHOWS_WATCHDOG_MS = 10000;
+
 export default function JoinCurrentShow() {
   const navigate = useNavigate();
   const { canUseTestMode, isRegistered } = useUser();
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [signingIn, setSigningIn] = useState(false);
-  void setError; // Suppress unused warning - error state used in JSX
 
   const isGoogleUser = !auth.currentUser?.isAnonymous && Boolean(auth.currentUser?.email);
   const needsSignIn = !isGoogleUser && !isRegistered;
 
+  const handleActiveShowsError = useCallback((activeShowsError: unknown) => {
+    console.error('Failed to check live shows:', activeShowsError);
+    setError('We couldn’t check the live show list. Check your connection and tap Retry.');
+  }, []);
+
   const { shows: liveShows, loading: liveShowsLoading } = useActiveShows({
     includeProd: true,
     includeTest: canUseTestMode,
+    onError: handleActiveShowsError,
   });
 
+  const loading = liveShowsLoading && !error;
+
   useEffect(() => {
-    setLoading(liveShowsLoading);
-  }, [liveShowsLoading]);
+    if (!liveShowsLoading || error) return;
+
+    const watchdogId = window.setTimeout(() => {
+      setError('Still looking for the live show. If you’re at the venue now, check your connection and tap Retry.');
+    }, LIVE_SHOWS_WATCHDOG_MS);
+
+    return () => window.clearTimeout(watchdogId);
+  }, [error, liveShowsLoading]);
 
   const primaryLiveShow = useMemo(() => liveShows[0] ?? null, [liveShows]);
 
@@ -118,17 +131,6 @@ export default function JoinCurrentShow() {
             >
               {signingIn ? 'Signing in...' : 'Sign in with Google'}
             </GoogleSignInButton>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-cinema-200"></div>
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="px-2 bg-cinema-50 text-cinema-500">or use any email</span>
-              </div>
-            </div>
-
-            <EmailLinkSignIn />
 
             <Link
               to="/signup"

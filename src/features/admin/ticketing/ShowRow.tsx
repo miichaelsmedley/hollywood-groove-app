@@ -87,10 +87,10 @@ function ShowTicketLimitsPanel({
   const { ticketTypes, loading } = useTicketTypes(show.id);
 
   return (
-    <div className="mt-3 rounded-lg border border-cinema-200 bg-white/60 p-3">
+    <div className="mt-3 rounded-lg border border-cinema-200 bg-cinema/70 p-3">
       <div className="flex items-center gap-1.5 mb-2">
-        <Ticket className="w-3.5 h-3.5 text-cinema-500" />
-        <h4 className="text-xs font-bold uppercase tracking-wide text-cinema-600">
+        <Ticket className="w-3.5 h-3.5 text-primary" />
+        <h4 className="text-xs font-bold uppercase tracking-wide text-cinema-700">
           Tickets per order
         </h4>
       </div>
@@ -153,14 +153,14 @@ function MaxPerOrderRow({
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
-      <span className="min-w-0 flex-1 truncate font-semibold text-cinema-800">
+      <span className="min-w-0 flex-1 truncate font-semibold text-cinema-900">
         {ticketType.name}
         <span className="ml-1 font-normal text-cinema-500">
           · {available} left
         </span>
       </span>
       <label className="flex items-center gap-1.5">
-        <span className="text-cinema-500">Max / order</span>
+        <span className="text-cinema-600">Max / order</span>
         <input
           type="number"
           min={1}
@@ -172,7 +172,7 @@ function MaxPerOrderRow({
             setMessage(null);
           }}
           disabled={saving}
-          className="w-20 rounded-md border border-cinema-300 px-2 py-1 text-cinema-900 focus:border-primary focus:outline-none"
+          className="w-20 rounded-md border border-cinema-300 bg-cinema-50 px-2 py-1 text-cinema-900 focus:border-primary focus:outline-none"
         />
       </label>
       <button

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Mail, Phone, User, CheckCircle, AlertCircle, LogOut,
   Edit3, Save, X, MapPin, Instagram, Loader2, Facebook, Youtube,
@@ -14,6 +14,7 @@ import EmailLinkSignIn from '../features/auth/EmailLinkSignIn';
 import { TikTokIcon, XIcon, ThreadsIcon, SpotifyIcon } from '../components/icons/SocialIcons';
 import Spinner from '../components/ui/Spinner';
 import GoogleSignInButton from '../components/ui/GoogleSignInButton';
+import ProfileOfferClaims from '../components/offers/ProfileOfferClaims';
 
 // Social brand icons moved to components/icons/SocialIcons (imported above).
 
@@ -407,6 +408,7 @@ function ProfilePicturePicker({
 }
 
 export default function Profile() {
+  const [searchParams] = useSearchParams();
   const {
     userProfile,
     loading,
@@ -425,6 +427,7 @@ export default function Profile() {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const isTestShow = searchParams.get('test') === 'true';
 
   // Edit form state
   const [editDisplayName, setEditDisplayName] = useState('');
@@ -707,6 +710,8 @@ export default function Profile() {
         </div>
         <span className="text-primary text-sm font-semibold group-hover:translate-x-0.5 transition-transform">→</span>
       </Link>
+
+      <ProfileOfferClaims uid={userProfile.uid} isTestShow={isTestShow} />
 
       {/* Staff & admin shortcuts — only renders for users with elevated claims */}
       <StaffToolsCard />

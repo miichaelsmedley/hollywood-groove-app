@@ -3,7 +3,7 @@ import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { onValue, ref } from 'firebase/database';
 import { ArrowLeft, Mic, Trophy, Vote, Users, Music, HelpCircle, Calendar, Sparkles, ChevronRight } from 'lucide-react';
 import { db } from '../lib/firebase';
-import { CrowdActivity, ActivityType, LiveActivityState, LiveTriviaState } from '../types/firebaseContract';
+import { ActivityType, LiveActivityState, LiveTriviaState } from '../types/firebaseContract';
 import ActionBar from '../components/show/ActionBar';
 import { getShowPath, getTestShowPath } from '../lib/mode';
 
@@ -20,15 +20,41 @@ const ACTIVITY_CONFIG: Record<ActivityType, { icon: typeof Mic; label: string; c
   raffle: { icon: Sparkles, label: 'Raffle', color: 'text-pink-400' },
 };
 
-type ActivityWithId = CrowdActivity & {
+type ActivityListItem = {
   id: string;
+  type: ActivityType;
+  title: string;
+  sequence?: number;
+  setId?: number;
+  songId?: number;
+  description?: string;
+  prompt?: string;
+  prize?: string;
+  maxParticipants?: number;
 };
+
+type ActivitySummaryRecord = Omit<ActivityListItem, 'id'>;
+
+function toActivityListItem(activityId: string, activity: ActivitySummaryRecord): ActivityListItem {
+  return {
+    id: activityId,
+    type: activity.type,
+    title: activity.title,
+    sequence: activity.sequence,
+    setId: activity.setId,
+    songId: activity.songId,
+    description: activity.description,
+    prompt: activity.prompt,
+    prize: activity.prize,
+    maxParticipants: activity.maxParticipants,
+  };
+}
 
 export default function Activities() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [activities, setActivities] = useState<ActivityWithId[]>([]);
+  const [activities, setActivities] = useState<ActivityListItem[]>([]);
   const [liveActivity, setLiveActivity] = useState<LiveActivityState | null>(null);
   const [liveTrivia, setLiveTrivia] = useState<LiveTriviaState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,15 +72,12 @@ export default function Activities() {
   useEffect(() => {
     if (!id) return;
 
-    // Listen to activities
-    const activitiesRef = ref(db, getPath(id, 'activities'));
-    const unsubscribeActivities = onValue(activitiesRef, (snapshot) => {
-      const data = snapshot.val();
+    const setActivityListFromValue = (value: unknown) => {
+      const data = value as Record<string, ActivitySummaryRecord> | null;
       if (data) {
-        const activityList: ActivityWithId[] = Object.entries(data).map(([activityId, activity]) => ({
-          ...(activity as CrowdActivity),
-          id: activityId,
-        }));
+        const activityList = Object.entries(data).map(([activityId, activity]) =>
+          toActivityListItem(activityId, activity)
+        );
         // Sort by sequence if available, otherwise by title
         activityList.sort((a, b) => {
           if (a.sequence !== undefined && b.sequence !== undefined) {
@@ -67,6 +90,11 @@ export default function Activities() {
         setActivities([]);
       }
       setLoading(false);
+    };
+
+    const activitiesSummaryRef = ref(db, getPath(id, 'activities_summary'));
+    const unsubscribeActivitiesSummary = onValue(activitiesSummaryRef, (snapshot) => {
+      setActivityListFromValue(snapshot.val());
     });
 
     // Listen to live activity state
@@ -82,7 +110,7 @@ export default function Activities() {
     });
 
     return () => {
-      unsubscribeActivities();
+      unsubscribeActivitiesSummary();
       unsubscribeLiveActivity();
       unsubscribeLiveTrivia();
     };
@@ -95,8 +123,8 @@ export default function Activities() {
   );
 
   // Build the live activities list, including live activity from state if not in collection
-  const buildLiveActivities = (): ActivityWithId[] => {
-    const result: ActivityWithId[] = [...liveActivitiesFromCollection];
+  const buildLiveActivities = (): ActivityListItem[] => {
+    const result: ActivityListItem[] = [...liveActivitiesFromCollection];
 
     // If there's an active live activity that's NOT in our activities collection,
     // create a synthetic entry from the live state
@@ -104,7 +132,7 @@ export default function Activities() {
       const existsInCollection = activities.some((a) => a.id === liveActivity.activityId);
       if (!existsInCollection) {
         // Create a synthetic activity from live state
-        const syntheticActivity: ActivityWithId = {
+        const syntheticActivity: ActivityListItem = {
           id: liveActivity.activityId,
           type: liveActivity.type,
           title: liveActivity.prompt || liveActivity.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
@@ -112,6 +140,18 @@ export default function Activities() {
           maxParticipants: liveActivity.slotsAvailable,
         };
         result.push(syntheticActivity);
+      }
+    }
+
+    const activeTriviaId = liveTrivia && liveTrivia.phase !== 'idle' ? liveTrivia.activityId : null;
+    if (activeTriviaId) {
+      const existsInCollection = activities.some((a) => a.id === activeTriviaId);
+      if (!existsInCollection) {
+        result.push({
+          id: activeTriviaId,
+          type: 'trivia',
+          title: 'Live trivia',
+        });
       }
     }
 
@@ -133,14 +173,14 @@ export default function Activities() {
   groupedActivities.song = groupedActivities.song.filter((a) => !liveIds.has(a.id));
 
   // Determine if an activity is joinable (can be signed up for at any time)
-  const isJoinableActivity = (activity: ActivityWithId) => {
+  const isJoinableActivity = (activity: ActivityListItem) => {
     // Trivia and dancing are handled via live state, not direct signup
     if (activity.type === 'trivia' || activity.type === 'dancing') return false;
     // All other activities can be joined
     return true;
   };
 
-  const handleActivityClick = (activity: ActivityWithId, isLive: boolean) => {
+  const handleActivityClick = (activity: ActivityListItem, isLive: boolean) => {
     const testParam = isTestShow ? '?test=true' : '';
     // If it's live trivia, go to trivia page
     if (isLive && activity.type === 'trivia') {
@@ -158,7 +198,7 @@ export default function Activities() {
     }
   };
 
-  const renderActivityCard = (activity: ActivityWithId, isLive = false) => {
+  const renderActivityCard = (activity: ActivityListItem, isLive = false) => {
     const config = ACTIVITY_CONFIG[activity.type] || ACTIVITY_CONFIG.stage_participation;
     const Icon = config.icon;
     const isClickable = isLive || isJoinableActivity(activity);
@@ -212,7 +252,7 @@ export default function Activities() {
     );
   };
 
-  const renderSection = (title: string, icon: typeof Calendar, items: ActivityWithId[], isLive = false) => {
+  const renderSection = (title: string, icon: typeof Calendar, items: ActivityListItem[], isLive = false) => {
     if (items.length === 0) return null;
 
     return (

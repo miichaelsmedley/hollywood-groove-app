@@ -140,7 +140,7 @@ export default function ShowPromoPanel({
       </summary>
 
       <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1.25fr]">
-        <div className="space-y-2 rounded-lg border border-cinema-200 bg-white p-3">
+        <div className="space-y-2 rounded-lg border border-cinema-200 bg-cinema/70 p-3">
           {promoCodes.length === 0 ? (
             <p className="text-xs text-cinema-500">No promo codes yet.</p>
           ) : (
@@ -155,7 +155,7 @@ export default function ShowPromoPanel({
               return (
                 <div
                   key={promo.id}
-                  className="border-b border-cinema-100 pb-2 last:border-b-0 last:pb-0"
+                  className="border-b border-cinema-200 pb-2 last:border-b-0 last:pb-0"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-mono text-xs font-bold text-cinema-900">
@@ -202,7 +202,7 @@ export default function ShowPromoPanel({
 
         <form
           onSubmit={handleSave}
-          className="grid gap-2 rounded-lg border border-cinema-200 bg-white p-3 sm:grid-cols-2"
+          className="grid gap-2 rounded-lg border border-cinema-200 bg-cinema/70 p-3 sm:grid-cols-2"
         >
           <label className="space-y-1">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-cinema-600">

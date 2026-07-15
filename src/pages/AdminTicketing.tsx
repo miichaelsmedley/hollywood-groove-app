@@ -40,6 +40,7 @@ import OrderRow from "../features/admin/ticketing/OrderRow";
 import RefundRow from "../features/admin/ticketing/RefundRow";
 import ShowRow from "../features/admin/ticketing/ShowRow";
 import TicketingCoAdminsPanel from "../features/admin/ticketing/TicketingCoAdminsPanel";
+import ShowOfferClaimsPanel from "../features/admin/offers/ShowOfferClaimsPanel";
 
 export default function AdminTicketing() {
   const { isPlatformAdmin, isEventAdmin } = useStaffRoles();
@@ -137,26 +138,13 @@ export default function AdminTicketing() {
         )}
       </header>
 
-      <section className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
-          <div className="space-y-1">
-            <p className="font-bold">
-              Live payments are ON - charges are real.
-            </p>
-            <p className="text-sm">
-              Merchant of record: The Adele Show. Handle refunds, disputes,
-              and pilot purchases as live-money operations.
-            </p>
-          </div>
-        </div>
-      </section>
-
       {isPlatformAdmin && <SelfTicketGigsPanel />}
 
       {isPlatformAdmin && <TicketingCoAdminsPanel />}
 
       {hasTicketingAdminClaim && <IssueCompTicketPanel shows={shows} />}
+
+      {hasTicketingAdminClaim && <ShowOfferClaimsPanel />}
 
       {actionError && (
         <section className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">

@@ -99,6 +99,7 @@ export function useUserRole(): UserRoleState {
 
   useEffect(() => {
     let rolesUnsubscribe: (() => void) | undefined;
+    let orgRolesUnsubscribe: (() => void) | undefined;
 
     // Listen to auth state changes
     const authUnsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -106,6 +107,10 @@ export function useUserRole(): UserRoleState {
       if (rolesUnsubscribe) {
         rolesUnsubscribe();
         rolesUnsubscribe = undefined;
+      }
+      if (orgRolesUnsubscribe) {
+        orgRolesUnsubscribe();
+        orgRolesUnsubscribe = undefined;
       }
 
       if (!user) {
@@ -126,6 +131,12 @@ export function useUserRole(): UserRoleState {
         return;
       }
 
+      setState((prev) => ({
+        ...prev,
+        isLoading: true,
+        error: null,
+      }));
+
       const uid = user.uid;
 
       let isClaimAdmin = false;
@@ -138,61 +149,81 @@ export function useUserRole(): UserRoleState {
         console.warn('Staff claim check failed', error);
       }
 
-      // Listen to member's global roles and org-scoped operator grants.
-      const memberRef = ref(db, `members/${uid}`);
+      let rolesData: unknown = null;
+      let orgRolesData: unknown = null;
+      let rolesLoaded = false;
+      let orgRolesLoaded = false;
+
+      const updateRoleState = () => {
+        if (!rolesLoaded || !orgRolesLoaded) return;
+
+        let userRoles: UserRole[] = [];
+
+        // Get roles from Firebase
+        if (rolesData && Array.isArray(rolesData)) {
+          userRoles = rolesData as UserRole[];
+        }
+
+        if (isClaimAdmin && !userRoles.includes('admin')) {
+          userRoles = [...userRoles, 'admin'];
+        }
+
+        const orgMemberships = normalizeOrgMemberships(orgRolesData);
+        const orgRoles = orgRolesFromMemberships(orgMemberships);
+        const isBandMember = hasRole(userRoles, 'band_member');
+        const isScorer = hasRole(userRoles, 'scorer');
+        const isAdmin = hasRole(userRoles, 'admin');
+        const isPlatformAdmin = isAdmin || isClaimAdmin;
+        const isOrgOperator = isClaimOrgOperator || Object.values(orgMemberships).some(
+          (membership) => membership.status === 'active' && membership.roles.length > 0
+        );
+
+        setState({
+          roles: userRoles,
+          orgMemberships,
+          orgRoles,
+          isLoading: false,
+          error: null,
+          isBandMember,
+          isScorer,
+          isAdmin,
+          isOrgOperator,
+          canViewTestShows: canViewTestShows(userRoles),
+          canScoreActivities: canScoreActivities(userRoles),
+          hasOrgRole: (orgId, role) => hasScopedOrgRole(orgMemberships, orgId, role),
+          canRunOrgShow: (orgId) => canRunOrgShowFor(orgMemberships, orgId, isPlatformAdmin),
+          canEditOrgContent: (orgId) => canEditOrgContentFor(orgMemberships, orgId, isPlatformAdmin),
+          canRequestOrgCampaign: (orgId) => canRequestOrgCampaignFor(orgMemberships, orgId, isPlatformAdmin),
+        });
+      };
+
+      const handleRoleError = (err: Error) => {
+        console.error('Error fetching user roles:', err);
+        setState((prev) => ({
+          ...prev,
+          isLoading: false,
+          error: err.message,
+        }));
+      };
 
       rolesUnsubscribe = onValue(
-        memberRef,
-        async (snapshot) => {
-          let userRoles: UserRole[] = [];
-          const memberData = snapshot.val() ?? {};
-
-          // Get roles from Firebase
-          const rolesData = memberData.roles;
-          if (rolesData && Array.isArray(rolesData)) {
-            userRoles = rolesData as UserRole[];
-          }
-
-          if (isClaimAdmin && !userRoles.includes('admin')) {
-            userRoles = [...userRoles, 'admin'];
-          }
-
-          const orgMemberships = normalizeOrgMemberships(memberData.org_roles);
-          const orgRoles = orgRolesFromMemberships(orgMemberships);
-          const isBandMember = hasRole(userRoles, 'band_member');
-          const isScorer = hasRole(userRoles, 'scorer');
-          const isAdmin = hasRole(userRoles, 'admin');
-          const isPlatformAdmin = isAdmin || isClaimAdmin;
-          const isOrgOperator = isClaimOrgOperator || Object.values(orgMemberships).some(
-            (membership) => membership.status === 'active' && membership.roles.length > 0
-          );
-
-          setState({
-            roles: userRoles,
-            orgMemberships,
-            orgRoles,
-            isLoading: false,
-            error: null,
-            isBandMember,
-            isScorer,
-            isAdmin,
-            isOrgOperator,
-            canViewTestShows: canViewTestShows(userRoles),
-            canScoreActivities: canScoreActivities(userRoles),
-            hasOrgRole: (orgId, role) => hasScopedOrgRole(orgMemberships, orgId, role),
-            canRunOrgShow: (orgId) => canRunOrgShowFor(orgMemberships, orgId, isPlatformAdmin),
-            canEditOrgContent: (orgId) => canEditOrgContentFor(orgMemberships, orgId, isPlatformAdmin),
-            canRequestOrgCampaign: (orgId) => canRequestOrgCampaignFor(orgMemberships, orgId, isPlatformAdmin),
-          });
+        ref(db, `members/${uid}/roles`),
+        (snapshot) => {
+          rolesData = snapshot.val();
+          rolesLoaded = true;
+          updateRoleState();
         },
-        (err) => {
-          console.error('Error fetching user roles:', err);
-          setState((prev) => ({
-            ...prev,
-            isLoading: false,
-            error: err.message,
-          }));
-        }
+        handleRoleError
+      );
+
+      orgRolesUnsubscribe = onValue(
+        ref(db, `members/${uid}/org_roles`),
+        (snapshot) => {
+          orgRolesData = snapshot.val();
+          orgRolesLoaded = true;
+          updateRoleState();
+        },
+        handleRoleError
       );
     });
 
@@ -200,6 +231,9 @@ export function useUserRole(): UserRoleState {
       authUnsubscribe();
       if (rolesUnsubscribe) {
         rolesUnsubscribe();
+      }
+      if (orgRolesUnsubscribe) {
+        orgRolesUnsubscribe();
       }
     };
   }, []);

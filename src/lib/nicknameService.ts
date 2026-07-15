@@ -1,4 +1,3 @@
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from './firebase';
 
 const FUNCTIONS_REGION = 'asia-southeast1';
@@ -16,14 +15,19 @@ export type NicknameAvailability = {
   checked: boolean;
 };
 
-const functions = getFunctions(app, FUNCTIONS_REGION);
-
-const checkDisplayNameAvailableCallable = httpsCallable<
-  CheckDisplayNameAvailableInput,
-  CheckDisplayNameAvailableResult
->(functions, 'checkDisplayNameAvailable');
-
 const MAX_SUGGESTED_NICKNAME_CHECKS = 3;
+
+async function checkDisplayNameAvailable(
+  displayName: string
+): Promise<CheckDisplayNameAvailableResult> {
+  const { getFunctions, httpsCallable } = await import('firebase/functions');
+  const checkDisplayNameAvailableCallable = httpsCallable<
+    CheckDisplayNameAvailableInput,
+    CheckDisplayNameAvailableResult
+  >(getFunctions(app, FUNCTIONS_REGION), 'checkDisplayNameAvailable');
+  const result = await checkDisplayNameAvailableCallable({ displayName });
+  return result.data;
+}
 
 export async function checkNicknameAvailability(displayName: string): Promise<NicknameAvailability> {
   const trimmed = displayName.trim();
@@ -32,9 +36,9 @@ export async function checkNicknameAvailability(displayName: string): Promise<Ni
   }
 
   try {
-    const result = await checkDisplayNameAvailableCallable({ displayName: trimmed });
+    const result = await checkDisplayNameAvailable(trimmed);
     return {
-      available: result.data.available,
+      available: result.available,
       checked: true,
     };
   } catch (error) {

@@ -62,8 +62,8 @@ import {
   getTicketSuccessUrl,
   getTicketWalletPath,
   resolveSellingFrontId,
-  useSellingFrontBrand,
 } from "../lib/sellingFronts";
+import { useSellingFrontBrand } from "../lib/useSellingFrontBrand";
 import Spinner from "../components/ui/Spinner";
 
 type TicketTypeWithId = TicketType & { id: string };

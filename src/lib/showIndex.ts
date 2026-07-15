@@ -52,6 +52,7 @@ type ActiveShowsOptions = {
   includeProd?: boolean;
   includeTest?: boolean;
   enabled?: boolean;
+  onError?: (error: unknown) => void;
 };
 
 const EMPTY_INDEXED_SHOWS: IndexedShow[] = [];
@@ -208,6 +209,7 @@ export function useActiveShows({
   includeProd = true,
   includeTest = false,
   enabled = true,
+  onError,
 }: ActiveShowsOptions = {}): UseActiveShowsResult {
   const [result, setResult] = useState<UseActiveShowsResult>({
     shows: [],
@@ -304,6 +306,7 @@ export function useActiveShows({
           },
           (error) => {
             console.warn('Failed to load show live state:', error);
+            if (!disposed) onError?.(error);
             liveValues.set(key, null);
             liveLoaded.add(key);
             publish();
@@ -333,6 +336,7 @@ export function useActiveShows({
         },
         (error) => {
           console.warn('Failed to load show index:', error);
+          if (!disposed) onError?.(error);
           indexRows[scope] = EMPTY_INDEXED_SHOWS;
           indexLoaded[scope] = true;
           syncLiveSubscriptions();
@@ -351,7 +355,7 @@ export function useActiveShows({
       indexUnsubscribes.forEach((unsubscribe) => unsubscribe());
       liveUnsubscribes.forEach((unsubscribe) => unsubscribe());
     };
-  }, [enabled, includeProd, includeTest]);
+  }, [enabled, includeProd, includeTest, onError]);
 
   return useMemo(() => result, [result]);
 }

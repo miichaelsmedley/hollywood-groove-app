@@ -7,7 +7,7 @@
  * Supports test mode: when isTestMode is true, all paths are prefixed with 'test/'
  */
 
-import { ref, get, update, push, runTransaction } from 'firebase/database';
+import { ref, get, update, push, runTransaction, query, orderByChild, equalTo } from 'firebase/database';
 import { db } from './firebase';
 import type {
   Team,
@@ -15,6 +15,7 @@ import type {
   TeamMember,
   MemberTeamInfo,
   TeamCodeIndex,
+  TeamNameIndex,
 } from '../types/firebaseContract';
 
 // Default team settings
@@ -39,6 +40,10 @@ function getPathPrefix(isTestMode: boolean): string {
  */
 function buildPath(path: string, isTestMode: boolean): string {
   return `${getPathPrefix(isTestMode)}${path}`;
+}
+
+function getTeamNameKey(name: string): string {
+  return encodeURIComponent(name.toLowerCase().trim()).replace(/\./g, '%2E');
 }
 
 // ============================================
@@ -71,21 +76,21 @@ export async function isTeamCodeAvailable(code: string, isTestMode = false): Pro
  * Check if a team name is available (case-insensitive)
  */
 export async function isTeamNameAvailable(name: string, isTestMode = false): Promise<boolean> {
-  const teamsRef = ref(db, buildPath('teams', isTestMode));
-  const snapshot = await get(teamsRef);
+  const trimmedName = name.trim();
+  if (!trimmedName) return true;
 
-  if (!snapshot.exists()) return true;
+  const nameRef = ref(db, buildPath(`team_names/${getTeamNameKey(trimmedName)}`, isTestMode));
+  const nameSnapshot = await get(nameRef);
+  if (nameSnapshot.exists()) return false;
 
-  const teams = snapshot.val();
-  const normalizedName = name.toLowerCase().trim();
+  const exactNameQuery = query(
+    ref(db, buildPath('teams', isTestMode)),
+    orderByChild('name'),
+    equalTo(trimmedName)
+  );
+  const exactNameSnapshot = await get(exactNameQuery);
 
-  for (const teamData of Object.values(teams) as Team[]) {
-    if (teamData.name.toLowerCase().trim() === normalizedName) {
-      return false;
-    }
-  }
-
-  return true;
+  return !exactNameSnapshot.exists();
 }
 
 // ============================================
@@ -196,11 +201,16 @@ export async function createTeam(
     team_id: teamId,
     created_by: ownerId,
   };
+  const nameIndex: TeamNameIndex = {
+    team_id: teamId,
+    created_by: ownerId,
+  };
 
   // Write all data atomically
   const updates: Record<string, unknown> = {};
   updates[`${prefix}teams/${teamId}`] = teamWithMembers;
   updates[`${prefix}team_codes/${code}`] = codeIndex;
+  updates[`${prefix}team_names/${getTeamNameKey(trimmedName)}`] = nameIndex;
   updates[`${prefix}members/${ownerId}/current_team`] = memberTeamInfo;
 
   try {
@@ -287,7 +297,7 @@ export async function joinTeam(
 
   try {
     // Use transaction to safely increment member count
-    await runTransaction(ref(db, `${prefix}teams/${teamId}/member_count`), (currentCount) => {
+    const memberCountResult = await runTransaction(ref(db, `${prefix}teams/${teamId}/member_count`), (currentCount) => {
       const count = currentCount || 0;
       if (count >= team.settings.max_members) {
         // Abort transaction if team became full
@@ -295,6 +305,10 @@ export async function joinTeam(
       }
       return count + 1;
     });
+
+    if (!memberCountResult.committed) {
+      return { success: false, error: `This team is full (max ${team.settings.max_members} members).` };
+    }
 
     // Write member data
     const updates: Record<string, unknown> = {};
@@ -391,6 +405,7 @@ export async function disbandTeam(
     const updates: Record<string, unknown> = {};
     updates[`${prefix}teams/${teamId}`] = null;
     updates[`${prefix}team_codes/${team.code}`] = null;
+    updates[`${prefix}team_names/${getTeamNameKey(team.name)}`] = null;
 
     // Remove current_team from all members
     for (const uid of memberUids) {
@@ -556,9 +571,19 @@ export async function updateTeamName(
     // Update team name and all member references
     const members = await getTeamMembers(teamId, isTestMode);
     const memberUids = Object.keys(members);
+    const oldNameKey = getTeamNameKey(team.name);
+    const newNameKey = getTeamNameKey(trimmedName);
+    const nameIndex: TeamNameIndex = {
+      team_id: teamId,
+      created_by: ownerId,
+    };
 
     const updates: Record<string, unknown> = {};
     updates[`${prefix}teams/${teamId}/name`] = trimmedName;
+    updates[`${prefix}team_names/${newNameKey}`] = nameIndex;
+    if (oldNameKey !== newNameKey) {
+      updates[`${prefix}team_names/${oldNameKey}`] = null;
+    }
 
     for (const uid of memberUids) {
       updates[`${prefix}members/${uid}/current_team/team_name`] = trimmedName;

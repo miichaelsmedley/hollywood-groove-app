@@ -39,13 +39,14 @@ export default function ShareButton({
     }
   }, [userProfile?.uid]);
 
-  const handleShareComplete = async () => {
-    if (!userProfile?.uid) return;
+  const handleShareComplete = async (): Promise<boolean> => {
+    if (!userProfile?.uid) return false;
 
     const result = await recordSocialShare(userProfile.uid, shareType);
     if (result.success) {
       setCanShare(result.dailySharesUsed < result.maxDailyShares);
     }
+    return result.success && result.starsAwarded > 0;
   };
 
   // Floating variant (FAB style)
@@ -209,11 +210,12 @@ export function SharePrompt({
 
   if (!isOpen || dismissed) return null;
 
-  const handleShareComplete = async () => {
-    if (!userProfile?.uid) return;
-    await recordSocialShare(userProfile.uid, shareType);
+  const handleShareComplete = async (): Promise<boolean> => {
+    if (!userProfile?.uid) return false;
+    const result = await recordSocialShare(userProfile.uid, shareType);
     setShowCamera(false);
     onClose();
+    return result.success && result.starsAwarded > 0;
   };
 
   const handleDismiss = () => {

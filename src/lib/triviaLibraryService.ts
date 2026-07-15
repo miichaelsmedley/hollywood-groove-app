@@ -22,27 +22,59 @@ import type {
 // Timezone Helpers
 // ============================================
 
+const melbourneDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Australia/Melbourne',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+function getMelbourneDateParts(date = new Date()): { year: number; month: number; day: number } {
+  const parts = Object.fromEntries(
+    melbourneDateFormatter
+      .formatToParts(date)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value])
+  );
+
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+  };
+}
+
+function formatDateParts(year: number, month: number, day: number): string {
+  return [
+    year.toString().padStart(4, '0'),
+    month.toString().padStart(2, '0'),
+    day.toString().padStart(2, '0'),
+  ].join('-');
+}
+
 /**
  * Get today's date string in Melbourne timezone (YYYY-MM-DD format)
  */
 export function getMelbourneDateString(): string {
-  return new Date().toLocaleDateString('en-CA', {
-    timeZone: 'Australia/Melbourne',
-  });
+  const { year, month, day } = getMelbourneDateParts();
+  return formatDateParts(year, month, day);
 }
 
 /**
  * Get the start of the current week (Monday) in Melbourne timezone
  */
 export function getMelbourneWeekStart(): string {
-  const now = new Date();
-  const melbourneDate = new Date(
-    now.toLocaleString('en-US', { timeZone: 'Australia/Melbourne' })
+  const { year, month, day } = getMelbourneDateParts();
+  const utcDate = new Date(Date.UTC(year, month - 1, day));
+  const dayOfWeek = utcDate.getUTCDay();
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  utcDate.setUTCDate(utcDate.getUTCDate() - daysFromMonday);
+
+  return formatDateParts(
+    utcDate.getUTCFullYear(),
+    utcDate.getUTCMonth() + 1,
+    utcDate.getUTCDate()
   );
-  const day = melbourneDate.getDay();
-  const diff = melbourneDate.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
-  const monday = new Date(melbourneDate.setDate(diff));
-  return monday.toLocaleDateString('en-CA', { timeZone: 'Australia/Melbourne' });
 }
 
 // ============================================

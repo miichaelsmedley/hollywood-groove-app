@@ -1,4 +1,14 @@
-import type { CrowdActivity, LiveActivityState, LiveTriviaState, UserScore } from '../types/firebaseContract';
+import type {
+  CrowdActivity,
+  LiveActivityState,
+  LiveTriviaState,
+  MemberTeamInfo,
+  ShowLeaderboard,
+  TeamLeaderboard,
+  TeamShowScore,
+  UserScore,
+  UserTriviaResult,
+} from '../types/firebaseContract';
 
 declare global {
   interface Window {
@@ -18,9 +28,14 @@ export type E2EUser = {
 
 export type TriviaFixture = {
   live: LiveTriviaState;
-  activity: CrowdActivity;
+  activity: CrowdActivity | null;
   score: UserScore;
   user: E2EUser;
+  result?: UserTriviaResult | null;
+  leaderboard?: ShowLeaderboard;
+  team?: MemberTeamInfo;
+  teamScore?: TeamShowScore;
+  teamLeaderboard?: TeamLeaderboard;
 };
 
 export type ActivityFixture = {
@@ -43,6 +58,17 @@ function liveTrivia(activityId: string): LiveTriviaState {
   };
 }
 
+function answerTrivia(activityId: string): LiveTriviaState {
+  return {
+    activityId,
+    phase: 'answer',
+    startedAt: Date.now() - 30_000,
+    durationSeconds: 30,
+    revealedCorrectAnswer: 'Queen',
+    revealedWinnerUid: 'sarah',
+  };
+}
+
 function score(): UserScore {
   return {
     displayName: fixtureUser.displayName,
@@ -52,15 +78,130 @@ function score(): UserScore {
   };
 }
 
+function leaderboard(): ShowLeaderboard {
+  return {
+    updatedAt: Date.now(),
+    top: [
+      { uid: 'sarah', displayName: 'Sarah', totalScore: 180 },
+      { uid: 'mick', displayName: 'Mick', totalScore: 155 },
+      { uid: fixtureUser.uid, displayName: fixtureUser.displayName, totalScore: 120 },
+      { uid: 'alex', displayName: 'Alex', totalScore: 90 },
+    ],
+  };
+}
+
+function fixtureTeam(): MemberTeamInfo {
+  return {
+    team_id: 'table-9',
+    team_name: 'Table 9',
+    joined_at: Date.now() - 120_000,
+    role: 'member',
+  };
+}
+
+function fixtureTeamScore(): TeamShowScore {
+  return {
+    team_name: 'Table 9',
+    combined_score: 1240,
+    member_scores: {
+      [fixtureUser.uid]: { display_name: fixtureUser.displayName, score: 120 },
+      sarah: { display_name: 'Sarah', score: 180 },
+    },
+    contributing_members: [fixtureUser.uid, 'sarah'],
+    updated_at: Date.now(),
+  };
+}
+
+function teamLeaderboard(): TeamLeaderboard {
+  return {
+    updated_at: Date.now(),
+    top: [
+      { team_id: 'table-2', team_name: 'Table 2', combined_score: 1380, member_count: 5, rank: 1 },
+      { team_id: 'table-4', team_name: 'Table 4', combined_score: 1300, member_count: 4, rank: 2 },
+      { team_id: 'table-9', team_name: 'Table 9', combined_score: 1240, member_count: 6, rank: 3 },
+    ],
+  };
+}
+
 export function getTriviaFixture(name: string | null): TriviaFixture | null {
   if (!E2E_FIXTURES_ENABLED || !name) return null;
 
   const base = {
     score: score(),
     user: fixtureUser,
+    leaderboard: leaderboard(),
+    team: fixtureTeam(),
+    teamScore: fixtureTeamScore(),
+    teamLeaderboard: teamLeaderboard(),
   };
 
   switch (name) {
+    case 'idle':
+      return {
+        ...base,
+        live: {
+          activityId: null,
+          phase: 'idle',
+          startedAt: Date.now(),
+          durationSeconds: 0,
+        },
+        activity: null,
+      };
+    case 'answer':
+      return {
+        ...base,
+        live: answerTrivia('fixture-trivia-answer'),
+        result: {
+          isCorrect: true,
+          baseScore: 100,
+          speedBonus: 52,
+          streakMultiplier: 1,
+          totalScore: 152,
+          answeredAt: Date.now() - 15_000,
+        },
+        activity: {
+          type: 'trivia',
+          title: 'Opening Question',
+          trivia: {
+            question: 'Which band sang Bohemian Rhapsody?',
+            kind: 'multi',
+            options: [
+              { index: 0, text: 'Queen' },
+              { index: 1, text: 'Adele' },
+              { index: 2, text: 'INXS' },
+            ],
+          },
+        },
+      };
+    case 'answer-winner':
+      return {
+        ...base,
+        live: {
+          ...answerTrivia('fixture-trivia-answer-winner'),
+          revealedWinnerUid: fixtureUser.uid,
+        },
+        result: {
+          isCorrect: true,
+          baseScore: 100,
+          speedBonus: 52,
+          streakMultiplier: 1,
+          totalScore: 152,
+          answeredAt: Date.now() - 15_000,
+        },
+        activity: {
+          type: 'trivia',
+          title: 'Opening Question',
+          trivia: {
+            question: 'Which band sang Bohemian Rhapsody?',
+            kind: 'multi',
+            options: [
+              { index: 0, text: 'Queen' },
+              { index: 1, text: 'Adele' },
+              { index: 2, text: 'INXS' },
+            ],
+          },
+        },
+      };
     case 'multi':
       return {
         ...base,

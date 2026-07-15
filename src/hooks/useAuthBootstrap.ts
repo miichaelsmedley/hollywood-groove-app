@@ -14,6 +14,33 @@ const AUTH_REDIRECT_KEYS = [
   'hg_google_auth_popup_pending',
 ];
 
+const RETRYABLE_ANONYMOUS_AUTH_CODES = new Set([
+  'auth/network-request-failed',
+  'auth/too-many-requests',
+]);
+
+const MAX_ANONYMOUS_AUTH_RETRY_DELAY_MS = 30_000;
+
+function getAuthErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null;
+  const maybeError = error as { code?: unknown };
+  return typeof maybeError.code === 'string' ? maybeError.code : null;
+}
+
+function isRetryableAnonymousAuthError(error: unknown): boolean {
+  const code = getAuthErrorCode(error);
+  return code ? RETRYABLE_ANONYMOUS_AUTH_CODES.has(code) : false;
+}
+
+function getAnonymousAuthRetryDelay(attempt: number): number {
+  const exponentialDelay = Math.min(
+    MAX_ANONYMOUS_AUTH_RETRY_DELAY_MS,
+    1000 * 2 ** attempt
+  );
+  const jitter = Math.round(exponentialDelay * (0.2 + Math.random() * 0.3));
+  return Math.min(MAX_ANONYMOUS_AUTH_RETRY_DELAY_MS, exponentialDelay + jitter);
+}
+
 export function clearStoredAuthAttempt(): void {
   AUTH_REDIRECT_KEYS.forEach((key) => localStorage.removeItem(key));
 }
@@ -22,6 +49,7 @@ export function useAuthBootstrap() {
   const [authReady, setAuthReady] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [showErrorBanner, setShowErrorBanner] = useState(false);
+  const [authStatusLabel, setAuthStatusLabel] = useState('Loading...');
 
   useEffect(() => {
     if (!authError || !authReady) {
@@ -37,6 +65,14 @@ export function useAuthBootstrap() {
     let unsubscribe: (() => void) | undefined;
     let tokenUnsubscribe: (() => void) | undefined;
     let isMounted = true;
+    let retryTimer: number | null = null;
+
+    const waitForRetry = (delayMs: number) => new Promise<void>((resolve) => {
+      retryTimer = window.setTimeout(() => {
+        retryTimer = null;
+        resolve();
+      }, delayMs);
+    });
 
     const observeAuthChanges = (label = 'Auth state changed') => {
       unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -130,13 +166,33 @@ export function useAuthBootstrap() {
         return;
       }
 
-      try {
-        console.log('No user found, signing in anonymously...');
-        await signInAnonymously(auth);
-        console.log('Anonymous sign-in complete');
-      } catch (error) {
-        console.error('Firebase auth error:', error);
-        setAuthError('Authentication failed. Please refresh the page.');
+      let anonymousSignInComplete = false;
+      let anonymousSignInAttempt = 0;
+
+      while (isMounted && !anonymousSignInComplete) {
+        try {
+          console.log('No user found, signing in anonymously...');
+          await signInAnonymously(auth);
+          console.log('Anonymous sign-in complete');
+          anonymousSignInComplete = true;
+          setAuthStatusLabel('Loading...');
+        } catch (error) {
+          console.error('Firebase auth error:', error);
+
+          if (!isRetryableAnonymousAuthError(error)) {
+            setAuthError('Authentication failed. Please refresh the page.');
+            break;
+          }
+
+          const retryDelay = getAnonymousAuthRetryDelay(anonymousSignInAttempt);
+          anonymousSignInAttempt += 1;
+          setAuthError(null);
+          setAuthStatusLabel('Connecting... hang tight');
+          console.warn(
+            `Anonymous sign-in throttled or offline; retrying in ${Math.round(retryDelay / 1000)}s`
+          );
+          await waitForRetry(retryDelay);
+        }
       }
 
       if (!isMounted) {
@@ -149,6 +205,9 @@ export function useAuthBootstrap() {
 
     return () => {
       isMounted = false;
+      if (retryTimer !== null) {
+        window.clearTimeout(retryTimer);
+      }
       unsubscribe?.();
       tokenUnsubscribe?.();
     };
@@ -158,6 +217,7 @@ export function useAuthBootstrap() {
     authReady,
     authError,
     showErrorBanner,
+    authStatusLabel,
     clearAuthError: () => {
       setShowErrorBanner(false);
       setAuthError(null);

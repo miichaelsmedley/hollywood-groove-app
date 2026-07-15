@@ -17,7 +17,7 @@ interface ShareMomentProps {
   showName?: string;
   venueName?: string;
   onClose: () => void;
-  onShareComplete?: () => void;
+  onShareComplete?: () => boolean | void | Promise<boolean | void>;
 }
 
 // Social brand icons moved to components/icons/SocialIcons (imported above).
@@ -305,6 +305,27 @@ function ShareMomentContent({
     startCamera();
   }, [startCamera]);
 
+  // Download image
+  const downloadImage = useCallback(() => {
+    if (!capturedImage) return;
+    const link = document.createElement('a');
+    link.href = capturedImage;
+    link.download = 'hollywood-groove-moment.jpg';
+    link.click();
+  }, [capturedImage]);
+
+  const completeShare = useCallback(async () => {
+    try {
+      const result = await onShareComplete?.();
+      setStarsEarned(result === true);
+    } catch (err) {
+      console.error('Failed to record social share:', err);
+      setStarsEarned(false);
+      setError('Shared, but the star reward could not be recorded.');
+    }
+    setMode('shared');
+  }, [onShareComplete]);
+
   // Share using Web Share API (best for images)
   const shareWithNativeSheet = useCallback(async () => {
     if (!capturedImage) return;
@@ -320,19 +341,18 @@ function ShareMomentContent({
           title: 'Hollywood Groove Moment',
           text: `Having a blast at ${showName}! 🎬✨ #HollywoodGroove`,
         });
-        setStarsEarned(true);
-        setMode('shared');
-        onShareComplete?.();
+        await completeShare();
       } else {
         // Fallback: download
         downloadImage();
+        await completeShare();
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         setError('Could not share. Try downloading instead.');
       }
     }
-  }, [capturedImage, showName, onShareComplete]);
+  }, [capturedImage, showName, completeShare, downloadImage]);
 
   // Share to specific platform with pre-filled text
   const shareToFacebook = useCallback(() => {
@@ -343,11 +363,8 @@ function ShareMomentContent({
     setTimeout(() => {
       window.open(`https://www.facebook.com/sharer/sharer.php?quote=${text}&u=${url}`, '_blank');
     }, 500);
-    // Still show success since they initiated share
-    setStarsEarned(true);
-    setMode('shared');
-    onShareComplete?.();
-  }, [showName, onShareComplete]);
+    void completeShare();
+  }, [showName, completeShare]);
 
   const shareToTwitter = useCallback(() => {
     const text = encodeURIComponent(`Having a blast at ${showName}! 🎬✨`);
@@ -355,10 +372,8 @@ function ShareMomentContent({
     const url = encodeURIComponent(HOLLYWOOD_GROOVE_SHARE_URL);
     // Twitter/X web intent works well and opens app if installed
     window.open(`https://twitter.com/intent/tweet?text=${text}&hashtags=${hashtags}&url=${url}`, '_blank');
-    setStarsEarned(true);
-    setMode('shared');
-    onShareComplete?.();
-  }, [showName, onShareComplete]);
+    void completeShare();
+  }, [showName, completeShare]);
 
   const shareToInstagram = useCallback(async () => {
     // Instagram doesn't have a share URL, but we can:
@@ -375,9 +390,7 @@ function ShareMomentContent({
             files: [file],
             title: 'Share to Instagram',
           });
-          setStarsEarned(true);
-          setMode('shared');
-          onShareComplete?.();
+          await completeShare();
           return;
         }
       } catch (e) {
@@ -387,19 +400,15 @@ function ShareMomentContent({
     // Fallback: download image, then try to open Instagram
     downloadImage();
     window.location.href = 'instagram://';
-    setStarsEarned(true);
-    setMode('shared');
-    onShareComplete?.();
-  }, [capturedImage, onShareComplete]);
+    await completeShare();
+  }, [capturedImage, completeShare, downloadImage]);
 
   const shareToThreads = useCallback(() => {
     const text = encodeURIComponent(`Having a blast at ${showName}! 🎬✨ #HollywoodGroove`);
     // Threads has a web intent
     window.open(`https://www.threads.net/intent/post?text=${text}`, '_blank');
-    setStarsEarned(true);
-    setMode('shared');
-    onShareComplete?.();
-  }, [showName, onShareComplete]);
+    void completeShare();
+  }, [showName, completeShare]);
 
   const shareToTikTok = useCallback(async () => {
     // TikTok doesn't have direct share, use native sheet or download
@@ -411,9 +420,7 @@ function ShareMomentContent({
 
         if (navigator.share && navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file] });
-          setStarsEarned(true);
-          setMode('shared');
-          onShareComplete?.();
+          await completeShare();
           return;
         }
       } catch (e) {
@@ -422,19 +429,8 @@ function ShareMomentContent({
     }
     downloadImage();
     window.location.href = 'tiktok://';
-    setStarsEarned(true);
-    setMode('shared');
-    onShareComplete?.();
-  }, [capturedImage, onShareComplete]);
-
-  // Download image
-  const downloadImage = useCallback(() => {
-    if (!capturedImage) return;
-    const link = document.createElement('a');
-    link.href = capturedImage;
-    link.download = 'hollywood-groove-moment.jpg';
-    link.click();
-  }, [capturedImage]);
+    await completeShare();
+  }, [capturedImage, completeShare, downloadImage]);
 
   // Handle close
   const handleClose = useCallback(() => {

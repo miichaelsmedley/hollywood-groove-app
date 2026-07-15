@@ -6,6 +6,7 @@ interface BreakMenuModalProps {
   onSelect: (mode: Exclude<BreakMode, 'off'>, customDuration?: number) => void;
   onClose: () => void;
   currentMedian: number | null;
+  isDanceWindowOpen?: boolean;
 }
 
 const BREAK_OPTIONS: {
@@ -42,7 +43,7 @@ const BREAK_OPTIONS: {
 
 const DURATION_OPTIONS = [2, 5, 10, 15, 20, 30];
 
-export default function BreakMenuModal({ onSelect, onClose, currentMedian }: BreakMenuModalProps) {
+export default function BreakMenuModal({ onSelect, onClose, currentMedian, isDanceWindowOpen = false }: BreakMenuModalProps) {
   const [showDurationPicker, setShowDurationPicker] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState(10);
 
@@ -138,10 +139,12 @@ export default function BreakMenuModal({ onSelect, onClose, currentMedian }: Bre
           </button>
         </div>
 
-        {/* Info */}
-        <p className="text-sm text-gray-400 mb-4">
-          Earn ~{currentMedian ?? 50} pts automatically while you're away. Auto-claims every minute (respects cooldown).
-        </p>
+          {/* Info */}
+          <p className="text-sm text-gray-400 mb-4">
+            {isDanceWindowOpen
+              ? 'Dance mode now earns +100 for this window, and the Spotlight could add +150.'
+              : `Earn ~${currentMedian ?? 50} pts automatically while you're away. Auto-claims every minute (respects cooldown).`}
+          </p>
 
         {/* Options */}
         <div className="space-y-3">

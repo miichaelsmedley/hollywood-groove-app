@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Mic, Trophy, Vote, Users, List, Music, ArrowLeft } from 'lucide-react';
+import { BarChart3, Mic, Trophy, Vote, Users, List, Music, ArrowLeft } from 'lucide-react';
 import { useShow } from '../../contexts/ShowContext';
 import TriviaButton from './TriviaButton';
 import BreakMenuModal from './BreakMenuModal';
@@ -26,6 +26,8 @@ export default function ActionBar() {
     enterBreakMode,
     exitBreakMode,
     liveActivity,
+    liveTrivia,
+    liveDanceWindow,
   } = useShow();
 
   const [showBreakMenu, setShowBreakMenu] = useState(false);
@@ -41,8 +43,12 @@ export default function ActionBar() {
 
   const handleActivitiesClick = () => {
     if (id) {
-      navigate(`/shows/${id}/activities`);
+      navigate(`/shows/${id}/activities${location.search}`);
     }
+  };
+
+  const handleScoresClick = () => {
+    navigate(`/scores${location.search}`);
   };
 
   // Determine if there's a non-dancing activity active
@@ -52,6 +58,16 @@ export default function ActionBar() {
 
   // Check if we're already on the activity page
   const isOnActivityPage = location.pathname.endsWith('/activity');
+  const isTriviaLive = Boolean(
+    liveTrivia &&
+    liveTrivia.phase !== 'idle' &&
+    liveTrivia.activityId
+  );
+  const isDanceWindowOpen = Boolean(
+    liveDanceWindow?.status === 'open' &&
+    typeof liveDanceWindow.endsAt === 'number' &&
+    liveDanceWindow.endsAt > Date.now()
+  );
 
   // Get activity icon based on type
   const getActivityIcon = (type: string) => {
@@ -73,8 +89,7 @@ export default function ActionBar() {
 
   const ActivityIcon = hasNonDanceActivity ? getActivityIcon(liveActivity.type) : Users;
 
-  // Don't render if nothing to show
-  if (!dancingEnabled && !hasNonDanceActivity) {
+  if (!id) {
     return null;
   }
 
@@ -83,73 +98,88 @@ export default function ActionBar() {
       <div className="bg-gray-950 border-t border-gray-800 px-2 py-2 pb-4 safe-area-pb">
         <div className="flex flex-col gap-2 max-w-lg mx-auto">
           {/* Top row: Trivia + Activity + Dance/Break */}
-          <div className="flex items-stretch gap-1.5 min-w-0">
-            {/* Trivia Button (if trivia is live and not on trivia page) */}
-            <TriviaButton />
+          {(isTriviaLive || hasNonDanceActivity || dancingEnabled) && (
+            <div className="flex items-stretch gap-1.5 min-w-0">
+              {/* Trivia Button (if trivia is live and not on trivia page) */}
+              <TriviaButton />
 
-            {/* Activity Button (if non-dance activity is live and not on activity page) */}
-            {hasNonDanceActivity && !isOnActivityPage && (
-              <button
-                onClick={() => navigate(`/shows/${id}/activity`)}
-                className="flex-1 flex flex-col items-center justify-center gap-0.5 px-2 py-2.5 rounded-xl bg-green-600 text-white font-semibold shadow-lg hover:bg-green-500 transition-all active:scale-95 min-w-0"
-              >
-                <ActivityIcon className="w-5 h-5 shrink-0" />
-                <span className="text-xs font-bold truncate">Join Activity</span>
-                {liveActivity.fixedPoints && (
-                  <span className="text-[10px] opacity-90">+{liveActivity.fixedPoints} pts</span>
-                )}
-              </button>
-            )}
+              {/* Activity Button (if non-dance activity is live and not on activity page) */}
+              {hasNonDanceActivity && !isOnActivityPage && (
+                <button
+                  onClick={() => navigate(`/shows/${id}/activity${location.search}`)}
+                  className="flex-1 flex flex-col items-center justify-center gap-0.5 px-2 py-2.5 rounded-xl bg-green-600 text-white font-semibold shadow-lg hover:bg-green-500 transition-all active:scale-95 min-w-0"
+                >
+                  <ActivityIcon className="w-5 h-5 shrink-0" />
+                  <span className="text-xs font-bold truncate">Join Activity</span>
+                  {liveActivity.fixedPoints && (
+                    <span className="text-[10px] opacity-90">+{liveActivity.fixedPoints} pts</span>
+                  )}
+                </button>
+              )}
 
-            {/* Dance/Break Button - Single button UX */}
-            {dancingEnabled && (
-              isOnBreak && breakMode !== 'off' ? (
-                // On break - show "Return to Trivia" button
-                <button
-                  onClick={handleReturnFromBreak}
-                  className="flex-1 flex flex-col items-center justify-center gap-0.5 px-2 py-2.5 rounded-xl bg-amber-500 text-gray-900 font-semibold shadow-lg hover:bg-amber-400 transition-all active:scale-95 min-w-0"
-                >
-                  <div className="flex items-center gap-1">
-                    <ArrowLeft className="w-4 h-4 shrink-0" />
-                    <span className="text-xs font-bold truncate">Return</span>
-                  </div>
-                  <span className="text-[10px] opacity-80 truncate">
-                    {pointsEarnedOnBreak > 0 ? `+${pointsEarnedOnBreak} pts` : 'Auto-claim'}
-                  </span>
-                </button>
-              ) : (
-                // Not on break - show "Dance / Take a Break" button
-                <button
-                  onClick={() => setShowBreakMenu(true)}
-                  className="flex-1 flex flex-col items-center justify-center gap-0.5 px-2 py-2.5 rounded-xl bg-primary text-gray-900 font-semibold shadow-lg hover:bg-primary-400 transition-all active:scale-95 min-w-0"
-                >
-                  <Music className="w-5 h-5 shrink-0" />
-                  <span className="text-xs font-bold truncate">Dance / Break</span>
-                  <span className="text-[10px] opacity-80">~{currentMedian ?? 50} pts</span>
-                </button>
-              )
-            )}
+              {/* Dance/Break Button - Single button UX */}
+              {dancingEnabled && (
+                isOnBreak && breakMode !== 'off' ? (
+                  // On break - show "Return to Trivia" button
+                  <button
+                    onClick={handleReturnFromBreak}
+                    className="flex-1 flex flex-col items-center justify-center gap-0.5 px-2 py-2.5 rounded-xl bg-amber-500 text-gray-900 font-semibold shadow-lg hover:bg-amber-400 transition-all active:scale-95 min-w-0"
+                  >
+                    <div className="flex items-center gap-1">
+                      <ArrowLeft className="w-4 h-4 shrink-0" />
+                      <span className="text-xs font-bold truncate">Return</span>
+                    </div>
+                    <span className="text-[10px] opacity-80 truncate">
+                      {isDanceWindowOpen ? '+100 window' : pointsEarnedOnBreak > 0 ? `+${pointsEarnedOnBreak} pts` : 'Auto-claim'}
+                    </span>
+                  </button>
+                ) : (
+                  // Not on break - show "Dance / Take a Break" button
+                  <button
+                    onClick={() => setShowBreakMenu(true)}
+                    className="flex-1 flex flex-col items-center justify-center gap-0.5 px-2 py-2.5 rounded-xl bg-primary text-gray-900 font-semibold shadow-lg hover:bg-primary-400 transition-all active:scale-95 min-w-0"
+                  >
+                    <Music className="w-5 h-5 shrink-0" />
+                    <span className="text-xs font-bold truncate">{isDanceWindowOpen ? 'Dance Window' : 'Dance / Break'}</span>
+                    <span className="text-[10px] opacity-80">
+                      {isDanceWindowOpen ? '+100 + spotlight' : `~${currentMedian ?? 50} pts`}
+                    </span>
+                  </button>
+                )
+              )}
+            </div>
+          )}
+
+          {/* Bottom row: Scores + Activities shortcuts */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={handleScoresClick}
+              className="flex items-center justify-center gap-2 px-2 py-2 rounded-xl bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white transition-all active:scale-98"
+            >
+              <BarChart3 className="w-4 h-4 shrink-0" />
+              <span className="text-xs font-medium">Scores</span>
+            </button>
+
+            <button
+              onClick={handleActivitiesClick}
+              className="flex items-center justify-center gap-2 px-2 py-2 rounded-xl bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white transition-all active:scale-98"
+            >
+              <List className="w-4 h-4 shrink-0" />
+              <span className="text-xs font-medium">All Activities</span>
+            </button>
           </div>
-
-          {/* Bottom row: Activities list button */}
-          <button
-            onClick={handleActivitiesClick}
-            className="flex items-center justify-center gap-2 px-2 py-2 rounded-xl bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white transition-all active:scale-98"
-          >
-            <List className="w-4 h-4 shrink-0" />
-            <span className="text-xs font-medium">All Activities</span>
-          </button>
         </div>
       </div>
 
       {/* Break Menu Modal */}
-      {showBreakMenu && (
-        <BreakMenuModal
-          onSelect={handleBreakSelect}
-          onClose={() => setShowBreakMenu(false)}
-          currentMedian={currentMedian}
-        />
-      )}
+        {showBreakMenu && (
+          <BreakMenuModal
+            onSelect={handleBreakSelect}
+            onClose={() => setShowBreakMenu(false)}
+            currentMedian={currentMedian}
+            isDanceWindowOpen={isDanceWindowOpen}
+          />
+        )}
     </>
   );
 }

@@ -11,10 +11,6 @@ import { clearStoredAuthAttempt, useAuthBootstrap } from './hooks/useAuthBootstr
 import { IS_TEST_MODE } from './lib/mode';
 import { auth } from './lib/firebase';
 import LoadingScreen from './components/ui/LoadingScreen';
-import {
-  claimMyPendingTickets,
-  claimMyPendingVenueStaffInvites,
-} from './lib/firebaseTicketing';
 
 const Home = lazy(() => import('./pages/Home'));
 const ShowsPage = lazy(() => import('./features/shows/ShowsPage'));
@@ -71,15 +67,21 @@ function AutoClaimPendingInvites() {
         return;
       }
       claimedThisSession.add(user.uid);
-      claimMyPendingVenueStaffInvites().catch((err) => {
-        // The callable rejects unauthenticated + missing App Check calls,
-        // both of which can happen briefly during sign-in; swallow rather
-        // than surfacing as a user-facing error.
-        console.warn('claimMyPendingVenueStaffInvites silently failed', err);
-      });
-      claimMyPendingTickets().catch((err) => {
-        console.warn('claimMyPendingTickets silently failed', err);
-      });
+      void import('./lib/ticketing/callables')
+        .then(({ claimMyPendingTickets, claimMyPendingVenueStaffInvites }) => {
+          claimMyPendingVenueStaffInvites().catch((err) => {
+            // The callable rejects unauthenticated + missing App Check calls,
+            // both of which can happen briefly during sign-in; swallow rather
+            // than surfacing as a user-facing error.
+            console.warn('claimMyPendingVenueStaffInvites silently failed', err);
+          });
+          claimMyPendingTickets().catch((err) => {
+            console.warn('claimMyPendingTickets silently failed', err);
+          });
+        })
+        .catch((err) => {
+          console.warn('Pending invite claim module failed to load', err);
+        });
     });
     return () => unsubscribe();
   }, []);
@@ -87,12 +89,19 @@ function AutoClaimPendingInvites() {
 }
 
 export default function App() {
-  const { authReady, authError, showErrorBanner, clearAuthError } = useAuthBootstrap();
+  const {
+    authReady,
+    authError,
+    showErrorBanner,
+    authStatusLabel,
+    clearAuthError,
+  } = useAuthBootstrap();
 
   // Show loading state while auth is initializing
   if (!authReady) {
     return (
       <LoadingScreen
+        label={authStatusLabel}
         error={authError}
         onRetry={() => {
           clearStoredAuthAttempt();

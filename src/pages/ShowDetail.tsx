@@ -9,6 +9,8 @@ import { getShowPath, getTestShowPath } from '../lib/mode';
 import TicketPurchasePanel from '../features/tickets/TicketPurchasePanel';
 import ExternalTicketCallout from '../features/tickets/ExternalTicketCallout';
 import AdminShowShortcuts from '../features/tickets/AdminShowShortcuts';
+import ScoringRulesPanel from '../components/show/ScoringRulesPanel';
+import ShowOfferRewards from '../components/offers/ShowOfferRewards';
 
 export default function ShowDetail() {
   const { id } = useParams<{ id: string }>();
@@ -121,8 +123,10 @@ export default function ShowDetail() {
     );
   }
 
-  const isLive = liveTrivia?.phase !== 'idle' || liveActivity?.status === 'active';
+  const isLive = (liveTrivia != null && liveTrivia.phase !== 'idle') || liveActivity?.status === 'active';
+  const showLiveStatus = isLive || liveTrivia != null;
   const showActivityCTA = liveActivity?.status === 'active' && liveActivity.type !== 'trivia';
+  const showTriviaCTA = showLiveStatus;
 
   return (
     <div className="space-y-6">
@@ -160,7 +164,7 @@ export default function ShowDetail() {
       </div>
 
       {/* Live Status */}
-      {isLive && (
+      {showLiveStatus && (
         <div className="bg-gradient-to-r from-primary/15 to-accent-red/15 border border-primary/40 rounded-2xl p-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -180,12 +184,12 @@ export default function ShowDetail() {
                   Join Activity
                 </Link>
               )}
-              {liveTrivia?.phase === 'question' && (
+              {showTriviaCTA && (
                 <Link
                   to={`/shows/${id}/trivia${isTestShow ? '?test=true' : ''}`}
                   className="px-4 py-2 bg-primary text-cinema font-semibold rounded-xl hover:bg-primary-600 transition-colors"
                 >
-                  Join Trivia
+                  {liveTrivia?.phase === 'question' ? 'Join Trivia' : 'Go to Trivia'}
                 </Link>
               )}
             </div>
@@ -199,6 +203,10 @@ export default function ShowDetail() {
           )}
         </div>
       )}
+
+      {id && <ShowOfferRewards showId={id} isTestShow={isTestShow} />}
+
+      <ScoringRulesPanel />
 
       {/* Internal Stripe-Checkout purchase — renders only when this show has
           a TicketedShow doc with ticketingEnabled=true. */}

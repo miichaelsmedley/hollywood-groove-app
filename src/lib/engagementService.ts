@@ -218,6 +218,8 @@ export async function recordAnswer(
   const weekStart = getMelbourneWeekStart();
 
   const usageRef = ref(db, `trivia_library/usage/${userId}`);
+  let transactionStarsEarnedBefore = 0;
+  let transactionStarsEarnedAfter = 0;
 
   // Use transaction to ensure atomic updates
   const result = await runTransaction(usageRef, (currentData) => {
@@ -239,6 +241,8 @@ export async function recordAnswer(
       data.week_start_date = weekStart;
       data.stars_earned_this_week = 0;
     }
+
+    const starsEarnedTodayBefore = data.stars_earned_today || 0;
 
     // Update counters
     data.questions_today = (data.questions_today || 0) + 1;
@@ -267,6 +271,9 @@ export async function recordAnswer(
       }
     }
 
+    transactionStarsEarnedBefore = starsEarnedTodayBefore;
+    transactionStarsEarnedAfter = data.stars_earned_today || 0;
+
     // Update recent questions (keep last 20)
     const recentQuestions = data.recent_questions || [];
     if (!recentQuestions.includes(questionId)) {
@@ -281,18 +288,9 @@ export async function recordAnswer(
   });
 
   const finalData = result.snapshot.val() as TriviaLibraryUsage;
-
-  // Check if a new star was earned this transaction
-  // (we determine this by checking if progress just went below threshold after being above)
-  const previousProgress =
-    finalData.star_progress_today +
-    (correct ? 0 : starValue) +
-    (finalData.stars_earned_today > 0 ? settings.star_threshold : 0);
-
-  const newStarEarned =
-    correct &&
-    previousProgress >= settings.star_threshold &&
-    finalData.star_progress_today < settings.star_threshold;
+  const starsEarnedBefore = transactionStarsEarnedBefore;
+  const starsEarnedAfter = finalData.stars_earned_today ?? transactionStarsEarnedAfter;
+  const newStarEarned = result.committed && correct && starsEarnedAfter > starsEarnedBefore;
 
   return {
     newStarEarned,
@@ -429,11 +427,11 @@ export async function updateMemberStars(
  * Get tier name from star count
  */
 function getTierFromStars(totalStars: number): string {
-  if (totalStars >= 5) return 'legend';
-  if (totalStars >= 4) return 'director';
-  if (totalStars >= 3) return 'lead';
-  if (totalStars >= 2) return 'featured';
-  if (totalStars >= 1) return 'supporting_role';
+  if (totalStars >= 51) return 'legend';
+  if (totalStars >= 31) return 'director';
+  if (totalStars >= 16) return 'lead';
+  if (totalStars >= 8) return 'featured';
+  if (totalStars >= 3) return 'supporting_role';
   return 'extra';
 }
 

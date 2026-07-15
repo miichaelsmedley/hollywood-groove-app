@@ -7,6 +7,7 @@ import { useStaffRoles } from '../hooks/useStaffRoles';
 import { isWhiteLabelTicketingFront, resolveSellingFrontId } from '../lib/sellingFronts';
 import ShareMoment from './ShareMoment';
 import { useActiveShows } from '../lib/showIndex';
+import { recordSocialShare } from '../lib/engagementService';
 
 export default function Layout() {
   const [searchParams] = useSearchParams();
@@ -15,7 +16,7 @@ export default function Layout() {
   const whiteLabelTicketing =
     isWhiteLabelTicketingFront(resolveSellingFrontId()) &&
     location.pathname.startsWith('/tickets');
-  const { canUseTestMode } = useUser();
+  const { canUseTestMode, userProfile } = useUser();
   const { canScoreActivities } = useUserRole();
   const { canScanTickets } = useStaffRoles();
   const [showShareModal, setShowShareModal] = useState(false);
@@ -28,6 +29,12 @@ export default function Layout() {
 
   // Helper to append test param to navigation paths
   const withTestParam = (path: string) => (isTestMode ? `${path}?test=true` : path);
+
+  const handleShareComplete = async (): Promise<boolean> => {
+    if (!userProfile?.uid) return false;
+    const result = await recordSocialShare(userProfile.uid, 'show_moment');
+    return result.success && result.starsAwarded > 0;
+  };
 
   if (whiteLabelTicketing) {
     return (
@@ -247,7 +254,7 @@ export default function Layout() {
         <ShareMoment
           showName="Hollywood Groove"
           onClose={() => setShowShareModal(false)}
-          onShareComplete={() => setShowShareModal(false)}
+          onShareComplete={handleShareComplete}
         />
       )}
     </div>

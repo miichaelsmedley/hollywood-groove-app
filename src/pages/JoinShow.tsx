@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { onValue, ref, get, set, update, runTransaction } from 'firebase/database';
 import { db, auth } from '../lib/firebase';
 import { useUser } from '../contexts/UserContext';
 import { MemberProfile, ShowMeta } from '../types/firebaseContract';
 import { Music, Mail, Phone, User, Check, Sparkles, AlertCircle, CheckCircle } from 'lucide-react';
 import { signInWithGoogle } from '../lib/auth';
-import EmailLinkSignIn from '../features/auth/EmailLinkSignIn';
 import { getShowPath, getTestShowPath } from '../lib/mode';
 import Spinner from '../components/ui/Spinner';
 import GoogleSignInButton from '../components/ui/GoogleSignInButton';
@@ -80,8 +79,11 @@ export default function JoinShow() {
   const [nicknameAvailable, setNicknameAvailable] = useState<boolean | null>(null);
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [marketingConsent, setMarketingConsent] = useState(true);
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
+  const [displayNameError, setDisplayNameError] = useState<string | null>(null);
+  const [contactError, setContactError] = useState<string | null>(null);
+  const [registrationError, setRegistrationError] = useState<string | null>(null);
 
   // Pre-fill form when user signs in with Google
   useEffect(() => {
@@ -340,7 +342,7 @@ export default function JoinShow() {
 
     console.log('[JoinShow] Starting join flow for show:', id, 'isTestShow:', isTestShow);
 
-    const targetPath = `/shows/${id}${isTestShow ? '?test=true' : ''}`;
+    const targetPath = `/shows/${id}/trivia${isTestShow ? '?test=true' : ''}`;
 
     // Timeout to prevent infinite hang - navigate after 10 seconds regardless
     const timeoutId = setTimeout(() => {
@@ -439,20 +441,27 @@ export default function JoinShow() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!displayName.trim()) return;
+    setDisplayNameError(null);
+    setContactError(null);
+    setRegistrationError(null);
+
+    if (!displayName.trim()) {
+      setDisplayNameError('Choose a nickname to join the show.');
+      return;
+    }
     if (nicknameAvailable === false) {
-      alert('This nickname is already taken. Please choose a different one or use a suggested nickname.');
+      setDisplayNameError('This nickname is already taken. Choose a different one or use a suggested nickname.');
       return;
     }
     if (!email.trim() && !phone.trim()) {
-      alert('Please provide either an email address or mobile number.');
+      setContactError('Please provide either an email address or mobile number.');
       return;
     }
 
     // Check if we have an authenticated user
     if (!auth.currentUser) {
       console.error('No authenticated user - cannot register');
-      alert('Session expired. Please refresh the page and try again.');
+      setRegistrationError('Session expired. Please refresh the page and try again.');
       return;
     }
 
@@ -489,7 +498,7 @@ export default function JoinShow() {
       }
 
       console.log('✅ Registration complete, navigating to show...');
-      navigate(`/shows/${id}${isTestShow ? '?test=true' : ''}`);
+      navigate(`/shows/${id}/trivia${isTestShow ? '?test=true' : ''}`);
     } catch (error: any) {
       console.error('❌ Registration error:', error);
       console.error('Error code:', error?.code);
@@ -497,11 +506,11 @@ export default function JoinShow() {
 
       // Provide more specific error messages
       if (error?.code === 'PERMISSION_DENIED' || error?.message?.includes('permission')) {
-        alert('Unable to save your profile. Please try signing in with Google instead.');
+        setRegistrationError('Unable to save your profile. Please try signing in with Google instead.');
       } else if (error?.code === 'auth/requires-recent-login') {
-        alert('Your session has expired. Please refresh the page and try again.');
+        setRegistrationError('Your session has expired. Please refresh the page and try again.');
       } else {
-        alert('Failed to register. Please try again or sign in with Google.');
+        setRegistrationError('Failed to register. Please try again or sign in with Google.');
       }
       setSubmitting(false);
     }
@@ -529,7 +538,7 @@ export default function JoinShow() {
   if (!showMeta) {
     return (
       <div className="min-h-screen bg-cinema flex items-center justify-center p-4">
-        <div className="text-center space-y-4 animate-slide-up">
+        <div className="bg-cinema-50 rounded-2xl p-6 border border-cinema-200 text-center space-y-4 animate-slide-up max-w-md w-full">
           <div className="w-20 h-20 rounded-full bg-cinema-50 border-2 border-cinema-200 flex items-center justify-center mx-auto">
             <Music className="w-10 h-10 text-cinema-500" />
           </div>
@@ -537,6 +546,17 @@ export default function JoinShow() {
           <p className="text-cinema-500 max-w-sm mx-auto">
             This show doesn't exist or hasn't been published yet.
           </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+            <Link to="/join" className="btn-primary text-center">
+              Join current show
+            </Link>
+            <Link
+              to="/"
+              className="px-6 py-3 rounded-xl border border-cinema-200 bg-cinema text-cinema-900 font-semibold hover:border-primary/60 transition text-center"
+            >
+              Home
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -546,7 +566,7 @@ export default function JoinShow() {
   if (showMeta.isTestShow && !canUseTestMode) {
     return (
       <div className="min-h-screen bg-cinema flex items-center justify-center p-4">
-        <div className="text-center space-y-4 animate-slide-up">
+        <div className="bg-cinema-50 rounded-2xl p-6 border border-cinema-200 text-center space-y-4 animate-slide-up max-w-md w-full">
           <div className="w-20 h-20 rounded-full bg-cinema-50 border-2 border-cinema-200 flex items-center justify-center mx-auto">
             <Music className="w-10 h-10 text-cinema-500" />
           </div>
@@ -554,6 +574,17 @@ export default function JoinShow() {
           <p className="text-cinema-500 max-w-sm mx-auto">
             This show doesn't exist or hasn't been published yet.
           </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+            <Link to="/join" className="btn-primary text-center">
+              Join current show
+            </Link>
+            <Link
+              to="/"
+              className="px-6 py-3 rounded-xl border border-cinema-200 bg-cinema text-cinema-900 font-semibold hover:border-primary/60 transition text-center"
+            >
+              Home
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -635,17 +666,6 @@ export default function JoinShow() {
                     <div className="w-full border-t border-cinema-200"></div>
                   </div>
                   <div className="relative flex justify-center text-xs">
-                    <span className="px-2 bg-cinema text-cinema-500">or sign in with any email</span>
-                  </div>
-                </div>
-
-                <EmailLinkSignIn />
-
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-cinema-200"></div>
-                  </div>
-                  <div className="relative flex justify-center text-xs">
                     <span className="px-2 bg-cinema text-cinema-500">or fill out manually</span>
                   </div>
                 </div>
@@ -680,7 +700,10 @@ export default function JoinShow() {
                 <input
                   type="text"
                   value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
+                  onChange={(e) => {
+                    setDisplayName(e.target.value);
+                    setDisplayNameError(null);
+                  }}
                   placeholder="Enter nickname"
                   required
                   autoFocus
@@ -704,6 +727,9 @@ export default function JoinShow() {
                   <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-red" />
                 )}
               </div>
+              {displayNameError && (
+                <p className="mt-1.5 text-xs text-accent-red">{displayNameError}</p>
+              )}
 
               {nicknameAvailable === false && suggestedNicknames.length > 0 && (
                 <div className="mt-2 p-2 bg-cinema-50 border border-cinema-200 rounded-lg">
@@ -735,7 +761,10 @@ export default function JoinShow() {
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setContactError(null);
+                    }}
                     placeholder="email@..."
                     className="w-full pl-10 pr-3 py-3 bg-cinema border-2 border-cinema-200 rounded-lg text-cinema-900 placeholder-cinema-500 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm"
                   />
@@ -751,12 +780,18 @@ export default function JoinShow() {
                   <input
                     type="tel"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => {
+                      setPhone(e.target.value);
+                      setContactError(null);
+                    }}
                     placeholder="04XX..."
                     className="w-full pl-10 pr-3 py-3 bg-cinema border-2 border-cinema-200 rounded-lg text-cinema-900 placeholder-cinema-500 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm"
                   />
                 </div>
               </div>
+              {contactError && (
+                <p className="text-xs text-accent-red">{contactError}</p>
+              )}
             </div>
 
             {/* Compact Marketing Consent */}
@@ -777,6 +812,12 @@ export default function JoinShow() {
                   Opt in to receive show updates and trivia in between shows
                 </span>
               </label>
+            )}
+
+            {registrationError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                <p className="text-xs text-red-700 text-center">{registrationError}</p>
+              </div>
             )}
 
             {/* Submit Button */}
@@ -807,9 +848,9 @@ export default function JoinShow() {
 
             <p className="text-xs text-center text-cinema-600">
               By joining, you agree to our{' '}
-              <a href="#" className="text-primary hover:underline">terms</a>
+              <a href="https://hollywoodgroove.com.au/terms" className="text-primary hover:underline">terms</a>
               {' '}and{' '}
-              <a href="#" className="text-primary hover:underline">privacy policy</a>
+              <a href="https://hollywoodgroove.com.au/privacy" className="text-primary hover:underline">privacy policy</a>
             </p>
           </form>
         </div>

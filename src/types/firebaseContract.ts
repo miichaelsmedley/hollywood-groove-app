@@ -182,6 +182,7 @@ export interface BaseActivity {
   title: string;
   sequence?: number;
   setId?: number;
+  setNumber?: number;
   songId?: number;
   description?: string;
   prompt?: string;
@@ -205,8 +206,10 @@ export interface TriviaActivity extends BaseActivity {
     kind: 'multi' | 'multiple_choice' | 'freeform' | 'text' | 'boolean' | 'scale';
     durationSeconds?: number;
     image?: {
-      mimeType: 'image/png' | 'image/jpeg';
-      base64: string;
+      mimeType?: 'image/png' | 'image/jpeg' | 'image/webp';
+      url?: string;
+      /** @deprecated Legacy RTDB payload. New controller publishes Storage URL only. */
+      base64?: string;
     };
     options?: {
       index: number;
@@ -248,8 +251,71 @@ export interface LiveTriviaState {
   phase: TriviaPhase;
   startedAt: number;      // Server timestamp
   durationSeconds: number;
+  setNumber?: number | null;
   revealedCorrectAnswer?: string | null;
   revealedWinnerUid?: string | null;
+  revealedWinnerName?: string | null;
+}
+
+// Path: shows/{showId}/live/set
+export interface LiveSetState {
+  number: number;
+  name?: string;
+  status: 'active' | 'closed';
+  startedAt: number;
+  closedAt?: number;
+  updatedAt?: number;
+}
+
+// Path: shows/{showId}/live/dance_window
+export interface LiveDanceWindowState {
+  windowId: string;
+  songTitle: string;
+  status: 'open' | 'closed';
+  startedAt: number;
+  endsAt: number;
+  closedAt?: number;
+  setNumber?: number | null;
+  participationPoints?: number;
+  spotlightPoints?: number;
+  dancerCount?: number;
+  spotlight?: {
+    status: 'fired';
+    firedAt: number;
+    dancerCount: number;
+    awardedCount?: number;
+    points: number;
+  };
+}
+
+// Path: shows/{showId}/live/callup
+export type CallupScreen = 'screen1' | 'screen2' | 'screen3';
+
+export interface LiveCallupState {
+  callupId: string;
+  activityId: string;
+  activityTitle: string;
+  uid: string;
+  displayName: string;
+  screens: CallupScreen[];
+  notifyPunter: boolean;
+  selectionMode: 'manual' | 'app_decides' | string;
+  calledAt: number;
+}
+
+// Path: shows/{showId}/dance_window_awards/{windowId}/{uid}
+export interface DanceWindowAward {
+  uid: string;
+  windowId: string;
+  showId: string;
+  songTitle?: string | null;
+  setNumber?: number | null;
+  displayName?: string;
+  totalPoints?: number;
+  participationPoints?: number;
+  participationAwardedAt?: number;
+  spotlightPoints?: number;
+  spotlightAwardedAt?: number;
 }
 
 // Path: shows/{showId}/live/activity
@@ -258,6 +324,7 @@ export interface LiveActivityState {
   type: ActivityType;
   status: 'active' | 'ended';
   startedAt: number;
+  setNumber?: number | null;
   currentMedian?: number;      // Dancing only
   prompt?: string;             // Participation activities
   slotsAvailable?: number;     // Participation activities
@@ -310,6 +377,17 @@ export interface UserScore {
   currentStreak?: number;
   tier?: string | null;
   lastAnsweredAt: number;
+  scoreReachedAt?: number | null;
+}
+
+// Path: shows/{showId}/results/{activityId}/{uid}
+export interface UserTriviaResult {
+  isCorrect: boolean;
+  baseScore: number;
+  speedBonus: number;
+  streakMultiplier: number;
+  totalScore: number;
+  answeredAt: number;
 }
 
 export interface LeaderboardEntry {
@@ -320,8 +398,89 @@ export interface LeaderboardEntry {
 }
 
 export interface ShowLeaderboard {
+  setNumber?: number;
   updatedAt?: number;
   top?: LeaderboardEntry[];
+}
+
+export interface WinnerResult {
+  uid: string | null;
+  displayName: string | null;
+  points: number;
+  setNumber?: number;
+  closedAt?: number;
+  computedAt?: number;
+  scoreReachedAt?: number | null;
+  tieBreak?: 'earliest_to_reach_score' | string;
+  noWinner?: boolean;
+}
+
+export type OfferEligibility = 'set_winner' | 'night_winner' | 'broadcast';
+export type PrizeType = 'free_ticket' | 'venue_drink' | 'custom';
+
+export interface ShowOffer {
+  title: string;
+  description?: string | null;
+  type: 'show_at_bar' | 'info_only' | 'claimable' | 'prize' | string;
+  prize_type?: PrizeType;
+  eligibility?: OfferEligibility;
+  total_quantity?: number | null;
+  claimed_count?: number | null;
+  claim_limit_per_user?: number | null;
+  display_on_screen?: boolean;
+  display_rotation_seconds?: number;
+  active?: boolean;
+  custom_prize_text?: string | null;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+export interface OfferAward {
+  offerId: string;
+  showId: string;
+  eligibility: OfferEligibility;
+  prizeType: PrizeType;
+  title: string;
+  description?: string | null;
+  awardedAt: number;
+  sourceAwardKey?: string | null;
+  sourceWinnerPoints?: number | null;
+  displayName?: string;
+  setNumber?: number | null;
+  claimed?: boolean;
+  claimedAt?: number;
+}
+
+export interface OfferClaim {
+  showId: string;
+  offerId: string;
+  uid: string;
+  displayName: string;
+  offerTitle: string;
+  offerDescription?: string | null;
+  prizeType: PrizeType;
+  eligibility: OfferEligibility;
+  voucherCode: string;
+  claimed_at?: number;
+  claimedAt?: number;
+  redeemed: boolean;
+  redeemed_at?: number | null;
+  redeemedAt?: number | null;
+  sourceAwardKey?: string | null;
+  sourceWinnerPoints?: number | null;
+}
+
+export interface SeasonLeaderboardEntry {
+  uid: string;
+  displayName: string;
+  seasonPoints: number;
+  tier?: string | null;
+}
+
+export interface SeasonLeaderboard {
+  seasonId: string;
+  updatedAt?: number;
+  top?: SeasonLeaderboardEntry[];
 }
 
 export interface AllTimeLeaderboardEntry {
@@ -631,6 +790,12 @@ export interface MemberTeamInfo {
 
 // Path: /team_codes/{code}
 export interface TeamCodeIndex {
+  team_id: string;
+  created_by?: string;
+}
+
+// Path: /team_names/{normalizedName}
+export interface TeamNameIndex {
   team_id: string;
   created_by?: string;
 }

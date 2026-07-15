@@ -26,6 +26,17 @@ export default defineConfig({
             return;
           }
 
+          if (
+            id.includes("@firebase/firestore") ||
+            id.includes("firebase/firestore") ||
+            id.includes("@firebase/functions") ||
+            id.includes("firebase/functions") ||
+            id.includes("@firebase/storage") ||
+            id.includes("firebase/storage")
+          ) {
+            return "firebase-ticketing";
+          }
+
           if (id.includes("firebase")) {
             return "firebase";
           }

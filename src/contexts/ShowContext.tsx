@@ -1,8 +1,9 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
-import { ref, onValue, set } from 'firebase/database';
+import { ref, onValue, set, serverTimestamp, onDisconnect } from 'firebase/database';
 import { auth, db } from '../lib/firebase';
-import { ShowSettings, LiveActivityState, LiveTriviaState, LiveMomentState } from '../types/firebaseContract';
+import { ShowSettings, LiveActivityState, LiveTriviaState, LiveMomentState, LiveSetState, LiveDanceWindowState, LiveCallupState } from '../types/firebaseContract';
 import { getShowPath, getTestShowPath } from '../lib/mode';
+import { useRealtimeConnection } from '../hooks/useRealtimeConnection';
 
 interface DanceClaimRecord {
   lastClaimAt: number;
@@ -23,19 +24,23 @@ const BREAK_TIMEOUTS: Record<Exclude<BreakMode, 'off'>, number> = {
 
 // Auto-claim interval (check every 60 seconds)
 const AUTO_CLAIM_INTERVAL = 60 * 1000;
+const DANCE_PRESENCE_HEARTBEAT = 10 * 1000;
 
 interface ShowContextType {
-  showId: number | null;
+  showId: string | null;
+  isTestShow: boolean;
   settings: ShowSettings | null;
   liveActivity: LiveActivityState | null;
   liveTrivia: LiveTriviaState | null;
+  liveSet: LiveSetState | null;
+  liveDanceWindow: LiveDanceWindowState | null;
+  liveCallup: LiveCallupState | null;
   liveMoment: LiveMomentState | null;
+  isRealtimeConnected: boolean;
 
   // Dancing state
   dancingEnabled: boolean;
   currentMedian: number | null;
-  canClaimDance: boolean;
-  cooldownRemaining: number; // seconds
   lastDanceClaim: DanceClaimRecord | null;
 
   // Enhanced break state
@@ -52,6 +57,13 @@ interface ShowContextType {
 
 const ShowContext = createContext<ShowContextType | undefined>(undefined);
 
+interface DanceCooldownContextType {
+  canClaimDance: boolean;
+  cooldownRemaining: number;
+}
+
+const DanceCooldownContext = createContext<DanceCooldownContextType | undefined>(undefined);
+
 // Default settings if not set by controller
 const DEFAULT_SETTINGS: ShowSettings = {
   dancing_mode: 'interval',
@@ -60,8 +72,67 @@ const DEFAULT_SETTINGS: ShowSettings = {
   dancing_cap: 200,
 };
 
+function getCooldownRemainingSeconds(
+  lastDanceClaim: DanceClaimRecord | null,
+  settings: ShowSettings
+): number {
+  if (!lastDanceClaim) return 0;
+  const cooldownMs = settings.dancing_cooldown_minutes * 60 * 1000;
+  const elapsed = Date.now() - lastDanceClaim.lastClaimAt;
+  return Math.ceil(Math.max(0, cooldownMs - elapsed) / 1000);
+}
+
+function DanceCooldownProvider({
+  children,
+  dancingEnabled,
+  lastDanceClaim,
+  settings,
+}: {
+  children: ReactNode;
+  dancingEnabled: boolean;
+  lastDanceClaim: DanceClaimRecord | null;
+  settings: ShowSettings;
+}) {
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
+
+  useEffect(() => {
+    const updateCooldown = () => {
+      const nextRemaining = getCooldownRemainingSeconds(lastDanceClaim, settings);
+      setCooldownRemaining(nextRemaining);
+      return nextRemaining;
+    };
+
+    const initialRemaining = updateCooldown();
+    if (initialRemaining <= 0) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      if (updateCooldown() <= 0) {
+        window.clearInterval(interval);
+      }
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [lastDanceClaim, settings]);
+
+  const value = useMemo(
+    () => ({
+      canClaimDance: dancingEnabled && cooldownRemaining === 0,
+      cooldownRemaining,
+    }),
+    [cooldownRemaining, dancingEnabled]
+  );
+
+  return (
+    <DanceCooldownContext.Provider value={value}>
+      {children}
+    </DanceCooldownContext.Provider>
+  );
+}
+
 interface ShowProviderProps {
-  showId: number;
+  showId: string;
   isTestShow?: boolean;
   children: ReactNode;
 }
@@ -71,8 +142,8 @@ export function ShowProvider({ showId, isTestShow = false, children }: ShowProvi
   const getPath = useMemo(() => {
     return (suffix?: string) => {
       return isTestShow
-        ? getTestShowPath(String(showId), suffix)
-        : getShowPath(String(showId), suffix);
+        ? getTestShowPath(showId, suffix)
+        : getShowPath(showId, suffix);
     };
   }, [showId, isTestShow]);
 
@@ -84,9 +155,12 @@ export function ShowProvider({ showId, isTestShow = false, children }: ShowProvi
   const [settings, setSettings] = useState<ShowSettings | null>(null);
   const [liveActivity, setLiveActivity] = useState<LiveActivityState | null>(null);
   const [liveTrivia, setLiveTrivia] = useState<LiveTriviaState | null>(null);
+  const [liveSet, setLiveSet] = useState<LiveSetState | null>(null);
+  const [liveDanceWindow, setLiveDanceWindow] = useState<LiveDanceWindowState | null>(null);
+  const [liveCallup, setLiveCallup] = useState<LiveCallupState | null>(null);
   const [liveMoment, setLiveMoment] = useState<LiveMomentState | null>(null);
   const [lastDanceClaim, setLastDanceClaim] = useState<DanceClaimRecord | null>(null);
-  const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const isRealtimeConnected = useRealtimeConnection();
 
   // Enhanced break mode state
   const [breakMode, setBreakMode] = useState<BreakMode>('off');
@@ -144,6 +218,33 @@ export function ShowProvider({ showId, isTestShow = false, children }: ShowProvi
     return () => unsubscribe();
   }, [getPath]);
 
+  // Listen to the current set marker used for set-scoped scoring.
+  useEffect(() => {
+    const setRef = ref(db, getPath('live/set'));
+    const unsubscribe = onValue(setRef, (snapshot) => {
+      setLiveSet(snapshot.val() as LiveSetState | null);
+    });
+    return () => unsubscribe();
+  }, [getPath]);
+
+  // Listen to the current dance window.
+  useEffect(() => {
+    const windowRef = ref(db, getPath('live/dance_window'));
+    const unsubscribe = onValue(windowRef, (snapshot) => {
+      setLiveDanceWindow(snapshot.val() as LiveDanceWindowState | null);
+    });
+    return () => unsubscribe();
+  }, [getPath]);
+
+  // Listen to the current participation callup.
+  useEffect(() => {
+    const callupRef = ref(db, getPath('live/callup'));
+    const unsubscribe = onValue(callupRef, (snapshot) => {
+      setLiveCallup(snapshot.val() as LiveCallupState | null);
+    });
+    return () => unsubscribe();
+  }, [getPath]);
+
   // Listen to user's dance claims for cooldown tracking
   useEffect(() => {
     const uid = auth.currentUser?.uid;
@@ -157,25 +258,6 @@ export function ShowProvider({ showId, isTestShow = false, children }: ShowProvi
     return () => unsubscribe();
   }, [getPath]);
 
-  // Update cooldown timer
-  useEffect(() => {
-    if (!lastDanceClaim || !settings) {
-      setCooldownRemaining(0);
-      return;
-    }
-
-    const cooldownMs = settings.dancing_cooldown_minutes * 60 * 1000;
-    const updateCooldown = () => {
-      const elapsed = Date.now() - lastDanceClaim.lastClaimAt;
-      const remaining = Math.max(0, cooldownMs - elapsed);
-      setCooldownRemaining(Math.ceil(remaining / 1000));
-    };
-
-    updateCooldown();
-    const interval = setInterval(updateCooldown, 1000);
-    return () => clearInterval(interval);
-  }, [lastDanceClaim, settings]);
-
   // Derived state
   const effectiveSettings = settings || DEFAULT_SETTINGS;
   const dancingEnabled = effectiveSettings.dancing_mode !== 'disabled';
@@ -187,14 +269,75 @@ export function ShowProvider({ showId, isTestShow = false, children }: ShowProvi
 
   // Convenience derived state
   const isOnBreak = breakMode !== 'off';
+  const isDanceWindowOpen = Boolean(
+    liveDanceWindow?.status === 'open' &&
+    typeof liveDanceWindow.endsAt === 'number' &&
+    liveDanceWindow.endsAt > Date.now()
+  );
 
-  // Can claim if dancing is enabled and cooldown is done (break mode doesn't prevent claiming)
-  const canClaimDance = dancingEnabled && cooldownRemaining === 0;
+  const writeDancePresence = useCallback(async (active: boolean) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const displayName = auth.currentUser?.displayName || 'Anonymous';
+    const presenceRef = ref(db, getPath(`dance_presence/${uid}`));
+    const payload = active
+      ? {
+          active: true,
+          mode: 'dancing',
+          displayName,
+          enteredAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }
+      : {
+          active: false,
+          mode: 'off',
+          displayName,
+          updatedAt: serverTimestamp(),
+        };
+    await set(presenceRef, payload);
+    if (active) {
+      onDisconnect(presenceRef).set({
+        active: false,
+        mode: 'off',
+        displayName,
+        updatedAt: serverTimestamp(),
+      }).catch((error) => {
+        console.warn('Failed to attach dance presence disconnect cleanup:', error);
+      });
+    } else {
+      onDisconnect(presenceRef).cancel().catch(() => undefined);
+    }
+  }, [getPath]);
+
+  useEffect(() => {
+    if (breakMode !== 'dancing') {
+      void writeDancePresence(false);
+      return;
+    }
+
+    void writeDancePresence(true);
+    const interval = window.setInterval(() => {
+      void writeDancePresence(true);
+    }, DANCE_PRESENCE_HEARTBEAT);
+
+    return () => {
+      window.clearInterval(interval);
+      void writeDancePresence(false);
+    };
+  }, [breakMode, writeDancePresence]);
 
   // Claim dance points - returns points claimed or 0 if failed
   const claimDancePoints = useCallback(async (): Promise<boolean> => {
     const uid = auth.currentUser?.uid;
-    if (!uid || !canClaimDance) return false;
+    const cooldownRemaining = getCooldownRemainingSeconds(lastDanceClaim, effectiveSettings);
+    if (!uid || !dancingEnabled) return false;
+
+    if (isDanceWindowOpen) {
+      await writeDancePresence(true);
+      return true;
+    }
+
+    if (cooldownRemaining > 0) return false;
 
     try {
       // Determine activity ID - use live dancing activity or create a persistent one
@@ -209,7 +352,6 @@ export function ShowProvider({ showId, isTestShow = false, children }: ShowProvi
         type: 'dance_claim',
         claimedAt: Date.now(),
         displayName: auth.currentUser?.displayName || 'Anonymous',
-        median: claimedMedian,
       });
 
       // Update dance claims record for cooldown tracking
@@ -230,7 +372,7 @@ export function ShowProvider({ showId, isTestShow = false, children }: ShowProvi
       console.error('Failed to claim dance points:', error);
       return false;
     }
-  }, [getPath, showId, canClaimDance, liveActivity, currentMedian, lastDanceClaim, effectiveSettings.dancing_floor, isOnBreak]);
+  }, [getPath, showId, dancingEnabled, liveActivity, currentMedian, lastDanceClaim, effectiveSettings, isOnBreak, isDanceWindowOpen, writeDancePresence]);
 
   // Clear break timers
   const clearBreakTimers = useCallback(() => {
@@ -255,9 +397,7 @@ export function ShowProvider({ showId, isTestShow = false, children }: ShowProvi
     setPointsEarnedOnBreak(0);
 
     // Auto-claim dance points immediately when entering break mode
-    if (canClaimDance) {
-      await claimDancePoints();
-    }
+    await claimDancePoints();
 
     // Set up auto-timeout
     const timeoutDuration = BREAK_TIMEOUTS[mode];
@@ -269,14 +409,12 @@ export function ShowProvider({ showId, isTestShow = false, children }: ShowProvi
 
     // Set up periodic auto-claim (respects cooldown via canClaimDance check)
     autoClaimIntervalRef.current = setInterval(async () => {
-      // Need to check dancingEnabled and cooldownRemaining directly since
-      // canClaimDance might not update within the closure
       if (dancingEnabled) {
-        // Attempt claim - claimDancePoints already checks canClaimDance
+        // Attempt claim - claimDancePoints checks cooldown at call time.
         await claimDancePoints();
       }
     }, AUTO_CLAIM_INTERVAL);
-  }, [clearBreakTimers, canClaimDance, claimDancePoints, dancingEnabled]);
+  }, [clearBreakTimers, claimDancePoints, dancingEnabled]);
 
   // Exit break mode
   const exitBreakMode = useCallback(() => {
@@ -294,18 +432,20 @@ export function ShowProvider({ showId, isTestShow = false, children }: ShowProvi
     };
   }, [clearBreakTimers]);
 
-  return (
-    <ShowContext.Provider
-      value={{
+  const value = useMemo(
+    () => ({
         showId,
+        isTestShow,
         settings: effectiveSettings,
         liveActivity,
         liveTrivia,
+        liveSet,
+        liveDanceWindow,
+        liveCallup,
         liveMoment,
+        isRealtimeConnected,
         dancingEnabled,
         currentMedian,
-        canClaimDance,
-        cooldownRemaining,
         lastDanceClaim,
         breakMode,
         pointsEarnedOnBreak,
@@ -314,9 +454,40 @@ export function ShowProvider({ showId, isTestShow = false, children }: ShowProvi
         claimDancePoints,
         enterBreakMode,
         exitBreakMode,
-      }}
-    >
-      {children}
+      }),
+    [
+      showId,
+      isTestShow,
+      effectiveSettings,
+      liveActivity,
+      liveTrivia,
+      liveSet,
+      liveDanceWindow,
+      liveCallup,
+      liveMoment,
+      isRealtimeConnected,
+      dancingEnabled,
+      currentMedian,
+      lastDanceClaim,
+      breakMode,
+      pointsEarnedOnBreak,
+      breakStartedAt,
+      isOnBreak,
+      claimDancePoints,
+      enterBreakMode,
+      exitBreakMode,
+    ]
+  );
+
+  return (
+    <ShowContext.Provider value={value}>
+      <DanceCooldownProvider
+        dancingEnabled={dancingEnabled}
+        lastDanceClaim={lastDanceClaim}
+        settings={effectiveSettings}
+      >
+        {children}
+      </DanceCooldownProvider>
     </ShowContext.Provider>
   );
 }
@@ -325,6 +496,14 @@ export function useShow() {
   const context = useContext(ShowContext);
   if (!context) {
     throw new Error('useShow must be used within ShowProvider');
+  }
+  return context;
+}
+
+export function useDanceCooldown() {
+  const context = useContext(DanceCooldownContext);
+  if (!context) {
+    throw new Error('useDanceCooldown must be used within ShowProvider');
   }
   return context;
 }

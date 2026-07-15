@@ -192,42 +192,48 @@ export function UserProvider({ children }: { children: ReactNode }) {
         console.log('Profile exists in Firebase:', snapshot.val());
         const rawProfile = snapshot.val();
 
-        // Handle both snake_case (MemberProfile from Controller/new saves)
-        // and camelCase (old UserProfile format)
-        const displayName = rawProfile.display_name || rawProfile.displayName || user.displayName || 'Guest';
-        const createdAt = rawProfile.created_at || rawProfile.createdAt || Date.now();
-        const emailOptIn = rawProfile.email_opt_in ?? rawProfile.preferences?.marketingEmails ?? false;
-        const smsOptIn = rawProfile.sms_opt_in ?? rawProfile.preferences?.marketingSMS ?? false;
+        try {
+          // Handle both snake_case (MemberProfile from Controller/new saves)
+          // and camelCase (old UserProfile format)
+          const displayName = rawProfile.display_name || rawProfile.displayName || user.displayName || 'Guest';
+          const createdAt = rawProfile.created_at || rawProfile.createdAt || Date.now();
+          const emailOptIn = rawProfile.email_opt_in ?? rawProfile.preferences?.marketingEmails ?? false;
+          const smsOptIn = rawProfile.sms_opt_in ?? rawProfile.preferences?.marketingSMS ?? false;
 
-        // Normalize to UserProfile format for PWA state
-        const normalizedProfile: UserProfile = {
-          uid: user.uid,
-          displayName,
-          email: rawProfile.email,
-          phone: rawProfile.phone,
-          createdAt,
-          lastSeenAt: rawProfile.lastSeenAt || Date.now(),
-          showsAttended: rawProfile.showsAttended || rawProfile.shows ? Object.keys(rawProfile.shows) : [],
-          preferences: {
-            marketingEmails: emailOptIn,
-            marketingSMS: smsOptIn,
-            notifications: rawProfile.preferences?.notifications ?? true,
-          },
-          // Extended profile fields
-          suburb: rawProfile.suburb,
-          socials: rawProfile.socials,
-          photoURL: rawProfile.photo_url || rawProfile.photoURL,
-        };
+          // Normalize to UserProfile format for PWA state
+          const normalizedProfile: UserProfile = {
+            uid: user.uid,
+            displayName,
+            email: rawProfile.email,
+            phone: rawProfile.phone,
+            createdAt,
+            lastSeenAt: rawProfile.lastSeenAt || Date.now(),
+            showsAttended: rawProfile.showsAttended ?? (rawProfile.shows ? Object.keys(rawProfile.shows) : []),
+            preferences: {
+              marketingEmails: emailOptIn,
+              marketingSMS: smsOptIn,
+              notifications: rawProfile.preferences?.notifications ?? true,
+            },
+            // Extended profile fields
+            suburb: rawProfile.suburb,
+            socials: rawProfile.socials,
+            photoURL: rawProfile.photo_url || rawProfile.photoURL,
+          };
 
-        console.log('✅ Normalized profile:', normalizedProfile);
-        setUserProfile(normalizedProfile);
-        profileLoadedForUid = user.uid;
-        // Save to localStorage with current UID
-        localStorage.setItem('userProfile', JSON.stringify(normalizedProfile));
+          console.log('✅ Normalized profile:', normalizedProfile);
+          setUserProfile(normalizedProfile);
+          profileLoadedForUid = user.uid;
+          // Save to localStorage with current UID
+          localStorage.setItem('userProfile', JSON.stringify(normalizedProfile));
 
-        // Update display name in auth if changed
-        if (user.displayName !== normalizedProfile.displayName) {
-          await updateProfile(user, { displayName: normalizedProfile.displayName });
+          // Update display name in auth if changed
+          if (user.displayName !== normalizedProfile.displayName) {
+            await updateProfile(user, { displayName: normalizedProfile.displayName });
+          }
+        } catch (normalizeError) {
+          console.error('🔍 Failed to normalize Firebase profile, treating user as unregistered:', normalizeError);
+          setUserProfile(null);
+          localStorage.removeItem('userProfile');
         }
       } else {
         console.log('🔍 Profile does NOT exist in Firebase for UID:', user.uid);

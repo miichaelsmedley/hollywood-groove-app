@@ -5,6 +5,7 @@ import { CalendarCheck, ArrowLeft, Users, CheckCircle, Clock, Trophy } from 'luc
 import { auth, db } from '../lib/firebase';
 import { CrowdActivity } from '../types/firebaseContract';
 import ActionBar from '../components/show/ActionBar';
+import CallupInlineNotice from '../components/show/CallupInlineNotice';
 import { getShowPath, getTestShowPath } from '../lib/mode';
 
 interface UserResponse {
@@ -207,6 +208,8 @@ export default function ActivityDetail() {
               </div>
             )}
           </div>
+
+          <CallupInlineNotice activityId={activityId} />
 
           {/* Already Joined State */}
           {hasResponded && (

@@ -1,12 +1,14 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { onValue, ref, set } from 'firebase/database';
 import { CalendarCheck, ArrowLeft, Users } from 'lucide-react';
 import { auth, db } from '../lib/firebase';
 import { CrowdActivity, LiveActivityState } from '../types/firebaseContract';
 import ActionBar from '../components/show/ActionBar';
+import CallupInlineNotice from '../components/show/CallupInlineNotice';
 import { getShowPath, getTestShowPath } from '../lib/mode';
 import { getActivityFixture, recordE2EResponse, type E2EUser } from '../lib/e2eShowFixtures';
+import { useDanceCooldown, useShow } from '../contexts/ShowContext';
 
 export default function Activity() {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +17,9 @@ export default function Activity() {
   const [activity, setActivity] = useState<CrowdActivity | null>(null);
   const [hasResponded, setHasResponded] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const activeActivityIdRef = useRef<string | null>(null);
+  const { claimDancePoints: claimDancePointsFromContext } = useShow();
+  const { canClaimDance } = useDanceCooldown();
   const fixtureName = searchParams.get('fixture');
   const activityFixture = useMemo(() => getActivityFixture(fixtureName), [fixtureName]);
 
@@ -32,24 +37,37 @@ export default function Activity() {
     if (!id) return;
 
     if (activityFixture) {
+      const nextActivityId = activityFixture.live.activityId ?? null;
+      if (nextActivityId !== activeActivityIdRef.current) {
+        setHasResponded(false);
+        setSelectedOption(null);
+        activeActivityIdRef.current = nextActivityId;
+      }
       setLiveActivity(activityFixture.live);
       setActivity(activityFixture.activity);
-      setHasResponded(false);
-      setSelectedOption(null);
-      return;
+      return () => {
+        activeActivityIdRef.current = null;
+      };
     }
 
     const unsubscribe = onValue(
       ref(db, getPath(id, 'live/activity')),
       (snapshot) => {
         const state = snapshot.val() as LiveActivityState | null;
+        const nextActivityId = state?.activityId ?? null;
+        if (nextActivityId !== activeActivityIdRef.current) {
+          setHasResponded(false);
+          setSelectedOption(null);
+          activeActivityIdRef.current = nextActivityId;
+        }
         setLiveActivity(state);
-        setHasResponded(false);
-        setSelectedOption(null);
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      activeActivityIdRef.current = null;
+    };
   }, [id, getPath, activityFixture]);
 
   useEffect(() => {
@@ -104,17 +122,25 @@ export default function Activity() {
     }
   };
 
-  const claimDancePoints = async () => {
+  const handleDanceClaim = async () => {
     const user = getResponseUser();
     if (!id || !liveActivity?.activityId || !user) return;
 
     try {
-      await writeActivityResponse(user.uid, {
-        type: 'dance_claim',
-        claimedAt: Date.now(),
-        displayName: user.displayName,
-      });
-      setHasResponded(true);
+      if (activityFixture) {
+        await writeActivityResponse(user.uid, {
+          type: 'dance_claim',
+          claimedAt: Date.now(),
+          displayName: user.displayName,
+        });
+        setHasResponded(true);
+        return;
+      }
+
+      const claimed = await claimDancePointsFromContext();
+      if (claimed) {
+        setHasResponded(true);
+      }
     } catch (error) {
       console.error('Failed to claim dance points:', error);
     }
@@ -229,16 +255,20 @@ export default function Activity() {
             )}
           </div>
 
+          <CallupInlineNotice activityId={liveActivity.activityId} />
+
           {isDancing ? (
             <div className="space-y-2">
               <button
                 type="button"
-                onClick={claimDancePoints}
+                onClick={handleDanceClaim}
                 className="w-full py-3 px-4 rounded-lg bg-primary/20 border border-primary text-primary font-semibold text-sm hover:bg-primary/30 transition-all active:scale-[0.98] disabled:opacity-50"
-                disabled={hasResponded}
+                disabled={hasResponded || (!activityFixture && !canClaimDance)}
               >
                 {hasResponded
                   ? 'Claimed!'
+                  : !activityFixture && !canClaimDance
+                    ? 'Dance claim cooling down'
                   : hasMedian
                     ? `Claim ${currentMedian} pts`
                     : 'Claim dance points'}

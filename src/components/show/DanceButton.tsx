@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Music } from 'lucide-react';
-import { useShow } from '../../contexts/ShowContext';
+import { useDanceCooldown, useShow } from '../../contexts/ShowContext';
 
 interface DanceButtonProps {
   onClaimSuccess?: () => void;
@@ -9,10 +9,10 @@ interface DanceButtonProps {
 export default function DanceButton({ onClaimSuccess }: DanceButtonProps) {
   const {
     currentMedian,
-    canClaimDance,
-    cooldownRemaining,
     claimDancePoints,
+    liveDanceWindow,
   } = useShow();
+  const { canClaimDance, cooldownRemaining } = useDanceCooldown();
 
   const [isClaiming, setIsClaiming] = useState(false);
   const [justClaimed, setJustClaimed] = useState(false);
@@ -40,7 +40,12 @@ export default function DanceButton({ onClaimSuccess }: DanceButtonProps) {
     }
   };
 
-  const isOnCooldown = cooldownRemaining > 0;
+  const isDanceWindowOpen = Boolean(
+    liveDanceWindow?.status === 'open' &&
+    typeof liveDanceWindow.endsAt === 'number' &&
+    liveDanceWindow.endsAt > Date.now()
+  );
+  const isOnCooldown = cooldownRemaining > 0 && !isDanceWindowOpen;
 
   if (justClaimed) {
     return (
@@ -49,7 +54,7 @@ export default function DanceButton({ onClaimSuccess }: DanceButtonProps) {
         className="flex-1 flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-lg bg-accent-green/20 border border-accent-green/50 text-accent-green animate-pulse"
       >
         <Music className="w-4 h-4" />
-        <span className="text-xs font-semibold">+{currentMedian} pts!</span>
+        <span className="text-xs font-semibold">+{isDanceWindowOpen ? 100 : currentMedian} pts!</span>
       </button>
     );
   }
@@ -75,7 +80,9 @@ export default function DanceButton({ onClaimSuccess }: DanceButtonProps) {
     >
       <Music className="w-4 h-4" />
       <span className="text-xs font-bold">Dance Break</span>
-      <span className="text-[10px] opacity-80">~{currentMedian} pts avg</span>
+      <span className="text-[10px] opacity-80">
+        {isDanceWindowOpen ? '+100 + spotlight' : `~${currentMedian} pts avg`}
+      </span>
     </button>
   );
 }

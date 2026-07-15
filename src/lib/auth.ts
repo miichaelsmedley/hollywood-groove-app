@@ -11,17 +11,24 @@ import {
   signInWithEmailLink,
   User,
 } from 'firebase/auth';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import app, { auth } from './firebase';
 import { resolveSellingFrontId } from './sellingFronts';
 
 // The sign-in link is minted + emailed by the `sendEmailSignInLink` callable in
 // asia-southeast1 (sent via our verified Resend domain), not by Firebase's
 // built-in email sender — far better deliverability to corporate/Outlook inboxes.
-const sendEmailSignInLinkCallable = httpsCallable<
-  { email: string; returnPath?: string; sellingFrontId?: string },
-  { ok: true }
->(getFunctions(app, 'asia-southeast1'), 'sendEmailSignInLink');
+async function callSendEmailSignInLink(input: {
+  email: string;
+  returnPath?: string;
+  sellingFrontId?: string;
+}): Promise<void> {
+  const { getFunctions, httpsCallable } = await import('firebase/functions');
+  const sendEmailSignInLinkCallable = httpsCallable<
+    { email: string; returnPath?: string; sellingFrontId?: string },
+    { ok: true }
+  >(getFunctions(app, 'asia-southeast1'), 'sendEmailSignInLink');
+  await sendEmailSignInLinkCallable(input);
+}
 
 // Email link (passwordless) sign-in storage key — the email the user entered
 // when they requested the link must be re-presented when completing the
@@ -47,7 +54,7 @@ export async function sendEmailLinkSignIn(
   if (!normalized || !normalized.includes('@')) {
     throw new Error('Please enter a valid email address.');
   }
-  await sendEmailSignInLinkCallable({
+  await callSendEmailSignInLink({
     email: normalized,
     returnPath:
       returnPath && returnPath.startsWith('/') ? returnPath : undefined,
@@ -288,11 +295,23 @@ export async function handleRedirectResult(): Promise<RedirectResult> {
     clearPopupPending();
   }
 
-  // CRITICAL: Wait for auth state to fully stabilize
-  // On mobile, this can take longer due to localStorage restoration
+  await auth.authStateReady();
+
+  // CRITICAL: Wait for auth state to fully stabilize only when there is
+  // actually something to restore. First-time anonymous punters should not pay
+  // a flat 1s OAuth redirect wait on every cold load.
+  const shouldWaitForStableUser =
+    wasRedirectPending || wasPopupPending || Boolean(auth.currentUser);
   const waitTime = wasRedirectPending ? 3000 : 1000; // Wait longer if we expect a redirect
-  console.log('⏳ Waiting up to', waitTime, 'ms for auth state to stabilize...');
-  const user = await waitForAuthStateStable(waitTime);
+  const user = shouldWaitForStableUser
+    ? await waitForAuthStateStable(waitTime)
+    : auth.currentUser;
+
+  if (shouldWaitForStableUser) {
+    console.log('⏳ Waited up to', waitTime, 'ms for auth state to stabilize');
+  } else {
+    console.log('⏩ Skipped redirect auth stabilization wait; no pending OAuth flow or persisted user');
+  }
 
   console.log('Auth state after wait:', user ? {
     uid: user.uid,

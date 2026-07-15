@@ -23,7 +23,7 @@ export default function TriviaButton() {
 
   const handleClick = () => {
     if (id) {
-      navigate(`/shows/${id}/trivia`);
+      navigate(`/shows/${id}/trivia${location.search}`);
     }
   };
 

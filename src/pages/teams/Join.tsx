@@ -25,6 +25,7 @@ export function JoinTeam() {
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showScanner, setShowScanner] = useState(false);
+  const finishProfileRequired = error === 'Finish joining the show first.';
 
   // Redirect if already in a team
   useEffect(() => {
@@ -63,7 +64,7 @@ export function JoinTeam() {
 
   const handleJoin = async () => {
     if (!userProfile?.uid || !userProfile?.displayName) {
-      setError('Please sign in to join a team');
+      setError('Finish joining the show first.');
       return;
     }
 
@@ -216,12 +217,30 @@ export function JoinTeam() {
                 {joining ? 'Joining...' : 'Join Team'}
               </button>
             )}
+
+            {previewTeam.team.member_count >= previewTeam.team.settings.max_members && (
+              <div className="p-3 rounded-lg bg-cinema-50/10 border border-cinema-200 text-cinema-300 text-sm text-center">
+                This team is full.
+              </div>
+            )}
           </div>
         )}
 
         {error && (
           <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/30 text-red-300 text-sm">
-            {error}
+            {finishProfileRequired ? (
+              <>
+                Finish joining the show first.{' '}
+                <Link
+                  to={getTestAwareUrl('/join', isTestMode)}
+                  className="font-semibold text-red-100 underline underline-offset-2 hover:text-white"
+                >
+                  Go to the join page
+                </Link>
+              </>
+            ) : (
+              error
+            )}
           </div>
         )}
       </section>
