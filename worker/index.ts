@@ -50,7 +50,7 @@ const CONTENT_SECURITY_POLICY = [
   "base-uri 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
-  "script-src 'self' https://www.google.com https://www.gstatic.com https://www.recaptcha.net https://apis.google.com https://www.youtube.com",
+  "script-src 'self' https://www.google.com https://www.gstatic.com https://www.recaptcha.net https://apis.google.com https://www.youtube.com https://static.cloudflareinsights.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://www.gravatar.com https://lh3.googleusercontent.com https://*.googleapis.com https://*.firebasestorage.app https://www.gstatic.com",
   "font-src 'self'",
@@ -60,10 +60,15 @@ const CONTENT_SECURITY_POLICY = [
   "worker-src 'self' blob:",
   "manifest-src 'self'",
   "form-action 'self'",
-  "upgrade-insecure-requests",
   `report-uri ${CSP_REPORT_PATH}`,
   `report-to ${CSP_REPORT_GROUP}`,
 ].join("; ");
+
+function contentSecurityPolicy(enforce: boolean): string {
+  return enforce
+    ? `${CONTENT_SECURITY_POLICY}; upgrade-insecure-requests`
+    : CONTENT_SECURITY_POLICY;
+}
 
 function shouldEnforceCsp(env: Env): boolean {
   const configured = env.CSP_ENFORCE;
@@ -107,7 +112,7 @@ function applySecurityHeaders(
     );
     headers.set(
       cspEnforce ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only",
-      CONTENT_SECURITY_POLICY,
+      contentSecurityPolicy(cspEnforce),
     );
   }
 }
