@@ -125,3 +125,17 @@ html {
   /* Prevent content from going under the home indicator */
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* A sticky 16:9 player is useful in portrait, but consumes most of a short
+   landscape phone. Let the answer pad use the full viewport in that case. */
+@media (orientation: landscape) and (max-height: 600px) {
+  .weekly-video-shell {
+    position: static;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weekly-video-shell .animate-spin {
+    animation: none;
+  }
+}

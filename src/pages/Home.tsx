@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
-import { Sparkles, List, FlaskConical, Brain, Users, UserPlus } from 'lucide-react';
+import { Sparkles, List, FlaskConical, Brain, Users, UserPlus, PlayCircle } from 'lucide-react';
 import { IS_TEST_MODE } from '../lib/mode';
 import { useUser } from '../contexts/UserContext';
 import { useTriviaHome } from '../lib/triviaLibraryService';
 import { useActiveShows } from '../lib/showIndex';
+import { getLatestWeeklyEpisode, isWeeklyEpisodePlayable } from '../features/weekly/episodeCatalog';
 
 export default function Home() {
   const { canUseTestMode } = useUser();
@@ -14,6 +15,8 @@ export default function Home() {
     enabled: canUseTestMode,
   });
   const activeTestShow = activeTestShows[0] ?? null;
+  const weeklyEpisode = getLatestWeeklyEpisode();
+  const weeklyEpisodePlayable = isWeeklyEpisodePlayable(weeklyEpisode);
 
   const handleEnableTestMode = () => {
     // Set test mode in localStorage and reload
@@ -32,17 +35,44 @@ export default function Home() {
       </section>
 
       <section className="space-y-3">
-        {/* Join Current Show - Primary CTA */}
+        {/* Weekly Watch & Play - Primary audience-growth CTA. A normal anchor
+            reloads into the backend-free weekly application shell. */}
+        {weeklyEpisodePlayable ? (
+          <a
+            href="/weekly"
+            className="block min-h-20 w-full rounded-xl bg-gradient-to-r from-primary to-primary-400 px-4 py-3 text-cinema font-bold shadow-glow-lg transition hover:shadow-glow active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-cinema"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-lg leading-tight">Weekly Watch &amp; Play</div>
+                <div className="text-sm font-semibold opacity-80">Play solo or gather a table</div>
+              </div>
+              <PlayCircle className="h-7 w-7" aria-hidden="true" />
+            </div>
+          </a>
+        ) : (
+          <div className="min-h-20 w-full rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-cinema-800">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-lg font-bold leading-tight text-primary">Weekly Watch &amp; Play</div>
+                <div className="text-sm text-cinema-600">Episode 1 video coming soon</div>
+              </div>
+              <PlayCircle className="h-7 w-7 text-primary" aria-hidden="true" />
+            </div>
+          </div>
+        )}
+
+        {/* Join Current Show */}
         <Link
           to="/join"
-          className="block w-full rounded-xl bg-primary px-4 py-3 text-cinema font-bold shadow-glow-lg active:scale-[0.99] transition"
+          className="block w-full rounded-xl border border-cinema-200 bg-cinema-50 px-4 py-3 font-bold text-cinema-900 transition hover:border-primary/60 active:scale-[0.99]"
         >
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-lg leading-tight">Join current show</div>
               <div className="text-sm font-semibold opacity-80">Play trivia and see your score</div>
             </div>
-            <Sparkles className="h-6 w-6" />
+            <Sparkles className="h-6 w-6 text-primary" />
           </div>
         </Link>
 
