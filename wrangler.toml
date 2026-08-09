@@ -4,6 +4,7 @@
 # Replaces Azure Static Web Apps deployment.
 
 name = "hollywoodgroove-app"
+account_id = "eda0e0621dcc8265e1c202a701259a0f"
 main = "worker/index.ts"
 compatibility_date = "2026-04-26"
 
