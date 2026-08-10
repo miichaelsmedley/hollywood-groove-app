@@ -21,6 +21,7 @@ export default function EpisodeResults({
   const [rememberError, setRememberError] = useState(false);
   const nativeShare = Reflect.get(navigator, 'share') as ((data: ShareData) => Promise<void>) | undefined;
   const score = scoreWeeklyAttempt(episode, attempt.answers);
+  const scoreRatio = episode.questions.length > 0 ? score / episode.questions.length : 0;
   const subject = attempt.mode === 'table' ? attempt.teamName ?? 'Our team' : 'I';
   const resultUrl = useMemo(() => {
     const url = new URL(`/weekly/${episode.slug}`, window.location.origin);
@@ -75,9 +76,9 @@ export default function EpisodeResults({
             {score}<span className="text-3xl text-primary">/{episode.questions.length}</span>
           </h1>
           <p className="mx-auto mt-3 max-w-sm text-base text-cinema-700">
-            {score >= 8
+            {scoreRatio >= 0.8
               ? 'That table knows its movie music. Send the challenge before the confidence wears off.'
-              : score >= 5
+              : scoreRatio >= 0.5
                 ? 'A respectable result with plenty to debate on the way home.'
                 : 'The comeback starts next week. Choose the strongest soundtrack expert as captain.'}
           </p>

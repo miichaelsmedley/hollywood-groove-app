@@ -321,6 +321,13 @@ function WeeklyEpisodeExperience({ episode }: { episode: WeeklyEpisode }) {
                   onPlaybackSeconds={handlePlaybackSeconds}
                   onPlayingChange={setVideoPlaying}
                   fixtureClock={playerFixture}
+                  fixtureCues={{
+                    firstQuestionOpensAtSeconds: episode.questions[0].opensAtSeconds,
+                    firstQuestionRevealsAtSeconds: episode.questions[0].revealAtSeconds,
+                    finalQuestionNumber: episode.questions.length,
+                    finalQuestionOpensAtSeconds: episode.questions[episode.questions.length - 1].opensAtSeconds,
+                    finalQuestionRevealsAtSeconds: episode.questions[episode.questions.length - 1].revealAtSeconds,
+                  }}
                 />
                 <div className="mt-2 flex items-center justify-between px-1 text-xs text-cinema-500">
                   <span>{videoPlaying ? 'Following the video' : 'Paused — answers stay in place'}</span>

@@ -92,6 +92,13 @@ interface YouTubeEpisodePlayerProps {
   onPlaybackSeconds: (seconds: number) => void;
   onPlayingChange: (playing: boolean) => void;
   fixtureClock?: boolean;
+  fixtureCues?: {
+    firstQuestionOpensAtSeconds: number;
+    firstQuestionRevealsAtSeconds: number;
+    finalQuestionNumber: number;
+    finalQuestionOpensAtSeconds: number;
+    finalQuestionRevealsAtSeconds: number;
+  };
 }
 
 export interface YouTubeEpisodePlayerHandle {
@@ -105,6 +112,7 @@ const YouTubeEpisodePlayer = forwardRef<YouTubeEpisodePlayerHandle, YouTubeEpiso
   onPlaybackSeconds,
   onPlayingChange,
   fixtureClock = false,
+  fixtureCues,
 }, forwardedRef) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<PlayerInstance | null>(null);
@@ -209,17 +217,24 @@ const YouTubeEpisodePlayer = forwardRef<YouTubeEpisodePlayerHandle, YouTubeEpiso
   };
 
   if (fixtureClock) {
+    const cues = fixtureCues ?? {
+      firstQuestionOpensAtSeconds: 40,
+      firstQuestionRevealsAtSeconds: 58,
+      finalQuestionNumber: 40,
+      finalQuestionOpensAtSeconds: 1045,
+      finalQuestionRevealsAtSeconds: 1063,
+    };
     return (
       <div className="min-h-[200px] w-full rounded-2xl border border-dashed border-primary/50 bg-cinema-50 p-4" data-testid="weekly-player-fixture">
         <p className="text-sm font-bold text-primary">Playback fixture · {formatFixtureTime(fixtureSeconds)}</p>
         <p className="mt-1 text-xs text-cinema-500">Test-only controls for reveal and seek behaviour.</p>
         <div className="mt-4 grid grid-cols-2 gap-2">
           {[
-            ['Q1 opens', 165],
-            ['Q1 reveals', 210],
-            ['Q10 opens', 800],
-            ['Q10 reveals', 845],
-            ['Rewind to Q1', 165],
+            ['Q1 opens', cues.firstQuestionOpensAtSeconds],
+            ['Q1 reveals', cues.firstQuestionRevealsAtSeconds],
+            [`Q${cues.finalQuestionNumber} opens`, cues.finalQuestionOpensAtSeconds],
+            [`Q${cues.finalQuestionNumber} reveals`, cues.finalQuestionRevealsAtSeconds],
+            ['Rewind to Q1', cues.firstQuestionOpensAtSeconds],
           ].map(([label, seconds]) => (
             <button
               key={label}

@@ -1,19 +1,20 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 
-const EPISODE_PATH = '/weekly/blockbuster-movie-music-01';
+const EPISODE_PATH = '/weekly/blockbuster-movie-music-ep1';
+const episodeOne = JSON.parse(readFileSync(
+  new URL('../src/features/weekly/episodes/blockbuster-movie-music-ep1.json', import.meta.url),
+  'utf8',
+)) as {
+  questions: Array<{
+    options: string[];
+    correctOptionIndex: number;
+  }>;
+};
 
-const CORRECT_OPTIONS = [
-  'Top Gun',
-  'Footloose',
-  'Back to the Future',
-  '(I’ve Had) The Time of My Life',
-  'Prince',
-  'John Williams',
-  'The Bodyguard',
-  'Three',
-  'Will Smith',
-  'Aerosmith',
-];
+const CORRECT_OPTIONS = episodeOne.questions.map(
+  (question) => question.options[question.correctOptionIndex],
+);
 
 async function installShareCapture(page: Page): Promise<void> {
   await page.addInitScript(() => {
@@ -60,7 +61,7 @@ test('a table shares one answer pad, restores its result and makes no Firebase c
   await page.getByLabel('Team name').fill('Quiztopher Walken');
   await page.getByRole('button', { name: 'Start the team quiz' }).click();
 
-  await expect(page.getByRole('heading', { name: /Take My Breath Away/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /iconic theme for Star Wars/ })).toBeVisible();
   for (const [index, option] of CORRECT_OPTIONS.entries()) {
     await page.getByRole('button', { name: new RegExp(option.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).click();
     await page.getByRole('button', { name: 'Lock it in' }).click();
@@ -70,19 +71,19 @@ test('a table shares one answer pad, restores its result and makes no Firebase c
   }
 
   await page.getByRole('button', { name: 'See our score' }).click();
-  await expect(page.locator('#weekly-result-heading')).toContainText('10/10');
+  await expect(page.locator('#weekly-result-heading')).toContainText('40/40');
   await expect(page.getByText('Quiztopher Walken').first()).toBeVisible();
   await expect(page.getByText('4 players, one shared answer pad')).toBeVisible();
 
   await page.getByRole('button', { name: 'Challenge another team' }).click();
   await expect.poll(() => page.evaluate(
     () => (window as Window & { __HG_WEEKLY_SHARE__?: string }).__HG_WEEKLY_SHARE__,
-  )).toContain('Quiztopher Walken scored 10/10');
+  )).toContain('Quiztopher Walken scored 40/40');
 
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Your result is ready' })).toBeVisible();
   await page.getByRole('button', { name: 'View result' }).click();
-  await expect(page.locator('#weekly-result-heading')).toContainText('10/10');
+  await expect(page.locator('#weekly-result-heading')).toContainText('40/40');
   expect(backendRequests).toEqual([]);
 });
 
@@ -94,7 +95,13 @@ test('challenge links open directly in team mode without extra setup fields for 
   await page.getByRole('radio', { name: /Play solo/ }).click();
   await expect(page.getByLabel('Team name')).toHaveCount(0);
   await page.getByRole('button', { name: 'Start playing' }).click();
-  await expect(page.getByText('Question 1 of 10')).toBeVisible();
+  await expect(page.getByText('Question 1 of 40')).toBeVisible();
+});
+
+test('the original Episode 1 beta URL remains compatible', async ({ page }) => {
+  await page.goto('/weekly/blockbuster-movie-music-01');
+  await expect(page.getByRole('heading', { name: 'How are you playing?' })).toBeVisible();
+  await expect(page.getByText('Blockbuster Movie Music').first()).toBeVisible();
 });
 
 test('the video clock closes revealed questions even after switching to the TV answer pad', async ({ page }) => {
@@ -102,7 +109,7 @@ test('the video clock closes revealed questions even after switching to the TV a
   await page.getByRole('button', { name: 'Start playing' }).click();
 
   await page.getByRole('button', { name: 'Q1 opens' }).click();
-  await page.getByRole('button', { name: 'Top Gun' }).click();
+  await page.getByRole('button', { name: 'John Williams' }).click();
   await expect(page.getByRole('button', { name: 'Lock it in' })).toBeEnabled();
 
   await page.getByRole('button', { name: 'Q1 reveals' }).click();
@@ -111,27 +118,27 @@ test('the video clock closes revealed questions even after switching to the TV a
 
   await page.getByRole('radio', { name: 'Video on the TV' }).click();
   await expect(page.getByRole('button', { name: 'Lock it in' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Top Gun' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'John Williams' })).toBeDisabled();
 });
 
 test('seeking backwards never reopens answers and the final score waits for the last reveal', async ({ page }) => {
   await page.goto(`${EPISODE_PATH}?playerFixture=1`);
   await page.getByRole('button', { name: 'Start playing' }).click();
 
-  await page.getByRole('button', { name: 'Q10 opens' }).click();
-  await expect(page.getByText('Question 10 of 10')).toBeVisible();
-  await page.getByRole('button', { name: 'Aerosmith' }).click();
+  await page.getByRole('button', { name: 'Q40 opens' }).click();
+  await expect(page.getByText('Question 40 of 40')).toBeVisible();
+  await page.getByRole('button', { name: 'Also sprach Zarathustra' }).click();
   await page.getByRole('button', { name: 'Lock it in' }).click();
   await expect(page.getByRole('button', { name: 'Finish and see our score' })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Rewind to Q1' }).click();
-  await expect(page.getByText('Question 1 of 10')).toBeVisible();
+  await expect(page.getByText('Question 1 of 40')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Lock it in' })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Q10 reveals' }).click();
+  await page.getByRole('button', { name: 'Q40 reveals' }).click();
   await expect(page.getByRole('button', { name: 'Finish and see our score' })).toBeVisible();
   await page.getByRole('button', { name: 'Finish and see our score' }).click();
-  await expect(page.locator('#weekly-result-heading')).toContainText('1/10');
+  await expect(page.locator('#weekly-result-heading')).toContainText('1/40');
 });
 
 test('blocked browser storage warns the player but does not stop the quiz', async ({ page }) => {
@@ -145,7 +152,7 @@ test('blocked browser storage warns the player but does not stop the quiz', asyn
   await page.getByRole('button', { name: 'Start playing' }).click();
   await expect(page.getByText(/this browser is blocking saved progress/i)).toBeVisible();
 
-  await page.getByRole('button', { name: 'Top Gun' }).click();
+  await page.getByRole('button', { name: 'John Williams' }).click();
   await page.getByRole('button', { name: 'Lock it in' }).click();
   await expect(page.getByText('Locked in')).toBeVisible();
 });
