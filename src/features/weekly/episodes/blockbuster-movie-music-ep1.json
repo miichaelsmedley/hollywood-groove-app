@@ -1,6 +1,6 @@
 {
   "slug": "blockbuster-movie-music-ep1",
-  "version": 2,
+  "version": 3,
   "episodeNumber": 1,
   "title": "Blockbuster Movie Music",
   "strapline": "The ultimate soundtrack showdown!",
@@ -10,9 +10,9 @@
       "prompt": "Which legendary composer wrote the iconic theme for Star Wars?",
       "options": [
         "John Williams",
-        "Hans Zimmer",
+        "Alan Silvestri",
         "Danny Elfman",
-        "Alan Silvestri"
+        "Hans Zimmer"
       ],
       "correctOptionIndex": 0,
       "reveal": "John Williams composed the legendary Star Wars theme, winning an Oscar for his work in 1978.",
@@ -23,12 +23,12 @@
       "id": "q002",
       "prompt": "Which 1997 disaster blockbuster featured Celine Dion's hit 'My Heart Will Go On'?",
       "options": [
-        "Titanic",
-        "Armageddon",
         "Deep Impact",
+        "Armageddon",
+        "Titanic",
         "The Volcano"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 2,
       "reveal": "Celine Dion's power ballad was the signature theme for James Cameron's record-breaking Titanic.",
       "opensAtSeconds": 64,
       "revealAtSeconds": 82
@@ -37,12 +37,12 @@
       "id": "q003",
       "prompt": "What instrument does Sherlock Holmes play in the Guy Ritchie films starring Robert Downey Jr.?",
       "options": [
+        "Piano",
         "Violin",
         "Flute",
-        "Piano",
         "Cello"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 1,
       "reveal": "Sherlock Holmes is famously depicted playing the violin to help him think and relax.",
       "opensAtSeconds": 88,
       "revealAtSeconds": 106
@@ -51,12 +51,12 @@
       "id": "q004",
       "prompt": "Which Bond theme connects the two faces blended together in the video?",
       "options": [
+        "GoldenEye",
         "Skyfall",
         "No Time to Die",
-        "Writing's on the Wall",
-        "GoldenEye"
+        "Writing's on the Wall"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 1,
       "reveal": "Adele co-wrote and performed 'Skyfall' for Daniel Craig's third Bond film, and the song won the Academy Award.",
       "opensAtSeconds": 112,
       "revealAtSeconds": 130
@@ -65,12 +65,12 @@
       "id": "q005",
       "prompt": "In which country was the blockbuster composer Hans Zimmer born?",
       "options": [
-        "Germany",
         "Austria",
         "Switzerland",
-        "Netherlands"
+        "Netherlands",
+        "Germany"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 3,
       "reveal": "Hans Zimmer was born in Frankfurt, Germany, before moving to London and later Los Angeles.",
       "opensAtSeconds": 136,
       "revealAtSeconds": 154
@@ -79,12 +79,12 @@
       "id": "q006",
       "prompt": "Which 1994 Disney animated film features the Oscar-winning song 'Can You Feel the Love Tonight'?",
       "options": [
-        "The Lion King",
-        "Aladdin",
+        "Pocahontas",
         "Beauty and the Beast",
-        "Pocahontas"
+        "The Lion King",
+        "Aladdin"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 2,
       "reveal": "Elton John and Tim Rice wrote 'Can You Feel the Love Tonight' for Disney's animated classic The Lion King.",
       "opensAtSeconds": 160,
       "revealAtSeconds": 178
@@ -94,9 +94,9 @@
       "prompt": "What is the name of the fictional heavy metal band in Rob Reiner's 1984 mockumentary?",
       "options": [
         "Spinal Tap",
-        "Steel Dragon",
+        "Wyld Stallyns",
         "Crucial Taunt",
-        "Wyld Stallyns"
+        "Steel Dragon"
       ],
       "correctOptionIndex": 0,
       "reveal": "The mockumentary features Spinal Tap, a parody band that actually went on to tour in real life.",
@@ -107,12 +107,12 @@
       "id": "q008",
       "prompt": "Which French electronic duo composed the entire synth-heavy score for the 2010 film Tron: Legacy?",
       "options": [
-        "Daft Punk",
-        "Justice",
+        "M83",
         "Air",
-        "M83"
+        "Daft Punk",
+        "Justice"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 2,
       "reveal": "Daft Punk composed and produced the orchestral-electronic fusion soundtrack for Tron: Legacy.",
       "opensAtSeconds": 208,
       "revealAtSeconds": 226
@@ -135,12 +135,12 @@
       "id": "q010",
       "prompt": "Which American rock band performed the hit song 'Eye of the Tiger' for the movie Rocky III?",
       "options": [
-        "Survivor",
+        "REO Speedwagon",
         "Journey",
         "Foreigner",
-        "REO Speedwagon"
+        "Survivor"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 3,
       "reveal": "Survivor wrote and performed 'Eye of the Tiger' at the request of Sylvester Stallone.",
       "opensAtSeconds": 256,
       "revealAtSeconds": 274
@@ -149,12 +149,12 @@
       "id": "q011",
       "prompt": "Which 1985 film is hidden in this picture rebus?",
       "options": [
-        "Back to the Future",
         "Ghostbusters",
+        "Back to the Future",
         "Weird Science",
         "The Terminator"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 1,
       "reveal": "Huey Lewis and the News recorded 'The Power of Love' specifically for Back to the Future.",
       "opensAtSeconds": 303,
       "revealAtSeconds": 321
@@ -164,9 +164,9 @@
       "prompt": "For which 1992 romantic drama did Whitney Houston record her record-shattering cover of 'I Will Always Love You'?",
       "options": [
         "The Bodyguard",
-        "Waiting to Exhale",
+        "Ghost",
         "The Preacher's Wife",
-        "Ghost"
+        "Waiting to Exhale"
       ],
       "correctOptionIndex": 0,
       "reveal": "Whitney Houston starred in and recorded the massive soundtrack for The Bodyguard.",
@@ -177,12 +177,12 @@
       "id": "q013",
       "prompt": "Which classical piece is famously used during the helicopter attack scene in Apocalypse Now?",
       "options": [
-        "Ride of the Valkyries",
-        "Ode to Joy",
         "Night on Bald Mountain",
-        "The Planets"
+        "The Planets",
+        "Ride of the Valkyries",
+        "Ode to Joy"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 2,
       "reveal": "Francis Ford Coppola used Richard Wagner's 'Ride of the Valkyries' during the iconic helicopter assault.",
       "opensAtSeconds": 351,
       "revealAtSeconds": 369
@@ -191,12 +191,12 @@
       "id": "q014",
       "prompt": "The song 'Mrs. Robinson' by Simon & Garfunkel was written for and featured in which 1967 film?",
       "options": [
-        "The Graduate",
         "Midnight Cowboy",
-        "Easy Rider",
-        "The Odd Couple"
+        "The Odd Couple",
+        "The Graduate",
+        "Easy Rider"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 2,
       "reveal": "Simon & Garfunkel wrote 'Mrs. Robinson' for Mike Nichols' classic film The Graduate.",
       "opensAtSeconds": 375,
       "revealAtSeconds": 393
@@ -206,9 +206,9 @@
       "prompt": "Which artist wrote and performed the track 'Lose Yourself' for the semi-autobiographical movie 8 Mile?",
       "options": [
         "Eminem",
+        "Snoop Dogg",
         "Dr. Dre",
-        "50 Cent",
-        "Snoop Dogg"
+        "50 Cent"
       ],
       "correctOptionIndex": 0,
       "reveal": "Eminem won the Academy Award for Best Original Song for 'Lose Yourself' in 2003.",
@@ -219,12 +219,12 @@
       "id": "q016",
       "prompt": "Who composed the whimsical, accordion-heavy score for the 2001 French film Amélie?",
       "options": [
-        "Yann Tiersen",
-        "Ludovico Einaudi",
         "Alexandre Desplat",
-        "Jean-Pierre Jeunet"
+        "Jean-Pierre Jeunet",
+        "Ludovico Einaudi",
+        "Yann Tiersen"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 3,
       "reveal": "Yann Tiersen composed the critically acclaimed soundtrack, which became a global instrumental hit.",
       "opensAtSeconds": 423,
       "revealAtSeconds": 441
@@ -233,12 +233,12 @@
       "id": "q017",
       "prompt": "Which 1977 disco movie soundtrack features hits by the Bee Gees and became one of the best-selling albums ever?",
       "options": [
-        "Saturday Night Fever",
-        "Grease",
         "Thank God It's Friday",
-        "Fame"
+        "Saturday Night Fever",
+        "Fame",
+        "Grease"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 1,
       "reveal": "Saturday Night Fever popularized disco globally and remains one of the highest-selling soundtracks in history.",
       "opensAtSeconds": 447,
       "revealAtSeconds": 465
@@ -247,12 +247,12 @@
       "id": "q018",
       "prompt": "The song 'Don't You (Forget About Me)' by Simple Minds plays during the credits of which 1985 John Hughes film?",
       "options": [
-        "The Breakfast Club",
-        "Pretty in Pink",
         "Ferris Bueller's Day Off",
-        "Sixteen Candles"
+        "Sixteen Candles",
+        "Pretty in Pink",
+        "The Breakfast Club"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 3,
       "reveal": "Simple Minds recorded the song specifically for the iconic teen drama The Breakfast Club.",
       "opensAtSeconds": 471,
       "revealAtSeconds": 489
@@ -261,12 +261,12 @@
       "id": "q019",
       "prompt": "Which rock legend composed the atmospheric slide-guitar soundtrack for Wim Wenders' 1984 film Paris, Texas?",
       "options": [
-        "Ry Cooder",
-        "Neil Young",
+        "Mark Knopfler",
         "Eric Clapton",
-        "Mark Knopfler"
+        "Ry Cooder",
+        "Neil Young"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 2,
       "reveal": "Ry Cooder's haunting, minimalist slide guitar score defined the lonely desert atmosphere of Paris, Texas.",
       "opensAtSeconds": 495,
       "revealAtSeconds": 513
@@ -275,12 +275,12 @@
       "id": "q020",
       "prompt": "What is the title of the signature song from Disney's Frozen, sung by Idina Menzel?",
       "options": [
-        "Let It Go",
+        "Do You Want to Build a Snowman?",
         "Into the Unknown",
         "For the First Time in Forever",
-        "Do You Want to Build a Snowman?"
+        "Let It Go"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 3,
       "reveal": "'Let It Go' won the Academy Award for Best Original Song and became a global phenomenon.",
       "opensAtSeconds": 519,
       "revealAtSeconds": 537
@@ -289,12 +289,12 @@
       "id": "q021",
       "prompt": "What links the scores of the three films pictured in the video?",
       "options": [
-        "Hans Zimmer worked on all three",
         "They all feature the same vocalist",
         "They were all recorded in Berlin",
-        "They all won the Best Score Oscar"
+        "They all won the Best Score Oscar",
+        "Hans Zimmer worked on all three"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 3,
       "reveal": "Hans Zimmer was the primary composer or co-composer for all three of these blockbuster films.",
       "opensAtSeconds": 566,
       "revealAtSeconds": 584
@@ -317,12 +317,12 @@
       "id": "q023",
       "prompt": "What unusual stringed instrument provides the entire, iconic theme for the 1949 film noir classic The Third Man?",
       "options": [
+        "Mandolin",
         "Zither",
-        "Banjo",
         "Theremin",
-        "Mandolin"
+        "Banjo"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 1,
       "reveal": "Anton Karas performed the famous theme solely on the zither, which became a global chart-topping hit.",
       "opensAtSeconds": 614,
       "revealAtSeconds": 632
@@ -331,12 +331,12 @@
       "id": "q024",
       "prompt": "Which Nine Inch Nails frontman won an Oscar for scoring the 2010 film The Social Network alongside Atticus Ross?",
       "options": [
-        "Trent Reznor",
         "Dave Grohl",
+        "Chris Cornell",
         "Billy Corgan",
-        "Chris Cornell"
+        "Trent Reznor"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 3,
       "reveal": "Trent Reznor and Atticus Ross won the Academy Award for Best Original Score for their moody, electronic work on The Social Network.",
       "opensAtSeconds": 638,
       "revealAtSeconds": 656
@@ -346,9 +346,9 @@
       "prompt": "Which quirky director frequently collaborates with composer Danny Elfman on films like Batman and Edward Scissorhands?",
       "options": [
         "Tim Burton",
-        "Christopher Nolan",
+        "Guillermo del Toro",
         "Steven Spielberg",
-        "Guillermo del Toro"
+        "Christopher Nolan"
       ],
       "correctOptionIndex": 0,
       "reveal": "Danny Elfman has scored almost all of Tim Burton's major feature films since Pee-wee's Big Adventure in 1985.",
@@ -359,12 +359,12 @@
       "id": "q026",
       "prompt": "Which Welsh vocal powerhouse performed the title tracks for Goldfinger, Diamonds Are Forever, and Moonraker?",
       "options": [
-        "Shirley Bassey",
         "Lulu",
-        "Tina Turner",
-        "Nancy Sinatra"
+        "Shirley Bassey",
+        "Nancy Sinatra",
+        "Tina Turner"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 1,
       "reveal": "Dame Shirley Bassey is the only artist to have recorded more than one James Bond theme song.",
       "opensAtSeconds": 686,
       "revealAtSeconds": 704
@@ -374,9 +374,9 @@
       "prompt": "What instrument is famously played by Will Ferrell's character Ron Burgundy in the comedy Anchorman?",
       "options": [
         "Jazz flute",
+        "Clarinet",
         "Saxophone",
-        "Keytar",
-        "Clarinet"
+        "Keytar"
       ],
       "correctOptionIndex": 0,
       "reveal": "Ron Burgundy plays a fiery, acrobatic jazz flute solo during a memorable club scene in Anchorman.",
@@ -387,12 +387,12 @@
       "id": "q028",
       "prompt": "Which filmmaker directed both La La Land and Whiplash, two major films heavily focused on jazz music?",
       "options": [
-        "Damien Chazelle",
-        "Greta Gerwig",
         "Denis Villeneuve",
-        "Rian Johnson"
+        "Rian Johnson",
+        "Damien Chazelle",
+        "Greta Gerwig"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 2,
       "reveal": "Damien Chazelle directed both music-centric films, winning Best Director for La La Land.",
       "opensAtSeconds": 734,
       "revealAtSeconds": 752
@@ -401,12 +401,12 @@
       "id": "q029",
       "prompt": "What connects the iconic soundtracks of Pulp Fiction, Reservoir Dogs, and Kill Bill?",
       "options": [
-        "They were directed by Quentin Tarantino",
         "They were all composed by Ennio Morricone",
+        "They were directed by Quentin Tarantino",
         "They feature no licensed music",
         "They were all recorded in mono"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 1,
       "reveal": "Quentin Tarantino is famous for hand-picking retro pop, rock, and soul tracks for his movie soundtracks.",
       "opensAtSeconds": 758,
       "revealAtSeconds": 776
@@ -415,12 +415,12 @@
       "id": "q030",
       "prompt": "Which classical composer's 'Ode to Joy' is used as a recurring musical theme in the 1988 action movie Die Hard?",
       "options": [
-        "Ludwig van Beethoven",
         "Wolfgang Amadeus Mozart",
-        "Johann Sebastian Bach",
-        "Pyotr Ilyich Tchaikovsky"
+        "Pyotr Ilyich Tchaikovsky",
+        "Ludwig van Beethoven",
+        "Johann Sebastian Bach"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 2,
       "reveal": "Director John McTiernan and composer Michael Kamen used Beethoven's Ninth Symphony as a motif for the terrorists.",
       "opensAtSeconds": 782,
       "revealAtSeconds": 800
@@ -431,8 +431,8 @@
       "options": [
         "O Brother, Where Art Thou?",
         "Fargo",
-        "The Big Lebowski",
-        "No Country for Old Men"
+        "No Country for Old Men",
+        "The Big Lebowski"
       ],
       "correctOptionIndex": 0,
       "reveal": "The soundtrack for O Brother, Where Art Thou? was a surprise multi-platinum hit and won Album of the Year at the Grammy Awards.",
@@ -443,12 +443,12 @@
       "id": "q032",
       "prompt": "Which electronic instrument is pictured in the video and can be played without touching it?",
       "options": [
-        "Theremin",
-        "Moog Synthesizer",
         "Mellotron",
-        "Ondes Martenot"
+        "Ondes Martenot",
+        "Theremin",
+        "Moog Synthesizer"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 2,
       "reveal": "Bernard Herrmann famously used two theremins in his score, defining the sound of classic Hollywood sci-fi.",
       "opensAtSeconds": 853,
       "revealAtSeconds": 871
@@ -457,12 +457,12 @@
       "id": "q033",
       "prompt": "Which Irish singer-songwriter co-starred in and wrote the Oscar-winning music for the 2007 musical film Once?",
       "options": [
-        "Glen Hansard",
-        "Damien Rice",
         "Hozier",
-        "Niall Horan"
+        "Niall Horan",
+        "Damien Rice",
+        "Glen Hansard"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 3,
       "reveal": "Glen Hansard and Marketa Irglova starred in Once and won the Best Original Song Oscar for 'Falling Slowly'.",
       "opensAtSeconds": 877,
       "revealAtSeconds": 895
@@ -471,12 +471,12 @@
       "id": "q034",
       "prompt": "Which legendary rock band wrote several songs for the 1986 fantasy film Highlander?",
       "options": [
-        "Queen",
-        "Led Zeppelin",
+        "Iron Maiden",
         "AC/DC",
-        "Iron Maiden"
+        "Queen",
+        "Led Zeppelin"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 2,
       "reveal": "Queen composed several tracks for Highlander, which were also released on their hit album 'A Kind of Magic'.",
       "opensAtSeconds": 901,
       "revealAtSeconds": 919
@@ -485,12 +485,12 @@
       "id": "q035",
       "prompt": "Who composed the iconic, minimalist two-note suspense theme for Steven Spielberg's 1975 thriller Jaws?",
       "options": [
-        "John Williams",
-        "Jerry Goldsmith",
+        "Ennio Morricone",
         "Bernard Herrmann",
-        "Ennio Morricone"
+        "Jerry Goldsmith",
+        "John Williams"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 3,
       "reveal": "John Williams won his second Academy Award for the simple but terrifying Jaws theme.",
       "opensAtSeconds": 925,
       "revealAtSeconds": 943
@@ -499,12 +499,12 @@
       "id": "q036",
       "prompt": "Which pop icon played the Goblin King and performed several original songs in the 1986 fantasy film Labyrinth?",
       "options": [
+        "Michael Jackson",
         "David Bowie",
         "Prince",
-        "Michael Jackson",
         "Mick Jagger"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 1,
       "reveal": "David Bowie starred as Jareth the Goblin King and wrote several songs for the Jim Henson classic.",
       "opensAtSeconds": 949,
       "revealAtSeconds": 967
@@ -513,12 +513,12 @@
       "id": "q037",
       "prompt": "Which Italian composer is legendary for his Spaghetti Western scores, including The Good, the Bad and the Ugly?",
       "options": [
+        "Ludovico Einaudi",
         "Ennio Morricone",
         "Nino Rota",
-        "Giorgio Moroder",
-        "Ludovico Einaudi"
+        "Giorgio Moroder"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 1,
       "reveal": "Ennio Morricone's innovative use of whistling, gunshots, and coyote howls redefined Western film music.",
       "opensAtSeconds": 973,
       "revealAtSeconds": 991
@@ -528,9 +528,9 @@
       "prompt": "The song 'Stuck in the Middle with You' by Stealers Wheel is famously used during a gruesome scene in which 1992 film?",
       "options": [
         "Reservoir Dogs",
-        "Pulp Fiction",
         "Goodfellas",
-        "Natural Born Killers"
+        "Natural Born Killers",
+        "Pulp Fiction"
       ],
       "correctOptionIndex": 0,
       "reveal": "Quentin Tarantino paired the upbeat pop track with a shocking torture scene in his debut film Reservoir Dogs.",
@@ -541,12 +541,12 @@
       "id": "q039",
       "prompt": "Which pop superstar starred in and recorded the multi-platinum gospel soundtrack for the 1996 film The Preacher's Wife?",
       "options": [
-        "Whitney Houston",
         "Mariah Carey",
-        "Janet Jackson",
-        "Toni Braxton"
+        "Whitney Houston",
+        "Toni Braxton",
+        "Janet Jackson"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 1,
       "reveal": "The Preacher's Wife soundtrack, performed by Whitney Houston, became the best-selling gospel album of all time.",
       "opensAtSeconds": 1021,
       "revealAtSeconds": 1039
@@ -555,12 +555,12 @@
       "id": "q040",
       "prompt": "Which classical piece does this cosmic sunrise suggest from 2001: A Space Odyssey?",
       "options": [
-        "Also sprach Zarathustra",
-        "The Blue Danube",
+        "The Rite of Spring",
         "Adagio for Strings",
-        "The Rite of Spring"
+        "The Blue Danube",
+        "Also sprach Zarathustra"
       ],
-      "correctOptionIndex": 0,
+      "correctOptionIndex": 3,
       "reveal": "Richard Strauss's tone poem 'Also sprach Zarathustra' was used to spectacular effect in the film's opening.",
       "opensAtSeconds": 1045,
       "revealAtSeconds": 1063

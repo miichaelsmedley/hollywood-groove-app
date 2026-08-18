@@ -76,6 +76,34 @@ function resolveDuration(questionTiming, roundTiming, episodeTiming, key) {
   );
 }
 
+function assertBalancedAnswerPositions(positions, label) {
+  if (positions.length < 4) return;
+  const counts = [0, 1, 2, 3].map(
+    (position) => positions.filter((value) => value === position).length,
+  );
+  if (Math.max(...counts) - Math.min(...counts) > 1) {
+    throw new Error(
+      `${label} must distribute correct answers evenly across A, B, C and D; `
+        + `found A=${counts[0]}, B=${counts[1]}, C=${counts[2]}, D=${counts[3]}`,
+    );
+  }
+
+  let longestRun = 0;
+  let currentRun = 0;
+  let previous = null;
+  for (const position of positions) {
+    currentRun = position === previous ? currentRun + 1 : 1;
+    longestRun = Math.max(longestRun, currentRun);
+    previous = position;
+  }
+  if (longestRun > 2) {
+    throw new Error(
+      `${label} repeats the same correct-answer position ${longestRun} times; `
+        + 'keep runs to two or fewer',
+    );
+  }
+}
+
 function assertProjectionShape(projection) {
   for (const key of Object.keys(projection)) {
     if (!TOP_LEVEL_KEYS.has(key)) {
@@ -122,6 +150,7 @@ export function projectEpisode(sourceValue) {
       `rounds[${roundIndex}].introSeconds`,
     );
 
+    const roundAnswerPositions = [];
     round.questions.forEach((questionValue, questionIndex) => {
       const question = requireObject(
         questionValue,
@@ -149,6 +178,7 @@ export function projectEpisode(sourceValue) {
           `rounds[${roundIndex}].questions[${questionIndex}].correctOptionIndex is out of range`,
         );
       }
+      roundAnswerPositions.push(correctOptionIndex);
 
       const questionSeconds = resolveDuration(
         questionTiming,
@@ -209,6 +239,10 @@ export function projectEpisode(sourceValue) {
         cursor += transitionSeconds;
       }
     });
+    assertBalancedAnswerPositions(
+      roundAnswerPositions,
+      `rounds[${roundIndex}].questions`,
+    );
 
     if (roundIndex < source.rounds.length - 1) {
       cursor += requireDuration(
@@ -217,6 +251,11 @@ export function projectEpisode(sourceValue) {
       );
     }
   });
+
+  assertBalancedAnswerPositions(
+    questions.map((question) => question.correctOptionIndex),
+    'episode questions',
+  );
 
   // Validate the final segment too, even though duration is intentionally not
   // exported to the public answer-pad data.

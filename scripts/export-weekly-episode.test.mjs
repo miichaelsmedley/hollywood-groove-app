@@ -92,11 +92,47 @@ test('projection mirrors Controller timing precedence and drops private producti
   assert.doesNotMatch(serialised, /programmeImage|sha256|mediaBytes|private\.png|example\.test/);
 });
 
+test('projection rejects an all-A weekly answer layout', () => {
+  const source = {
+    slug: 'biased-episode',
+    version: 1,
+    episodeNumber: 1,
+    title: 'Biased episode',
+    timing: {},
+    rounds: [{
+      id: 'round-1',
+      title: 'Round 1',
+      timing: {},
+      questions: Array.from({ length: 4 }, (_, index) => ({
+        id: `q${index + 1}`,
+        prompt: `Question ${index + 1}?`,
+        options: ['Correct', 'Wrong 1', 'Wrong 2', 'Wrong 3'],
+        correctOptionIndex: 0,
+        reveal: 'Correct.',
+        timing: {},
+      })),
+    }],
+  };
+
+  assert.throws(
+    () => projectEpisode(source),
+    /A=4, B=0, C=0, D=0/,
+  );
+});
+
 test('checked-in Episode 1 projection is 40 questions and uses programme t=0 cues', async () => {
   const episode = JSON.parse(await readFile(GENERATED_EPISODE_PATH, 'utf8'));
   assert.equal(episode.slug, 'blockbuster-movie-music-ep1');
-  assert.equal(episode.version, 2);
+  assert.equal(episode.version, 3);
   assert.equal(episode.questions.length, 40);
+  assert.deepEqual(
+    [0, 1, 2, 3].map(
+      (position) => episode.questions.filter(
+        (question) => question.correctOptionIndex === position,
+      ).length,
+    ),
+    [10, 10, 10, 10],
+  );
   assert.deepEqual(Object.keys(episode).sort(), TOP_LEVEL_KEYS);
   episode.questions.forEach((question) => {
     assert.deepEqual(Object.keys(question).sort(), QUESTION_KEYS);
